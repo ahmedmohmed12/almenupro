@@ -1,0 +1,49 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "version": 2,
+  "installCommand": "node scripts/preparePublicUploads.js",
+  "buildCommand": "node scripts/preparePublicUploads.js",
+  "builds": [
+    {
+      "src": "apiServer.js",
+      "use": "@vercel/node",
+      "config": {
+        "includeFiles": [
+          "data/**",
+          "uploads/menu/**",
+          "public/menu-images/**",
+          "lib/menuImageStorage.js"
+        ]
+      }
+    }
+  ],
+  "rewrites": [
+    { "handle": "filesystem" },
+    {
+      "source": "/og/(.*)",
+      "destination": "/apiServer.js"
+    },
+    {
+      "source": "/api/(.*)",
+      "destination": "/apiServer.js"
+    }
+  ],
+  "headers": [
+    {
+      "source": "/menu-images/(.*)",
+      "headers": [
+        { "key": "Access-Control-Allow-Origin", "value": "*" },
+        { "key": "Access-Control-Allow-Methods", "value": "GET, OPTIONS" },
+        { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
+      ]
+    },
+    {
+      "source": "/api/(.*)",
+      "headers": [
+        { "key": "Access-Control-Allow-Origin", "value": "*" },
+        { "key": "Access-Control-Allow-Methods", "value": "GET, POST, PATCH, PUT, OPTIONS" },
+        { "key": "Access-Control-Allow-Headers", "value": "Content-Type" }
+      ]
+    }
+  ]
+}

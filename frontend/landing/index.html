@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Almenupro — restaurant menus, ordering, and admin dashboard" />
+  <title>Almenupro | لوحة المنصة</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              orange: '#E39000',
+              maroon: '#7B241C',
+              surface: '#FAF7F4',
+              bg: '#F5F0EB',
+              black: '#1A1A1A',
+            },
+          },
+          fontFamily: {
+            sans: ['Poppins', 'system-ui', 'sans-serif'],
+          },
+          boxShadow: {
+            card: '0 8px 30px rgba(26, 26, 26, 0.08)',
+            cardHover: '0 16px 40px rgba(123, 36, 28, 0.15)',
+          },
+        },
+      },
+    };
+  </script>
+  <style>
+    body { font-family: 'Poppins', system-ui, sans-serif; }
+    .action-card {
+      transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
+    }
+    .action-card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 16px 40px rgba(123, 36, 28, 0.15);
+    }
+    .pulse-dot {
+      animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+    .skeleton {
+      background: linear-gradient(90deg, #ece5df 25%, #f7f2ed 50%, #ece5df 75%);
+      background-size: 200% 100%;
+      animation: shimmer 1.2s infinite;
+    }
+    @keyframes shimmer {
+      0% { background-position: 200% 0; }
+      100% { background-position: -200% 0; }
+    }
+  </style>
+</head>
+<body class="min-h-screen bg-brand-bg text-brand-black antialiased">
+  <div class="pointer-events-none fixed inset-0 overflow-hidden">
+    <div class="absolute -left-24 -top-24 h-72 w-72 rounded-full bg-brand-orange/10 blur-3xl"></div>
+    <div class="absolute -bottom-24 -right-24 h-96 w-96 rounded-full bg-brand-maroon/10 blur-3xl"></div>
+  </div>
+
+  <div class="relative mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
+    <!-- Header -->
+    <header class="mb-10 flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
+      <div class="flex items-center gap-4">
+        <div class="flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-orange/15 ring-1 ring-brand-orange/30">
+          <svg class="h-8 w-8 text-brand-orange" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" />
+          </svg>
+        </div>
+        <div>
+          <h1 class="text-2xl font-extrabold tracking-tight sm:text-3xl">
+            <span class="text-brand-orange">Almenu</span><span class="text-brand-maroon">pro</span>
+          </h1>
+          <p class="mt-1 text-sm text-stone-600">منصة قوائم الطعام وإدارة المطاعم</p>
+        </div>
+      </div>
+
+      <div id="status-badges" class="flex flex-wrap gap-2">
+        <span class="inline-flex items-center gap-2 rounded-full bg-white px-3 py-1.5 text-xs font-semibold text-stone-500 shadow-card ring-1 ring-stone-200">
+          <span class="h-2 w-2 rounded-full bg-stone-300 skeleton"></span>
+          جاري فحص السيرفر...
+        </span>
+      </div>
+    </header>
+
+    <!-- Quick access -->
+    <section class="mb-12 grid gap-5 md:grid-cols-2">
+      <a id="customer-link" href="https://almenupro-frontend-three.vercel.app/menu/molton-cookies"
+        class="action-card group rounded-3xl border border-brand-orange/20 bg-white p-8 shadow-card ring-1 ring-brand-orange/10">
+        <div class="mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-orange text-white shadow-lg shadow-brand-orange/30 transition group-hover:scale-105">
+          <svg class="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
+          </svg>
+        </div>
+        <h2 class="text-xl font-bold text-brand-black">قائمة العملاء</h2>
+        <p class="mt-2 text-sm leading-relaxed text-stone-600">تصفّح المنيو واطلب مباشرة من واجهة العميل العامة.</p>
+        <span class="mt-5 inline-flex items-center gap-2 text-sm font-semibold text-brand-orange">
+          فتح المنيو
+          <svg class="h-4 w-4 transition group-hover:-translate-x-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7" />
+          </svg>
+        </span>
+      </a>
+
+      <a href="https://almenupro-frontend-three.vercel.app/admin"
+        class="action-card group rounded-3xl border border-brand-maroon/20 bg-white p-8 shadow-card ring-1 ring-brand-maroon/10">
+        <div class="mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-maroon text-white shadow-lg shadow-brand-maroon/30 transition group-hover:scale-105">
+          <svg class="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+            <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+          </svg>
+        </div>
+        <h2 class="text-xl font-bold text-brand-black">لوحة الإدارة</h2>
+        <p class="mt-2 text-sm leading-relaxed text-stone-600">Super Admin ومدير المطعم — منيو، طلبات، وإعدادات.</p>
+        <span class="mt-5 inline-flex items-center gap-2 text-sm font-semibold text-brand-maroon">
+          دخول لوحة التحكم
+          <svg class="h-4 w-4 transition group-hover:-translate-x-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7" />
+          </svg>
+        </span>
+      </a>
+    </section>
+
+    <!-- Restaurants -->
+    <section class="rounded-3xl border border-stone-200/80 bg-white p-6 shadow-card sm:p-8">
+      <div class="mb-6 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h2 class="text-lg font-bold text-brand-maroon">المطاعم على المنصة</h2>
+          <p class="text-sm text-stone-500">بيانات مباشرة من الباك إند</p>
+        </div>
+        <button id="refresh-btn" type="button"
+          class="inline-flex items-center gap-2 self-start rounded-xl border border-stone-200 bg-brand-surface px-4 py-2 text-sm font-semibold text-stone-700 transition hover:border-brand-orange/40 hover:text-brand-maroon">
+          <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+          </svg>
+          تحديث
+        </button>
+      </div>
+
+      <div id="restaurants-grid" class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div class="rounded-2xl border border-stone-100 p-5 skeleton h-36"></div>
+        <div class="rounded-2xl border border-stone-100 p-5 skeleton h-36"></div>
+      </div>
+    </section>
+
+    <footer class="mt-10 text-center text-xs text-stone-400">
+      Almenupro · API: <span id="api-url" class="font-mono">—</span>
+    </footer>
+  </div>
+
+  <script>
+    const FRONTEND_ORIGIN = window.location.origin;
+    const API_BASE = 'https://almenupro-backend.vercel.app/api';
+
+    document.getElementById('api-url').textContent = API_BASE;
+
+    function badge(label, ok, detail) {
+      const dot = ok ? 'bg-emerald-500 pulse-dot' : 'bg-red-500';
+      const bg = ok ? 'bg-emerald-50 text-emerald-800 ring-emerald-200' : 'bg-red-50 text-red-800 ring-red-200';
+      return `<span class="inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-semibold shadow-sm ring-1 ${bg}" title="${detail || ''}">
+        <span class="h-2 w-2 rounded-full ${dot}"></span>
+        ${label}
+      </span>`;
+    }
+
+    function restaurantCard(r) {
+      const menuUrl = `${FRONTEND_ORIGIN}/menu/${encodeURIComponent(r.slug)}`;
+      const statusColor = r.status === 'active' ? 'bg-emerald-100 text-emerald-700' : 'bg-stone-100 text-stone-600';
+      return `
+        <article class="rounded-2xl border border-stone-100 bg-brand-surface/50 p-5 transition hover:border-brand-orange/30 hover:shadow-card">
+          <div class="mb-3 flex items-start justify-between gap-3">
+            <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand-orange/15 text-brand-orange">
+              <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M13.5 21v-7.5a.75.75 0 01.75-.75h3a.75.75 0 01.75.75V21m-4.5 0H2.36m11.14 0H18m0 0h3.64m-1.39 0V9.349m-16.5 11.65V9.35m0 0a3.001 3.001 0 003.75-.615A2.993 2.993 0 009.75 9.75c-.896 0-1.7-.393-2.25-1.016a2.993 2.993 0 00-2.25 1.016 3.001 3.001 0 003.75.615m16.5 0V6.75A2.25 2.25 0 0018 4.5h-1.5m-15 0h-1.5A2.25 2.25 0 003 6.75v2.599" />
+              </svg>
+            </div>
+            <span class="rounded-full px-2.5 py-0.5 text-[11px] font-semibold uppercase ${statusColor}">${r.status || 'active'}</span>
+          </div>
+          <h3 class="font-bold text-brand-black">${escapeHtml(r.name)}</h3>
+          <p class="mt-1 font-mono text-xs text-stone-500">${escapeHtml(r.slug)}</p>
+          <a href="${menuUrl}" class="mt-4 inline-flex items-center gap-1 text-sm font-semibold text-brand-orange hover:underline">
+            فتح منيو العملاء
+            <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg>
+          </a>
+        </article>`;
+    }
+
+    function escapeHtml(str) {
+      return String(str || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+
+    async function loadDashboard() {
+      const badgesEl = document.getElementById('status-badges');
+      const gridEl = document.getElementById('restaurants-grid');
+      const customerLink = document.getElementById('customer-link');
+
+      badgesEl.innerHTML = badge('جاري الفحص...', false, '');
+
+      let health = null;
+      let restaurants = [];
+
+      try {
+        const healthRes = await fetch(`${API_BASE}/health`);
+        health = await healthRes.json();
+      } catch (e) {
+        health = { ok: false, persistent: false };
+      }
+
+      try {
+        const restRes = await fetch(`${API_BASE}/restaurants/public`);
+        if (restRes.ok) {
+          restaurants = await restRes.json();
+        }
+      } catch (e) {
+        restaurants = [];
+      }
+
+      const apiOk = health && health.ok === true;
+      const mongoOk = health && health.persistent === true && health.storage === 'mongodb';
+
+      badgesEl.innerHTML = [
+        badge(apiOk ? 'الباك إند متصل' : 'الباك إند غير متاح', apiOk, health?.persistenceMessage || ''),
+        badge(mongoOk ? 'MongoDB نشط' : 'تخزين مؤقت', mongoOk, health?.storage || 'unknown'),
+        badge(`${health?.items ?? 0} صنف`, apiOk, 'menu items'),
+      ].join('');
+
+      if (restaurants.length === 0) {
+        gridEl.innerHTML = `
+          <div class="col-span-full rounded-2xl border border-dashed border-stone-200 bg-stone-50 p-8 text-center text-sm text-stone-500">
+            لا توجد مطاعم مسجّلة حالياً أو تعذّر الاتصال بالباك إند.
+          </div>`;
+      } else {
+        gridEl.innerHTML = restaurants.map(restaurantCard).join('');
+        const primary = restaurants[0];
+        if (primary && primary.slug) {
+          customerLink.href = `${FRONTEND_ORIGIN}/menu/${encodeURIComponent(primary.slug)}`;
+        }
+      }
+    }
+
+    document.getElementById('refresh-btn').addEventListener('click', loadDashboard);
+    loadDashboard();
+  </script>
+</body>
+</html>

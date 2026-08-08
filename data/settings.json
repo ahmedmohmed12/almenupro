@@ -1,0 +1,17 @@
+{
+  "byRestaurant": {
+    "rest_molton": {
+      "whatsappNumber": "96594774950",
+      "workingHours": [
+        { "weekday": 6, "isOpen": true, "open": "10:00", "close": "22:00" },
+        { "weekday": 7, "isOpen": true, "open": "10:00", "close": "22:00" },
+        { "weekday": 1, "isOpen": true, "open": "10:00", "close": "22:00" },
+        { "weekday": 2, "isOpen": true, "open": "10:00", "close": "22:00" },
+        { "weekday": 3, "isOpen": true, "open": "10:00", "close": "22:00" },
+        { "weekday": 4, "isOpen": true, "open": "10:00", "close": "22:00" },
+        { "weekday": 5, "isOpen": true, "open": "10:00", "close": "23:00" }
+      ],
+      "updatedAt": "2026-07-24T00:00:00.000Z"
+    }
+  }
+}

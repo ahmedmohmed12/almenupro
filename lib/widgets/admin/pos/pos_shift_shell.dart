@@ -1,0 +1,506 @@
+import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+
+import '../../../models/pos_role.dart';
+import '../../../models/shift_session.dart';
+import '../../../models/staff_user.dart';
+import '../../../services/admin_auth_service.dart';
+import '../../../services/pos_operations_service.dart';
+import '../../../services/pos_security_service.dart';
+import '../../../services/restaurant_settings_service.dart';
+import '../../../utils/admin_route_nav.dart';
+import '../admin_pos_panel.dart';
+import 'pos_add_staff_dialog.dart';
+import 'pos_close_shift_dialog.dart';
+import 'pos_layout.dart';
+import 'pos_menu_catalog.dart';
+import 'pos_menu_page.dart';
+import 'pos_reports_page.dart';
+import 'pos_staff_empty_state.dart';
+import 'pos_staff_page.dart';
+import 'pos_void_orders_page.dart';
+
+class PosShiftShell extends StatefulWidget {
+  const PosShiftShell({
+    super.key,
+    this.onOrderSubmitted,
+    this.onOpenMenu,
+    this.initialRoute = PosRoute.home,
+  });
+
+  final VoidCallback? onOrderSubmitted;
+  final VoidCallback? onOpenMenu;
+  final PosRoute initialRoute;
+
+  @override
+  State<PosShiftShell> createState() => _PosShiftShellState();
+}
+
+class _PosShiftShellState extends State<PosShiftShell> {
+  final _pinController = TextEditingController();
+  final _openingFloatController = TextEditingController(text: '0');
+
+  var _loading = true;
+  var _openingShift = false;
+  var _error = '';
+  ShiftSession? _shift;
+  List<StaffUser> _staff = const [];
+  late PosRoute _selectedRoute;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedRoute = widget.initialRoute;
+    _bootstrap();
+  }
+
+  @override
+  void dispose() {
+    _pinController.dispose();
+    _openingFloatController.dispose();
+    PosSecurityService.instance.dispose();
+    super.dispose();
+  }
+
+  Future<void> _bootstrap() async {
+    setState(() {
+      _loading = true;
+      _error = '';
+    });
+
+    try {
+      if (!AdminAuthService.instance.isCashier) {
+        await PosOperationsService.instance.bootstrapAdminCashier();
+      }
+      final settings = await RestaurantSettingsService.instance.load();
+      PosSecurityService.instance.configure(
+        autoLockMinutes: settings.posAutoLockMinutes,
+        onLockChanged: () {
+          if (mounted) setState(() {});
+        },
+      );
+
+      _staff = await loadPosStaffUsers();
+
+      final cashier = PosOperationsService.instance.cashierSession;
+      _shift = await PosOperationsService.instance.fetchCurrentShift(
+        cashierId: cashier?.staff.id,
+      );
+    } catch (error) {
+      _error = error.toString().replaceFirst('Exception: ', '');
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _loginCashier() async {
+    final pin = _pinController.text.trim();
+    if (pin.isEmpty) return;
+
+    setState(() {
+      _loading = true;
+      _error = '';
+    });
+
+    try {
+      await PosOperationsService.instance.loginWithPin(pin);
+      final cashier = PosOperationsService.instance.cashierSession;
+      _shift = await PosOperationsService.instance.fetchCurrentShift(
+        cashierId: cashier?.staff.id,
+      );
+      _pinController.clear();
+    } catch (error) {
+      _error = error.toString().replaceFirst('Exception: ', '');
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _openShift() async {
+    final cashier = PosOperationsService.instance.cashierSession;
+    if (cashier == null) return;
+
+    setState(() => _openingShift = true);
+    try {
+      final openingFloat = double.tryParse(_openingFloatController.text.trim()) ?? 0;
+      _shift = await PosOperationsService.instance.openShift(
+        cashierId: cashier.staff.id,
+        cashierName: cashier.staff.name,
+        roleId: cashier.roleId.isNotEmpty ? cashier.roleId : cashier.staff.roleId,
+        openingFloat: openingFloat,
+      );
+      setState(() => _selectedRoute = PosRoute.home);
+    } catch (error) {
+      _error = error.toString().replaceFirst('Exception: ', '');
+    } finally {
+      if (mounted) setState(() => _openingShift = false);
+    }
+  }
+
+  Future<void> _closeShift() async {
+    if (_shift == null) return;
+    final closed = await showPosCloseShiftDialog(context, shift: _shift!);
+    if (closed == null || !mounted) return;
+    await showShiftSummaryDialog(context, closed);
+    setState(() {
+      _shift = null;
+      _selectedRoute = PosRoute.home;
+    });
+  }
+
+  Future<void> _unlock() async {
+    final pin = _pinController.text.trim();
+    if (pin.isEmpty) return;
+    try {
+      await PosOperationsService.instance.loginWithPin(pin);
+      PosSecurityService.instance.unlock();
+      _pinController.clear();
+      setState(() {});
+    } catch (error) {
+      setState(() => _error = error.toString().replaceFirst('Exception: ', ''));
+    }
+  }
+
+  void _onUserActivity() {
+    PosSecurityService.instance.registerActivity();
+  }
+
+  Future<void> _refreshStaff() async {
+    try {
+      _staff = await loadPosStaffUsers();
+      if (mounted) setState(() {});
+    } catch (_) {}
+  }
+
+  void _onRouteSelected(PosRoute route) {
+    setState(() => _selectedRoute = route);
+  }
+
+  Widget _buildRouteContent() {
+    switch (_selectedRoute) {
+      case PosRoute.home:
+        if (_shift == null || !_shift!.isOpen) {
+          final cashier = PosOperationsService.instance.cashierSession;
+          return cashier == null
+              ? _buildCashierLogin(useAdminFallback: _staff.isEmpty)
+              : _buildOpenShiftScreen(cashier.staff.name);
+        }
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _buildShiftBanner(),
+            Expanded(
+              child: AdminPosPanel(
+                onOrderSubmitted: widget.onOrderSubmitted,
+                onOpenMenu: widget.onOpenMenu,
+              ),
+            ),
+          ],
+        );
+      case PosRoute.reports:
+        return const PosReportsPage();
+      case PosRoute.voidOrders:
+        return const PosVoidOrdersPage();
+      case PosRoute.staff:
+        return const PosStaffPage();
+      case PosRoute.menu:
+        return const PosMenuPage();
+      case PosRoute.shiftClose:
+        return _buildShiftClosePlaceholder();
+    }
+  }
+
+  Widget _buildShiftClosePlaceholder() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.lock_clock, size: 48, color: Color(0xFF6B1124)),
+            const SizedBox(height: 12),
+            const Text(
+              'إغلاق الوردية',
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              _shift == null || !_shift!.isOpen
+                  ? 'لا توجد وردية مفتوحة حالياً.'
+                  : 'اضغط الزر أدناه لإغلاق الوردية الحالية.',
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 16),
+            if (_shift != null && _shift!.isOpen)
+              FilledButton.icon(
+                onPressed: _closeShift,
+                icon: const Icon(Icons.lock_clock),
+                label: const Text('إغلاق الوردية الآن'),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_loading) {
+      return const Center(child: CircularProgressIndicator(color: Color(0xFF6B1124)));
+    }
+
+    if (!PosOperationsService.instance.allows(PosPermissionKeys.posAccess) &&
+        !PosOperationsService.instance.allows(PosPermissionKeys.processOrders)) {
+      return _buildPermissionDenied(
+        'لا تملك صلاحية الوصول لشاشة POS.',
+      );
+    }
+
+    final cashier = PosOperationsService.instance.cashierSession;
+    if (cashier == null) {
+      return _buildCashierLogin(useAdminFallback: _staff.isEmpty);
+    }
+
+    final content = Listener(
+      onPointerDown: (_) => _onUserActivity(),
+      child: Stack(
+        children: [
+          _buildRouteContent(),
+          if (PosSecurityService.instance.isLocked &&
+              _selectedRoute == PosRoute.home &&
+              _shift != null &&
+              _shift!.isOpen)
+            _buildLockOverlay(),
+        ],
+      ),
+    );
+
+    return PosLayout(
+      selectedRoute: _selectedRoute,
+      onRouteSelected: _onRouteSelected,
+      onShiftCloseRequested: _closeShift,
+      showSidebar: true,
+      child: content,
+    );
+  }
+
+  Widget _buildShiftBanner() {
+    final shift = _shift!;
+    return Material(
+      color: const Color(0xFF6B1124),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        child: Row(
+          children: [
+            const Icon(Icons.schedule, color: Colors.white),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'وردية مفتوحة — ${shift.cashierName} • من ${shift.openedAt.toLocal().toString().substring(0, 16)}',
+                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCashierLogin({required bool useAdminFallback}) {
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 420),
+        child: Card(
+          margin: const EdgeInsets.all(24),
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Text(
+                  'تسجيل دخول الكاشير',
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'أدخل رمز PIN الخاص بك لبدء جلسة POS',
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 16),
+                if (_staff.isEmpty) ...[
+                  PosStaffEmptyState(onStaffAdded: _refreshStaff),
+                  const SizedBox(height: 16),
+                ],
+                TextField(
+                  controller: _pinController,
+                  obscureText: true,
+                  keyboardType: TextInputType.number,
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                  decoration: InputDecoration(
+                    labelText: 'رمز PIN',
+                    border: const OutlineInputBorder(),
+                    errorText: _error.isEmpty ? null : _error,
+                  ),
+                  onSubmitted: (_) => _loginCashier(),
+                ),
+                const SizedBox(height: 12),
+                FilledButton(
+                  onPressed: _loginCashier,
+                  child: const Text('دخول'),
+                ),
+                if (_staff.isNotEmpty &&
+                    PosOperationsService.instance.allows(PosPermissionKeys.manageStaff)) ...[
+                  const SizedBox(height: 8),
+                  OutlinedButton.icon(
+                    onPressed: () async {
+                      await showPosAddStaffDialog(context);
+                      await _refreshStaff();
+                    },
+                    icon: const Icon(Icons.person_add),
+                    label: const Text('إضافة موظف / كاشier جديد'),
+                  ),
+                ],
+                if (useAdminFallback) ...[
+                  const SizedBox(height: 8),
+                  TextButton(
+                    onPressed: () async {
+                      await PosOperationsService.instance.bootstrapAdminCashier();
+                      setState(() {});
+                    },
+                    child: const Text('متابعة كمدير (بدون PIN)'),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildOpenShiftScreen(String cashierName) {
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 420),
+        child: Card(
+          margin: const EdgeInsets.all(24),
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  'فتح وردية — $cashierName',
+                  style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: _openingFloatController,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  decoration: const InputDecoration(
+                    labelText: 'رصيد افتتاح الدرج (د.ك)',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                if (_error.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  Text(_error, style: TextStyle(color: Colors.red.shade700)),
+                ],
+                const SizedBox(height: 16),
+                FilledButton(
+                  onPressed: _openingShift ? null : _openShift,
+                  child: _openingShift
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                        )
+                      : const Text('فتح الوردية'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLockOverlay() {
+    return Container(
+      color: Colors.black.withValues(alpha: 0.82),
+      alignment: Alignment.center,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 380),
+        child: Card(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Icon(Icons.lock_outline, size: 48, color: Color(0xFF6B1124)),
+                const SizedBox(height: 12),
+                const Text(
+                  'الشاشة مقفلة',
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'أدخل رمز PIN للمتابعة',
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: _pinController,
+                  obscureText: true,
+                  keyboardType: TextInputType.number,
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                  decoration: InputDecoration(
+                    labelText: 'رمز PIN',
+                    border: const OutlineInputBorder(),
+                    errorText: _error.isEmpty ? null : _error,
+                  ),
+                  onSubmitted: (_) => _unlock(),
+                ),
+                const SizedBox(height: 12),
+                FilledButton(onPressed: _unlock, child: const Text('فتح القفل')),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPermissionDenied(String message) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.lock_outline, size: 56, color: Colors.grey.shade500),
+            const SizedBox(height: 16),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+PosRoute readPosRouteFromLocation() {
+  if (!kIsWeb) return PosRoute.home;
+  final path = Uri.base.path.replaceAll(RegExp(r'/+$'), '');
+  return PosRoute.fromPath(path.isEmpty ? '/admin/pos' : path);
+}

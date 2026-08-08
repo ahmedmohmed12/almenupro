@@ -1,0 +1,1 @@
+void navigateToAdminPath(String path) {}

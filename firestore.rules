@@ -1,0 +1,102 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function validMenuItemData() {
+      let data = request.resource.data;
+      return data.keys().hasAll([
+          'name', 'description', 'price', 'imageUrl', 'category', 'isAvailable'
+        ])
+        && data.name is string
+        && data.price is number
+        && data.isAvailable is bool;
+    }
+
+    function validCategoryData() {
+      let data = request.resource.data;
+      return data.keys().hasAll(['name'])
+        && data.name is string;
+    }
+
+    function validItemData() {
+      let data = request.resource.data;
+      return data.keys().hasAll([
+          'name', 'description', 'price', 'categoryName', 'isAvailable'
+        ])
+        && data.name is string
+        && data.description is string
+        && data.price is number
+        && data.isAvailable is bool;
+    }
+
+    function validItemUpdate() {
+      let data = request.resource.data;
+      return data.name is string
+        && data.price is number
+        && data.isAvailable is bool;
+    }
+
+    function validOrderCreate() {
+      let data = request.resource.data;
+      return data.keys().hasAll([
+          'customerName', 'phone', 'address', 'items',
+          'totalPrice', 'orderType', 'status', 'createdAt'
+        ])
+        && data.customerName is string
+        && data.phone is string
+        && data.address is string
+        && data.items is list
+        && data.items.size() > 0
+        && data.totalPrice is number
+        && data.totalPrice > 0
+        && data.orderType in ['Delivery', 'Pickup']
+        && data.status == 'pending'
+        && data.createdAt is timestamp;
+    }
+
+    function validStatusUpdate() {
+      let allowed = [
+        'pending', 'confirmed', 'preparing', 'ready', 'delivered', 'cancelled'
+      ];
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status'])
+        && request.resource.data.status in allowed;
+    }
+
+    match /app_meta/{docId} {
+      allow read: if true;
+      allow write: if docId in ['menu_seed', 'molton_seed', 'molton_talabat_seed']
+        && request.resource.data.keys().hasAll(['seededAt', 'version']);
+    }
+
+    match /categories/{categoryId} {
+      allow read: if true;
+      allow create: if validCategoryData();
+      allow update, delete: if false;
+    }
+
+    match /items/{itemId} {
+      allow read: if true;
+      allow create: if validItemData();
+      allow update: if validItemUpdate();
+      allow delete: if true;
+    }
+
+    match /menu_items/{itemId} {
+      allow read: if true;
+      allow create: if validMenuItemData();
+      allow update, delete: if false;
+    }
+
+    match /orders/{orderId} {
+      allow create: if validOrderCreate();
+      allow read: if true;
+      allow update: if validStatusUpdate();
+      allow delete: if false;
+    }
+
+    match /settings/{docId} {
+      allow read: if true;
+      allow write: if docId == 'restaurant_info';
+    }
+  }
+}

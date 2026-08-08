@@ -1,0 +1,12 @@
+{
+  "name": "almenupro-api",
+  "private": true,
+  "main": "apiServer.js",
+  "scripts": {
+    "start": "node apiServer.js",
+    "seed": "node seedFromTalabat.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

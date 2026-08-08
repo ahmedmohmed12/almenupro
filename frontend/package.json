@@ -1,0 +1,7 @@
+{
+  "name": "almenupro-frontend",
+  "private": true,
+  "scripts": {
+    "vercel-build": "bash scripts/build.sh"
+  }
+}

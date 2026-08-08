@@ -1,0 +1,42 @@
+[
+  {
+    "id": "zone_molton_salmiya",
+    "restaurant_id": "rest_molton",
+    "governorate": "حولي",
+    "areaName": "السالمية",
+    "deliveryFee": 1.0,
+    "isActive": true,
+    "createdAt": "2026-07-25T00:00:00.000Z",
+    "updatedAt": "2026-07-25T00:00:00.000Z"
+  },
+  {
+    "id": "zone_molton_hawally",
+    "restaurant_id": "rest_molton",
+    "governorate": "حولي",
+    "areaName": "حولي",
+    "deliveryFee": 1.25,
+    "isActive": true,
+    "createdAt": "2026-07-25T00:00:00.000Z",
+    "updatedAt": "2026-07-25T00:00:00.000Z"
+  },
+  {
+    "id": "zone_molton_jabriya",
+    "restaurant_id": "rest_molton",
+    "governorate": "حولي",
+    "areaName": "الجابرية",
+    "deliveryFee": 1.5,
+    "isActive": true,
+    "createdAt": "2026-07-25T00:00:00.000Z",
+    "updatedAt": "2026-07-25T00:00:00.000Z"
+  },
+  {
+    "id": "zone_molton_fintas",
+    "restaurant_id": "rest_molton",
+    "governorate": "الأحمدي",
+    "areaName": "الفنطاس",
+    "deliveryFee": 2.0,
+    "isActive": true,
+    "createdAt": "2026-07-25T00:00:00.000Z",
+    "updatedAt": "2026-07-25T00:00:00.000Z"
+  }
+]
