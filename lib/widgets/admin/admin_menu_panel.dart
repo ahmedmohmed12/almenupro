@@ -10,13 +10,19 @@ class AdminMenuPanel extends StatefulWidget {
     required this.onAddItem,
     required this.onEditItem,
     required this.onDeleteItem,
-    required this.onAutofillTalabat,
+    this.onAutofillTalabat,
+    this.canImportTalabat = false,
+    this.canManageItems = true,
+    this.onStatusChanged,
   });
 
   final VoidCallback onAddItem;
   final void Function(MenuItemRecord record) onEditItem;
   final void Function(String id) onDeleteItem;
-  final VoidCallback onAutofillTalabat;
+  final VoidCallback? onAutofillTalabat;
+  final bool canImportTalabat;
+  final bool canManageItems;
+  final ValueChanged<AdminMenuPanelStatus>? onStatusChanged;
 
   @override
   State<AdminMenuPanel> createState() => _AdminMenuPanelState();

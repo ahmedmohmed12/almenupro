@@ -29,6 +29,14 @@ class OrdersService {
     await OrdersDemoService.updateOrderStatus(orderId, status);
   }
 
+  Future<void> refreshOrders() async {
+    if (usesFirebase) {
+      await _firebase.refreshOrders();
+      return;
+    }
+    await OrdersDemoService.refreshFromApi();
+  }
+
   Future<void> submitOrderFromCart({
     required List<CartItem> cartItems,
     required String customerName,

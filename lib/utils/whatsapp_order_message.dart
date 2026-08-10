@@ -1,6 +1,6 @@
+import '../models/cart_item.dart';
 import '../models/delivery_address_details.dart';
 import '../models/menu_item.dart';
-import '../providers/cart_provider.dart';
 
 class WhatsAppOrderMessage {
   static String build({

@@ -87,6 +87,12 @@ class RestaurantSettingsService {
     await _syncFirebase(updated);
   }
 
+  Future<void> clearCache() async {
+    _cached = null;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_cacheKey);
+  }
+
   Future<void> _syncFirebase(RestaurantSettings settings) async {
     if (!isFirebaseConfigured) return;
 

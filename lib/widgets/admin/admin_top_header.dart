@@ -12,6 +12,7 @@ class AdminTopHeader extends StatelessWidget {
     this.showOrderNotifications = true,
     this.restaurantLabel,
     this.onMenuTap,
+    this.onLogout,
   });
 
   final int pendingOrdersCount;
@@ -20,6 +21,7 @@ class AdminTopHeader extends StatelessWidget {
   final bool showOrderNotifications;
   final String? restaurantLabel;
   final VoidCallback? onMenuTap;
+  final VoidCallback? onLogout;
 
   static const Color burgundy = Color(0xFF6B1124);
   static const Color gold = Color(0xFFD49A00);

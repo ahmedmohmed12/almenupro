@@ -73,7 +73,7 @@ class Customer {
 class CustomerDetailData {
   const CustomerDetailData({
     required this.customer,
-    required this.orders,
+    required this.rawOrders,
   });
 
   final Customer customer;
