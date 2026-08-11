@@ -9,6 +9,23 @@ export PATH="$PATH:$FLUTTER_HOME/bin"
 
 flutter doctor
 flutter pub get
-flutter build web --release
+flutter build web --release --output-dir build/web
 
 echo "Flutter web build complete"
+
+{
+  "version": 2,
+  "builds": [
+    {
+      "src": "frontend/**",
+      "use": "@vercel/static-build"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/(.*)",
+      "dest": "index.html"
+    }
+  ],
+  "outputDirectory": "frontend/build/web"
+}

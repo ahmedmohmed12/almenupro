@@ -59,4 +59,17 @@ class DeliveryAddressDetails {
     ];
     return parts.join('، ');
   }
+
+  String formatEnglish() {
+    final parts = <String>[
+      if (governorate.isNotEmpty) '', // governorate is not included in english format
+      if (areaName.isNotEmpty) areaName,
+      if (avenue.isNotEmpty) avenue,
+      if (street.isNotEmpty) street,
+      if (block.isNotEmpty) 'Block $block',
+      if (houseNumber.isNotEmpty) 'House $houseNumber',
+      if (floorApartment.isNotEmpty) 'Floor/Apartment $floorApartment',
+    ];
+    return parts.join(', ');
+  }
 }

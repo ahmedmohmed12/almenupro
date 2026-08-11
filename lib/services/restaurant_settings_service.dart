@@ -87,6 +87,19 @@ class RestaurantSettingsService {
     await _syncFirebase(updated);
   }
 
+  Future<void> saveUpsellSettings(dynamic settings) async {
+    final current = _cached ?? await load();
+    final updated = current.copyWith(
+      upsellSettings: settings,
+      updatedAt: DateTime.now().toUtc(),
+    );
+
+    await ApiService.instance.updateSettings(updated);
+    _cached = updated;
+    await _saveCache(updated);
+    await _syncFirebase(updated);
+  }
+
   Future<void> clearCache() async {
     _cached = null;
     final prefs = await SharedPreferences.getInstance();
@@ -95,7 +108,6 @@ class RestaurantSettingsService {
 
   Future<void> _syncFirebase(RestaurantSettings settings) async {
     if (!isFirebaseConfigured) return;
-
     try {
       await FirebaseFirestore.instance
           .collection('settings')
