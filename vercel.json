@@ -26,6 +26,14 @@
     {
       "source": "/api/(.*)",
       "destination": "/apiServer.js"
+    },
+    {
+      "source": "/about",
+      "destination": "/about.html"
+    },
+    {
+      "source": "/contact",
+      "destination": "/contact.html"
     }
   ],
   "headers": [
@@ -47,3 +55,4 @@
     }
   ]
 }
+
