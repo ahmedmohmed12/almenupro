@@ -60,3 +60,6 @@ class DefaultFirebaseOptions {
     storageBucket: 'YOUR_PROJECT_ID.appspot.com',
   );
 }
+
+// IMPORTANT: Replace all 'YOUR_...' placeholders with your actual Firebase project credentials.
+// These values are sensitive and should ideally be managed through environment variables or a secure configuration system in production.
