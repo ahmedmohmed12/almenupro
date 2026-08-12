@@ -20,22 +20,7 @@ import '../../services/orders_demo_service.dart';
 import '../../services/pos_print_service.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/pos_receipt_html.dart';
-await OrdersService.instance.submitOrderFromCart(
-  cartItems: List.from(_cart),
-  customerName: _nameController.text.trim(),
-  phone: _phoneController.text.trim(),
-  address: _isPickup ? 'استلام من المحل' : _formattedAddress(),
-  paymentMethod: _paymentMethod,
-  invoiceNumber: invoiceNumber,
-  deliveryFee: _deliveryFee,
-  governorate: _isPickup ? null : _selectedZone?.governorate,
-  areaName: _isPickup ? null : _selectedZone?.areaName,
-  deliveryZoneId: _isPickup ? null : _selectedZone?.id,
-  addressDetails:
-      _isPickup ? const DeliveryAddressDetails() : _addressDetails,
-  orderSource: 'pos',
-  orderType: _isPickup ? OrderType.pickup : OrderType.delivery,
-);
+
 import 'pos/pos_fast_modifiers_dialog.dart';
 import 'pos/pos_theme.dart';
 import 'pos/pos_ui_components.dart';
@@ -63,7 +48,29 @@ class _PosPageData {
   final List<DeliveryZone> zones;
   final List<int> topItemIds;
 }
+class AdminPosPanel extends State<AdminPosPanel> {
 
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Center(
+        child: ElevatedButton(
+          onPressed: () async {
+            // ✅ الصحيح: وضعه هنا داخل الدالة أو الزر
+            await OrdersService.instance.submitOrderFromCart(
+              restaurantId: _restaurantId,
+              deliveryZoneId: _isPickup ? null : _selectedZone?.id,
+              addressDetails: _addressDetails,
+              orderSource: 'pos',
+              orderType: _isPickup ? OrderType.pickup : OrderType.delivery,
+            );
+          },
+          child: Text('إرسال الطلب'),
+        ),
+      ),
+    );
+  }
+}
 class _AdminPosPanelState extends State<AdminPosPanel> {
   static const _allCategory = 'الكل';
   static const _topCategory = 'الأكثر مبيعاً 🔥';
