@@ -24,15 +24,13 @@ import '../../utils/pos_receipt_html.dart';
 import 'pos/pos_fast_modifiers_dialog.dart';
 import 'pos/pos_theme.dart';
 import 'pos/pos_ui_components.dart';
-
-
 class AdminPosPanel extends StatefulWidget {
   const AdminPosPanel({
     super.key,
-    this.onOrderSubmitted,
+    this.onOrdersSubmitted,
   });
 
-  final VoidCallback? onOrderSubmitted;
+  final VoidCallback? onOrdersSubmitted;
 
   @override
   State<AdminPosPanel> createState() => _AdminPosPanelState();
@@ -48,12 +46,6 @@ class _PosPageData {
   final List<MenuItem> items;
   final List<DeliveryZone> zones;
   final List<int> topItemIds;
-}
-class AdminPosPanel extends StatefulWidget {
-  const AdminPosPanel({super.key});
-
-  @override
-  State<AdminPosPanel> createState() => _AdminPosPanelState();
 }
 class _AdminPosPanelState extends State<AdminPosPanel> {
   static const _allCategory = 'الكل';

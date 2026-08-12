@@ -28,7 +28,6 @@ import '../widgets/admin/admin_delivery_zones_panel.dart';
 import '../widgets/admin/admin_item_addons_editor.dart';
 import '../widgets/admin/admin_item_linked_sides_editor.dart';
 import '../widgets/admin/admin_menu_panel.dart';
-import '../widgets/admin/admin_menu_panel_status.dart';
 import '../widgets/admin/admin_orders_panel.dart';
 import '../widgets/admin/admin_customers_panel.dart';
 import '../widgets/admin/admin_sidebar.dart';
@@ -132,8 +131,8 @@ class _AdminDashboardState extends State<AdminDashboard> {
     try {
       final restaurantId = SuperAdminScopeService.instance.effectiveRestaurantId;
       final settings = await RestaurantSettingsService.instance.load(
-        restaurantId: restaurantId,
-      );
+  restaurantId,
+);
       _loadedSettings = settings;
       _whatsappCountryCode = settings.whatsappCountryCode;
       _whatsappController.text = settings.whatsappPhone;
