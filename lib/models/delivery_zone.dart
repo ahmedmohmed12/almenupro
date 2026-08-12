@@ -5,6 +5,7 @@ class DeliveryZone {
     required this.areaName,
     required this.deliveryFee,
     this.restaurantId,
+    this.defaultKitchenId,
     this.isActive = true,
   });
 
@@ -13,6 +14,7 @@ class DeliveryZone {
   final String areaName;
   final double deliveryFee;
   final String? restaurantId;
+  final String? defaultKitchenId;
   final bool isActive;
 
   factory DeliveryZone.fromMap(Map<String, dynamic> map) {
@@ -25,6 +27,10 @@ class DeliveryZone {
           0,
       restaurantId:
           map['restaurantId']?.toString() ?? map['restaurant_id']?.toString(),
+      defaultKitchenId: map['defaultKitchenId']?.toString() ??
+          map['default_kitchen_id']?.toString() ??
+          map['kitchenId']?.toString() ??
+          map['kitchen_id']?.toString(),
       isActive: map['isActive'] != false && map['is_active'] != false,
     );
   }
@@ -35,6 +41,8 @@ class DeliveryZone {
       'areaName': areaName,
       'deliveryFee': deliveryFee,
       if (restaurantId != null) 'restaurantId': restaurantId,
+      if (defaultKitchenId != null && defaultKitchenId!.isNotEmpty)
+        'defaultKitchenId': defaultKitchenId,
       'isActive': isActive,
     };
   }
@@ -43,6 +51,8 @@ class DeliveryZone {
     String? governorate,
     String? areaName,
     double? deliveryFee,
+    String? restaurantId,
+    String? defaultKitchenId,
     bool? isActive,
   }) {
     return DeliveryZone(
@@ -50,7 +60,8 @@ class DeliveryZone {
       governorate: governorate ?? this.governorate,
       areaName: areaName ?? this.areaName,
       deliveryFee: deliveryFee ?? this.deliveryFee,
-      restaurantId: restaurantId,
+      restaurantId: restaurantId ?? this.restaurantId,
+      defaultKitchenId: defaultKitchenId ?? this.defaultKitchenId,
       isActive: isActive ?? this.isActive,
     );
   }

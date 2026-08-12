@@ -9,6 +9,11 @@ class CustomerCheckoutProfile {
     this.deliveryZoneId,
     this.addressDetails = const DeliveryAddressDetails(),
     this.paymentMethod = 'كاش',
+    this.customerId,
+    this.personalPromoCode = '',
+    this.personalPromoDiscount = 0,
+    this.walletBalance = 0,
+    this.walletPromoCode = '',
   });
 
   final String phone;
@@ -18,6 +23,11 @@ class CustomerCheckoutProfile {
   final String? deliveryZoneId;
   final DeliveryAddressDetails addressDetails;
   final String paymentMethod;
+  final String? customerId;
+  final String personalPromoCode;
+  final double personalPromoDiscount;
+  final double walletBalance;
+  final String walletPromoCode;
 
   factory CustomerCheckoutProfile.fromMap(Map<String, dynamic> map) {
     final detailsRaw = map['addressDetails'] ?? map['address_details'];
@@ -36,6 +46,20 @@ class CustomerCheckoutProfile {
             ),
       paymentMethod:
           map['paymentMethod']?.toString() ?? map['payment_method']?.toString() ?? 'كاش',
+      customerId: map['customerId']?.toString() ?? map['customer_id']?.toString(),
+      personalPromoCode: map['personalPromoCode']?.toString() ??
+          map['personal_promo_code']?.toString() ??
+          '',
+      personalPromoDiscount:
+          (map['personalPromoDiscount'] as num?)?.toDouble() ??
+              (map['personal_promo_discount'] as num?)?.toDouble() ??
+              0,
+      walletBalance: (map['walletBalance'] as num?)?.toDouble() ??
+          (map['wallet_balance'] as num?)?.toDouble() ??
+          0,
+      walletPromoCode: map['walletPromoCode']?.toString() ??
+          map['wallet_promo_code']?.toString() ??
+          '',
     );
   }
 
@@ -49,6 +73,11 @@ class CustomerCheckoutProfile {
         'deliveryZoneId': deliveryZoneId,
       'addressDetails': addressDetails.toMap(),
       'paymentMethod': paymentMethod,
+      if (customerId != null && customerId!.isNotEmpty) 'customerId': customerId,
+      if (personalPromoCode.isNotEmpty) 'personalPromoCode': personalPromoCode,
+      if (personalPromoDiscount > 0) 'personalPromoDiscount': personalPromoDiscount,
+      if (walletBalance > 0) 'walletBalance': walletBalance,
+      if (walletPromoCode.isNotEmpty) 'walletPromoCode': walletPromoCode,
     };
   }
 
@@ -58,4 +87,9 @@ class CustomerCheckoutProfile {
       addressDetails.street.trim().isNotEmpty ||
       governorate.trim().isNotEmpty ||
       areaName.trim().isNotEmpty;
+
+  bool get hasActivePromo =>
+      personalPromoCode.trim().isNotEmpty && personalPromoDiscount > 0;
+
+  bool get hasWalletBalance => walletBalance > 0;
 }

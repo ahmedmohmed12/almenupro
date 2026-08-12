@@ -4,11 +4,15 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
+import '../models/customer.dart';
+import '../models/customer_checkout_profile.dart';
+import '../models/delivery_zone.dart';
 import '../models/menu_item.dart';
 import '../models/order.dart';
 import '../models/restaurant.dart';
 import '../models/restaurant_settings.dart';
 import 'admin_auth_service.dart';
+import 'super_admin_scope_service.dart';
 
 class ApiService {
   ApiService._();
@@ -28,10 +32,15 @@ class ApiService {
   }
 
   static const Duration _fetchTimeout = Duration(seconds: 15);
+  static const Duration _writeTimeout = Duration(seconds: 30);
 
   Map<String, String> get _jsonHeaders => {
         'Content-Type': 'application/json',
         ...AdminAuthService.instance.authHeaders,
+      };
+
+  Map<String, String> get _publicHeaders => const {
+        'Content-Type': 'application/json',
       };
 
   Uri _uri(String path, [Map<String, String>? query]) {
@@ -441,6 +450,465 @@ class ApiService {
       'isAvailable': data['isAvailable'] ?? data['is_available'] ?? true,
       'source': data['source'] ?? 'Manual',
     };
+  }
+
+  String _scopedRestaurantId({String? restaurantId}) {
+    if (restaurantId != null && restaurantId.isNotEmpty) {
+      return restaurantId;
+    }
+    final scoped = SuperAdminScopeService.instance.effectiveRestaurantId;
+    if (scoped.isNotEmpty) return scoped;
+    return AdminAuthService.instance.restaurantId ??
+        defaultRestaurantId;
+  }
+
+  Map<String, String> _restaurantQuery({String? restaurantId}) {
+    final scoped = _scopedRestaurantId(restaurantId: restaurantId);
+    return {
+      'restaurant_id': scoped,
+      'restaurantId': scoped,
+    };
+  }
+
+  Map<String, String> _publicRestaurantQuery({
+    String? slug,
+    String? restaurantId,
+  }) {
+    final cleanSlug = slug?.trim();
+    if (cleanSlug != null && cleanSlug.isNotEmpty) {
+      return {'slug': cleanSlug};
+    }
+    final scoped = _scopedRestaurantId(restaurantId: restaurantId);
+    return {
+      'restaurant_id': scoped,
+      'restaurantId': scoped,
+    };
+  }
+
+  Future<List<MenuItem>> fetchPublicItems({
+    String? restaurantId,
+  }) async {
+    try {
+      final query = _publicRestaurantQuery(restaurantId: restaurantId);
+      final response = await http
+          .get(_uri('/items', query), headers: _publicHeaders)
+          .timeout(_fetchTimeout);
+
+      if (response.statusCode != 200) {
+        throw Exception('فشل في تحميل الأصناف (${response.statusCode})');
+      }
+
+      final decoded = jsonDecode(response.body);
+      if (decoded is! List) {
+        throw Exception('استجابة غير متوقعة من السيرفر');
+      }
+
+      return decoded
+          .whereType<Map>()
+          .map((item) => MenuItem.fromJson(Map<String, dynamic>.from(item)))
+          .where((item) => item.name.trim().isNotEmpty)
+          .toList();
+    } on TimeoutException {
+      throw Exception('انتهت مهلة الاتصال بالسيرفر');
+    } on FormatException {
+      throw Exception('تعذر قراءة بيانات المنيو من السيرفر');
+    } catch (error) {
+      throw Exception('خطأ في الاتصال بالسيرفر: $error');
+    }
+  }
+
+  Future<List<int>> fetchTopMenuItemIds({
+    String? restaurantId,
+    int limit = 12,
+    int days = 90,
+  }) async {
+    try {
+      final query = {
+        ..._publicRestaurantQuery(restaurantId: restaurantId),
+        'limit': '$limit',
+        'days': '$days',
+      };
+      final response = await http
+          .get(_uri('/analytics/top-items', query), headers: _publicHeaders)
+          .timeout(_fetchTimeout);
+
+      if (response.statusCode != 200) {
+        throw Exception('فشل في تحميل الأصناف المميزة (${response.statusCode})');
+      }
+
+      final decoded = jsonDecode(response.body);
+      if (decoded is! List) {
+        return const [];
+      }
+
+      return decoded
+          .map((id) => int.tryParse(id.toString()))
+          .whereType<int>()
+          .toList();
+    } catch (error) {
+      debugPrint('fetchTopMenuItemIds failed: $error');
+      return const [];
+    }
+  }
+
+  Future<StorageHealth> fetchStorageHealth() async {
+    final response = await http
+        .get(_uri('/health'), headers: _publicHeaders)
+        .timeout(const Duration(seconds: 10));
+
+    if (response.statusCode != 200) {
+      throw Exception('فشل في فحص السيرفر (${response.statusCode})');
+    }
+
+    final decoded = jsonDecode(response.body);
+    if (decoded is! Map) {
+      throw Exception('استجابة غير متوقعة من السيرفر');
+    }
+
+    return StorageHealth.fromJson(Map<String, dynamic>.from(decoded));
+  }
+
+  Future<Restaurant> updateRestaurant({
+    required String id,
+    required String name,
+    required String slug,
+    String ownerName = '',
+    String phone = '',
+    RestaurantStatus status = RestaurantStatus.active,
+    SubscriptionPlan subscriptionPlan = SubscriptionPlan.free,
+    SubscriptionStatus subscriptionStatus = SubscriptionStatus.active,
+    DateTime? subscriptionExpiresAt,
+    String subscriptionNotes = '',
+    String? adminPassword,
+  }) async {
+    final response = await http
+        .patch(
+          _uri('/restaurants/$id'),
+          headers: _jsonHeaders,
+          body: jsonEncode({
+            'name': name,
+            'slug': slug,
+            if (ownerName.isNotEmpty) 'ownerName': ownerName,
+            if (phone.isNotEmpty) 'phone': phone,
+            'status': status.apiValue,
+            'subscriptionPlan': subscriptionPlan.apiValue,
+            'subscriptionStatus': subscriptionStatus.apiValue,
+            if (subscriptionExpiresAt != null)
+              'subscriptionExpiresAt': subscriptionExpiresAt.toUtc().toIso8601String(),
+            if (subscriptionNotes.isNotEmpty) 'subscriptionNotes': subscriptionNotes,
+            if (adminPassword != null && adminPassword.isNotEmpty)
+              'adminPassword': adminPassword,
+          }),
+        )
+        .timeout(_fetchTimeout);
+
+    if (response.statusCode != 200) {
+      String message = 'فشل في تحديث المطعم (${response.statusCode})';
+      try {
+        final decoded = jsonDecode(response.body);
+        if (decoded is Map && decoded['error'] != null) {
+          message = decoded['error'].toString();
+        }
+      } catch (_) {}
+      throw Exception(message);
+    }
+
+    final decoded = jsonDecode(response.body);
+    if (decoded is! Map) {
+      throw Exception('استجابة غير متوقعة من السيرفر');
+    }
+
+    return Restaurant.fromJson(Map<String, dynamic>.from(decoded));
+  }
+
+  Future<TalabatImportResult> importTalabatMenu({
+    required String url,
+    required String restaurantId,
+  }) async {
+    try {
+      final response = await http
+          .post(
+            _uri('/talabat/import'),
+            headers: _jsonHeaders,
+            body: jsonEncode({
+              'url': url,
+              'restaurantId': restaurantId,
+              'downloadImages': true,
+            }),
+          )
+          .timeout(const Duration(seconds: 180));
+
+      final decoded = jsonDecode(response.body);
+      if (response.statusCode != 200) {
+        final message = decoded is Map
+            ? decoded['error']?.toString() ?? 'فشل استيراد المنيو'
+            : 'فشل استيراد المنيو (${response.statusCode})';
+        throw Exception(message);
+      }
+
+      if (decoded is! Map) {
+        throw Exception('استجابة غير متوقعة من السيرفر');
+      }
+
+      return TalabatImportResult.fromJson(Map<String, dynamic>.from(decoded));
+    } on TimeoutException {
+      throw Exception('انتهت مهلة الاستيراد — حاول مرة أخرى');
+    } catch (error) {
+      if (error is Exception) rethrow;
+      throw Exception('خطأ في استيراد المنيو: $error');
+    }
+  }
+
+  Future<List<DeliveryZone>> fetchDeliveryZones({
+    String? restaurantId,
+  }) async {
+    final query = _restaurantQuery(restaurantId: restaurantId);
+
+    final headers = AdminAuthService.instance.isLoggedIn
+        ? _jsonHeaders
+        : _publicHeaders;
+
+    final response = await http
+        .get(_uri('/delivery-zones', query), headers: headers)
+        .timeout(_fetchTimeout);
+
+    if (response.statusCode != 200) {
+      throw Exception('فشل في تحميل مناطق التوصيل (${response.statusCode})');
+    }
+
+    final decoded = jsonDecode(response.body);
+    if (decoded is! List) return const [];
+
+    return decoded
+        .whereType<Map>()
+        .map((raw) => DeliveryZone.fromMap(Map<String, dynamic>.from(raw)))
+        .where((zone) => zone.isActive)
+        .toList();
+  }
+
+  Future<DeliveryZone> createDeliveryZone(DeliveryZone zone) async {
+    final scoped = _scopedRestaurantId(restaurantId: zone.restaurantId);
+    final payload = zone.toMap()
+      ..['restaurantId'] = scoped
+      ..['restaurant_id'] = scoped
+      ..['area_name'] = zone.areaName
+      ..['delivery_fee'] = zone.deliveryFee;
+    if (zone.defaultKitchenId != null && zone.defaultKitchenId!.isNotEmpty) {
+      payload['defaultKitchenId'] = zone.defaultKitchenId;
+      payload['default_kitchen_id'] = zone.defaultKitchenId;
+    }
+
+    final response = await http
+        .post(
+          _uri('/delivery-zones'),
+          headers: _jsonHeaders,
+          body: jsonEncode(payload),
+        )
+        .timeout(_writeTimeout);
+
+    if (response.statusCode != 201 && response.statusCode != 200) {
+      throw Exception('فشل في إضافة منطقة التوصيل (${response.statusCode})');
+    }
+
+    final decoded = jsonDecode(response.body);
+    if (decoded is! Map) {
+      throw Exception('استجابة غير متوقعة من السيرفر');
+    }
+
+    return DeliveryZone.fromMap(Map<String, dynamic>.from(decoded));
+  }
+
+  Future<DeliveryZone> updateDeliveryZone(DeliveryZone zone) async {
+    final payload = zone.toMap()
+      ..['area_name'] = zone.areaName
+      ..['delivery_fee'] = zone.deliveryFee;
+    if (zone.defaultKitchenId != null && zone.defaultKitchenId!.isNotEmpty) {
+      payload['defaultKitchenId'] = zone.defaultKitchenId;
+      payload['default_kitchen_id'] = zone.defaultKitchenId;
+    }
+
+    final response = await http
+        .put(
+          _uri('/delivery-zones/${zone.id}'),
+          headers: _jsonHeaders,
+          body: jsonEncode(payload),
+        )
+        .timeout(_writeTimeout);
+
+    if (response.statusCode != 200) {
+      throw Exception('فشل في تحديث منطقة التوصيل (${response.statusCode})');
+    }
+
+    final decoded = jsonDecode(response.body);
+    if (decoded is! Map) {
+      throw Exception('استجابة غير متوقعة من السيرفر');
+    }
+
+    return DeliveryZone.fromMap(Map<String, dynamic>.from(decoded));
+  }
+
+  Future<void> deleteDeliveryZone(String zoneId) async {
+    final response = await http
+        .delete(_uri('/delivery-zones/$zoneId'), headers: _jsonHeaders)
+        .timeout(_writeTimeout);
+
+    if (response.statusCode != 200) {
+      throw Exception('فشل في حذف منطقة التوصيل (${response.statusCode})');
+    }
+  }
+
+  Future<List<Customer>> fetchCustomers({String? restaurantId}) async {
+    final query = <String, String>{};
+    if (restaurantId != null && restaurantId.trim().isNotEmpty) {
+      query['restaurant_id'] = restaurantId.trim();
+    } else if (AdminAuthService.instance.restaurantId != null) {
+      query['restaurant_id'] = AdminAuthService.instance.restaurantId!;
+    }
+
+    final response = await http
+        .get(_uri('/customers', query.isEmpty ? null : query), headers: _jsonHeaders)
+        .timeout(_fetchTimeout);
+
+    if (response.statusCode != 200) {
+      throw Exception('فشل في تحميل العملاء (${response.statusCode})');
+    }
+
+    final decoded = jsonDecode(response.body);
+    if (decoded is! List) return const [];
+
+    return decoded
+        .whereType<Map>()
+        .map((raw) => Customer.fromMap(Map<String, dynamic>.from(raw)))
+        .toList();
+  }
+
+  Future<CustomerDetailData> fetchCustomerDetail(
+    String customerId, {
+    String? restaurantId,
+  }) async {
+    final query = <String, String>{};
+    if (restaurantId != null && restaurantId.trim().isNotEmpty) {
+      query['restaurant_id'] = restaurantId.trim();
+    } else if (AdminAuthService.instance.restaurantId != null) {
+      query['restaurant_id'] = AdminAuthService.instance.restaurantId!;
+    }
+
+    final response = await http
+        .get(
+          _uri('/customers/$customerId', query.isEmpty ? null : query),
+          headers: _jsonHeaders,
+        )
+        .timeout(_fetchTimeout);
+
+    if (response.statusCode == 404) {
+      throw Exception('العميل غير موجود');
+    }
+    if (response.statusCode != 200) {
+      throw Exception('فشل في تحميل بيانات العميل (${response.statusCode})');
+    }
+
+    final decoded = jsonDecode(response.body);
+    if (decoded is! Map) {
+      throw Exception('استجابة غير متوقعة من السيرفر');
+    }
+
+    return CustomerDetailData.fromMap(Map<String, dynamic>.from(decoded));
+  }
+
+  Future<CustomerCheckoutProfile?> fetchCustomerCheckoutProfile({
+    required String phone,
+    String? restaurantId,
+  }) async {
+    final normalizedPhone = phone.replaceAll(RegExp(r'\D'), '');
+    if (normalizedPhone.length < 8) return null;
+
+    final query = <String, String>{'phone': normalizedPhone};
+    query['restaurantId'] = _scopedRestaurantId(restaurantId: restaurantId);
+
+    try {
+      final response = await http
+          .get(_uri('/customers/lookup', query), headers: _publicHeaders)
+          .timeout(_fetchTimeout);
+
+      if (response.statusCode == 404) return null;
+      if (response.statusCode != 200) return null;
+
+      final decoded = jsonDecode(response.body);
+      if (decoded is! Map) return null;
+
+      final profileRaw = decoded['profile'];
+      if (profileRaw is! Map) return null;
+
+      final profile = CustomerCheckoutProfile.fromMap(
+        Map<String, dynamic>.from(profileRaw),
+      );
+      if (profile.hasUsableData ||
+          profile.hasActivePromo ||
+          profile.hasWalletBalance) {
+        return profile;
+      }
+      return null;
+    } catch (error) {
+      debugPrint('Customer lookup failed: $error');
+      return null;
+    }
+  }
+}
+
+class TalabatImportResult {
+  const TalabatImportResult({
+    required this.added,
+    required this.updated,
+    required this.skipped,
+    required this.synced,
+    required this.total,
+    this.menuUrl,
+  });
+
+  final int added;
+  final int updated;
+  final int skipped;
+  final int synced;
+  final int total;
+  final String? menuUrl;
+
+  factory TalabatImportResult.fromJson(Map<String, dynamic> json) {
+    return TalabatImportResult(
+      added: _toInt(json['added']),
+      updated: _toInt(json['updated']),
+      skipped: _toInt(json['skipped']),
+      synced: _toInt(json['synced']),
+      total: _toInt(json['total']),
+      menuUrl: json['menuUrl']?.toString(),
+    );
+  }
+
+  static int _toInt(Object? value) {
+    if (value is num) return value.toInt();
+    return int.tryParse(value?.toString() ?? '') ?? 0;
+  }
+}
+
+class StorageHealth {
+  const StorageHealth({
+    required this.ok,
+    required this.storage,
+    required this.persistent,
+    this.message,
+  });
+
+  final bool ok;
+  final String storage;
+  final bool persistent;
+  final String? message;
+
+  factory StorageHealth.fromJson(Map<String, dynamic> json) {
+    return StorageHealth(
+      ok: json['ok'] == true,
+      storage: json['storage']?.toString() ?? 'unknown',
+      persistent: json['persistent'] == true,
+      message: json['persistenceMessage']?.toString(),
+    );
   }
 }
 
