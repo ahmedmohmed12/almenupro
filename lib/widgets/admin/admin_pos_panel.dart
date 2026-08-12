@@ -48,28 +48,11 @@ class _PosPageData {
   final List<DeliveryZone> zones;
   final List<int> topItemIds;
 }
-class AdminPosPanel extends State<AdminPosPanel> {
+class AdminPosPanel extends StatefulWidget {
+  const AdminPosPanel({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      body: Center(
-        child: ElevatedButton(
-          onPressed: () async {
-            // ✅ الصحيح: وضعه هنا داخل الدالة أو الزر
-            await OrdersService.instance.submitOrderFromCart(
-              restaurantId: _restaurantId,
-              deliveryZoneId: _isPickup ? null : _selectedZone?.id,
-              addressDetails: _addressDetails,
-              orderSource: 'pos',
-              orderType: _isPickup ? OrderType.pickup : OrderType.delivery,
-            );
-          },
-          child: Text('إرسال الطلب'),
-        ),
-      ),
-    );
-  }
+  State<AdminPosPanel> createState() => _AdminPosPanelState();
 }
 class _AdminPosPanelState extends State<AdminPosPanel> {
   static const _allCategory = 'الكل';
