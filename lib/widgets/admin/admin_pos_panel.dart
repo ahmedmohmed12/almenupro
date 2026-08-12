@@ -25,6 +25,7 @@ import 'pos/pos_fast_modifiers_dialog.dart';
 import 'pos/pos_theme.dart';
 import 'pos/pos_ui_components.dart';
 
+
 class AdminPosPanel extends StatefulWidget {
   const AdminPosPanel({
     super.key,

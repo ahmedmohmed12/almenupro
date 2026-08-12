@@ -7,6 +7,15 @@ import '../../services/super_admin_scope_service.dart';
 import '../../services/talabat_menu_service.dart';
 import '../../utils/restaurant_route.dart';
 import '../../utils/restaurant_slug.dart';
+class StorageHealth {
+  final String status;
+  final double usagePercentage;
+  
+  const StorageHealth({
+    this.status = 'normal',
+    this.usagePercentage = 0.0,
+  });
+}
 
 class AdminSuperRestaurantsPanel extends StatefulWidget {
   const AdminSuperRestaurantsPanel({super.key});
