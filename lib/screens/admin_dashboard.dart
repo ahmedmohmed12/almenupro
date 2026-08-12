@@ -31,6 +31,7 @@ import '../widgets/admin/admin_menu_panel.dart';
 import '../widgets/admin/admin_orders_panel.dart';
 import '../widgets/admin/admin_customers_panel.dart';
 import '../widgets/admin/admin_sidebar.dart';
+import '../widgets/admin/admin_menu_sidebar_footer.dart';
 import '../widgets/admin/admin_super_restaurants_panel.dart';
 import '../widgets/admin/admin_sound_settings_card.dart';
 import '../widgets/admin/admin_top_header.dart';
@@ -131,7 +132,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
     try {
       final restaurantId = SuperAdminScopeService.instance.effectiveRestaurantId;
       final settings = await RestaurantSettingsService.instance.load(
-  restaurantId,
+  restaurantId: restaurantId,
 );
       _loadedSettings = settings;
       _whatsappCountryCode = settings.whatsappCountryCode;
@@ -157,11 +158,11 @@ class _AdminDashboardState extends State<AdminDashboard> {
 
     try {
       final restaurantId = SuperAdminScopeService.instance.effectiveRestaurantId;
-      await RestaurantSettingsService.instance.saveWhatsappNumber(
-        countryCode: _whatsappCountryCode,
-        phone: _whatsappController.text.trim(),
-        restaurantId: restaurantId,
-      );
+await RestaurantSettingsService.instance.saveWhatsappNumber(
+  restaurantId,
+  countryCode: _whatsappCountryCode,
+  phone: _whatsappController.text.trim(),
+);
       if (!mounted) return;
       final display = WhatsAppPhone.formatDisplay(
         _whatsappCountryCode,
@@ -470,11 +471,11 @@ class _AdminDashboardState extends State<AdminDashboard> {
                     const Divider(),
                     const SizedBox(height: 8),
                     AdminItemAddonsEditor(
-                      options: addonOptions,
-                      currentItemId: int.tryParse(editingItemId?.toString() ?? ''),
-                      onChanged: (next) =>
-                          setDialogState(() => addonOptions = next),
-                    ),
+                         options: addonOptions,
+                          itemId: int.tryParse(editingItemId?.toString() ?? ''),
+                         onChanged: (next) =>
+                          setState(() => addonOptions = next),
+                          ),
                     const SizedBox(height: 16),
                     const Divider(),
                     const SizedBox(height: 8),
