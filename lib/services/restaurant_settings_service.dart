@@ -20,9 +20,9 @@ class RestaurantSettingsService {
 
   RestaurantSettings? get cached => _cached;
 
-  Future<RestaurantSettings> load() async {
+  Future<RestaurantSettings> load({String? restaurantId}) async {
     try {
-      final remote = await ApiService.instance.fetchSettings();
+      final remote = await ApiService.instance.fetchSettings(restaurantId: restaurantId);
       _cached = remote;
       await _saveCache(remote);
       return remote;
@@ -41,6 +41,8 @@ class RestaurantSettingsService {
     if (isFirebaseConfigured) {
       try {
         final doc = await FirebaseFirestore.instance
+            .collection('restaurants')
+            .doc(restaurantId)
             .collection('settings')
             .doc('restaurant_info')
             .get();
@@ -74,10 +76,11 @@ class RestaurantSettingsService {
     await _syncFirebase(updated);
   }
 
-  Future<void> saveWhatsappNumber(String whatsappNumber) async {
+  Future<void> saveWhatsappNumber({required String restaurantId, required String countryCode, required String phone}) async {
     final current = _cached ?? await load();
     final updated = current.copyWith(
-      whatsappNumber: whatsappNumber.trim(),
+      whatsappNumber: phone.trim(),
+      whatsappCountryCode: countryCode,
       updatedAt: DateTime.now().toUtc(),
     );
 
@@ -87,10 +90,10 @@ class RestaurantSettingsService {
     await _syncFirebase(updated);
   }
 
-  Future<void> saveUpsellSettings(dynamic settings) async {
+  Future<void> saveUpsellSettings({required dynamic upsellSettings}) async {
     final current = _cached ?? await load();
     final updated = current.copyWith(
-      upsellSettings: settings,
+      upsellSettings: upsellSettings,
       updatedAt: DateTime.now().toUtc(),
     );
 

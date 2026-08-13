@@ -159,7 +159,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
     try {
       final restaurantId = SuperAdminScopeService.instance.effectiveRestaurantId;
 await RestaurantSettingsService.instance.saveWhatsappNumber(
-  restaurantId,
+  restaurantId: restaurantId,
   countryCode: _whatsappCountryCode,
   phone: _whatsappController.text.trim(),
 );
@@ -1096,6 +1096,8 @@ await RestaurantSettingsService.instance.saveWhatsappNumber(
         return _buildSettingsTab();
       case AdminSidebar.posIndex:
         return AdminPosPanel(
+          restaurantId: SuperAdminScopeService.instance.effectiveRestaurantId,
+          deliveryFee: _loadedSettings?.defaultDeliveryFee ?? 0.0,
           onOrderSubmitted: () {
             unawaited(OrdersService.instance.refreshOrders());
           },

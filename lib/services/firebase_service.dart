@@ -107,4 +107,10 @@ class FirebaseService {
   Future<void> updateOrderStatus(String orderId, OrderStatus status) async {
     await _ordersRef.doc(orderId).update({'status': status.name});
   }
+
+  Future<void> refreshOrders() async {
+    // Firebase streams provide real-time updates, so explicit refresh might not be needed.
+    // If a more complex refresh mechanism is required (e.g., clearing cache, re-fetching data),
+    // it would be implemented here based on specific requirements.
+  }
 }

@@ -20,6 +20,7 @@ import '../../services/orders_demo_service.dart';
 import '../../services/pos_print_service.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/pos_receipt_html.dart';
+import '../../utils/whatsapp_phone.dart';
 
 import 'pos/pos_fast_modifiers_dialog.dart';
 import 'pos/pos_theme.dart';
@@ -27,10 +28,14 @@ import 'pos/pos_ui_components.dart';
 class AdminPosPanel extends StatefulWidget {
   const AdminPosPanel({
     super.key,
-    this.onOrdersSubmitted,
+    this.onOrderSubmitted,
+    this.restaurantId,
+    this.deliveryFee,
   });
 
-  final VoidCallback? onOrdersSubmitted;
+  final VoidCallback? onOrderSubmitted;
+  final String? restaurantId;
+  final double? deliveryFee;
 
   @override
   State<AdminPosPanel> createState() => _AdminPosPanelState();

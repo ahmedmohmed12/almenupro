@@ -123,7 +123,6 @@ class _MenuCheckoutSheetState extends State<MenuCheckoutSheet> {
   Future<void> _loadDeliveryZones() async {
     try {
       final zones = await ApiService.instance.fetchDeliveryZones(
-        slug: _restaurantSlug,
         restaurantId: _restaurantId,
       );
       if (!mounted) return;

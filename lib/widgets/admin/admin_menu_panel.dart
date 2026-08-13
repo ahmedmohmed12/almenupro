@@ -8,6 +8,10 @@ enum AdminMenuPanelStatus {
   inactive,
   loading,
 }
+
+extension AdminMenuPanelStatusX on AdminMenuPanelStatus {
+  bool get isHealthy => this == AdminMenuPanelStatus.active;
+}
 class AdminMenuPanel extends StatefulWidget {
   const AdminMenuPanel({
     super.key,
