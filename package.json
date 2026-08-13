@@ -4,9 +4,13 @@
   "main": "apiServer.js",
   "scripts": {
     "start": "node apiServer.js",
-    "seed": "node seedFromTalabat.js"
+    "seed": "node seedFromTalabat.js",
+    "test:cors": "node scripts/cors-smoke.js"
   },
   "engines": {
     "node": ">=18"
+  },
+  "dependencies": {
+    "mongodb": "^6.16.0"
   }
 }
