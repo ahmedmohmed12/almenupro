@@ -111,6 +111,9 @@ class ShiftSession {
 
   bool get isOpen => status.toLowerCase() == 'open';
 
+  double get cashCollected =>
+      closingCashCounted ?? summary.actualCash;
+
   factory ShiftSession.fromJson(Map<String, dynamic> json) {
     return ShiftSession(
       id: json['id']?.toString() ?? '',
@@ -135,4 +138,73 @@ class ShiftSession {
       closedByName: json['closedByName']?.toString() ?? json['closed_by_name']?.toString(),
     );
   }
+}
+
+class ShiftReportsMeta {
+  const ShiftReportsMeta({
+    this.totalShifts = 0,
+    this.openShifts = 0,
+    this.closedShifts = 0,
+    this.grossSales = 0,
+    this.dataState = '',
+    this.openCount = 0,
+    this.ordersInRange = 0,
+    this.ordersWithoutShift = 0,
+  });
+
+  final int totalShifts;
+  final int openShifts;
+  final int closedShifts;
+  final double grossSales;
+  final String dataState;
+  final int openCount;
+  final int ordersInRange;
+  final int ordersWithoutShift;
+
+  factory ShiftReportsMeta.fromJson(Map<String, dynamic> json) {
+    final openShifts = (json['openShifts'] as num?)?.toInt() ??
+        (json['open_shifts'] as num?)?.toInt() ??
+        (json['openCount'] as num?)?.toInt() ??
+        0;
+    return ShiftReportsMeta(
+      totalShifts: (json['totalShifts'] as num?)?.toInt() ??
+          (json['total_shifts'] as num?)?.toInt() ??
+          0,
+      openShifts: openShifts,
+      closedShifts: (json['closedShifts'] as num?)?.toInt() ??
+          (json['closed_shifts'] as num?)?.toInt() ??
+          0,
+      grossSales: (json['grossSales'] as num?)?.toDouble() ??
+          (json['gross_sales'] as num?)?.toDouble() ??
+          0,
+      dataState: json['dataState']?.toString() ??
+          json['data_state']?.toString() ??
+          '',
+      openCount: (json['openCount'] as num?)?.toInt() ??
+          (json['open_count'] as num?)?.toInt() ??
+          openShifts,
+      ordersInRange: (json['ordersInRange'] as num?)?.toInt() ??
+          (json['orders_in_range'] as num?)?.toInt() ??
+          0,
+      ordersWithoutShift: (json['ordersWithoutShift'] as num?)?.toInt() ??
+          (json['orders_without_shift'] as num?)?.toInt() ??
+          0,
+    );
+  }
+}
+
+class ShiftReportsResult {
+  const ShiftReportsResult({
+    this.shifts = const [],
+    this.meta = const ShiftReportsMeta(),
+  });
+
+  final List<ShiftSession> shifts;
+  final ShiftReportsMeta meta;
+
+  List<ShiftSession> get openShifts =>
+      shifts.where((shift) => shift.isOpen).toList();
+
+  List<ShiftSession> get closedShifts =>
+      shifts.where((shift) => !shift.isOpen).toList();
 }

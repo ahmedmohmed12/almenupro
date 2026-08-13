@@ -74,4 +74,40 @@ class AppStrings {
     if (displayLabel == cash || displayLabel == 'Cash') return 'كاش';
     return 'K-Net';
   }
+
+  String get impulseBumpsTitle =>
+      isArabic ? 'أضف مع طلبك' : 'Add with your order';
+  String get impulseBumpsSubtitle =>
+      isArabic ? 'إضافات سريعة بأسعار مناسبة' : 'Quick add-ons at a great price';
+  String get smartRecommendationsTitle =>
+      isArabic ? 'مقترحات لك' : 'Recommended for you';
+  String get smartRecommendationsSubtitle =>
+      isArabic ? 'اختيارات تكمل طلبك' : 'Picks that complete your order';
+  String get quickAddLabel => isArabic ? 'إضافة سريعة' : 'Quick add';
+
+  String requiredAddonGroup(String groupName) => isArabic
+      ? 'يرجى اختيار إضافة من "$groupName"'
+      : 'Please choose an option from "$groupName"';
+  String get freeAddon => isArabic ? 'مجاناً' : 'Free';
+  String basePriceLabel(String price) =>
+      isArabic ? 'السعر الأساسي: $price د.ك' : 'Base price: $price KWD';
+  String get requiredLabel => isArabic ? 'مطلوب' : 'Required';
+  String get noAddonSelected => isArabic ? 'بدون إضافة' : 'No add-on';
+  String get specialNotesLabel => isArabic ? 'ملاحظات خاصة' : 'Special notes';
+  String get specialNotesHint => isArabic
+      ? 'مثال: بدون بصل، صلصة جانبية...'
+      : 'e.g. no onion, sauce on the side...';
+  String totalWithAddons(String total) =>
+      isArabic ? 'الإجمالي: $total د.ك' : 'Total: $total KWD';
+  String get cancel => isArabic ? 'إلغاء' : 'Cancel';
+  String get addToCart => isArabic ? 'أضف للسلة' : 'Add to cart';
+
+  String get freeDeliveryUnlocked =>
+      isArabic ? 'التوصيل مجاناً!' : 'Free delivery unlocked!';
+  String freeDeliveryRemaining(String amount) => isArabic
+      ? 'تبقّى $amount د.ك للتوصيل المجاني'
+      : '$amount KWD left for free delivery';
+  String freeDeliveryProgressHint(String subtotal, String threshold) => isArabic
+      ? 'مجموعك $subtotal د.ك من أصل $threshold د.ك'
+      : 'Your subtotal is $subtotal KWD of $threshold KWD';
 }

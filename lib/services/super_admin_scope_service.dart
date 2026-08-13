@@ -26,6 +26,9 @@ class SuperAdminScopeService extends ChangeNotifier {
   bool get loadingRestaurants => _loadingRestaurants;
   bool get hasSelection =>
       _selectedRestaurantId != null && _selectedRestaurantId!.isNotEmpty;
+  bool get isSuperAdmin => AdminAuthService.instance.isSuperAdmin;
+  bool get hasEffectiveRestaurant =>
+      AdminAuthService.instance.isRestaurantAdmin || hasSelection;
 
   String get effectiveRestaurantId =>
       AdminAuthService.instance.isRestaurantAdmin

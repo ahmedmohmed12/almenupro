@@ -104,7 +104,20 @@ class FirebaseService {
         );
   }
 
-  Future<void> updateOrderStatus(String orderId, OrderStatus status) async {
-    await _ordersRef.doc(orderId).update({'status': status.name});
+  Future<void> updateOrderStatus(
+    String orderId,
+    OrderStatus status, {
+    String? shiftId,
+    String? cashierId,
+  }) async {
+    await _ordersRef.doc(orderId).update({
+      'status': status.name,
+      if (shiftId != null && shiftId.isNotEmpty) 'shiftId': shiftId,
+      if (cashierId != null && cashierId.isNotEmpty) 'cashierId': cashierId,
+    });
+  }
+
+  Future<void> refreshOrders() async {
+    // Orders are delivered via [watchOrders]; this exists for API compatibility.
   }
 }

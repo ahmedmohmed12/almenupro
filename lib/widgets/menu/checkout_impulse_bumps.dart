@@ -54,6 +54,7 @@ class CheckoutImpulseBumps extends StatelessWidget {
       localeCode: localeCode,
       strings: strings,
       onAddItem: onAddItem,
+      surface: 'impulse_bumps',
       compact: true,
     );
   }

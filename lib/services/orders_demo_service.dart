@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import '../models/cart_item.dart';
+import '../models/delivery_address_details.dart';
 import '../models/menu_item.dart';
 import '../models/order.dart';
 import 'api_service.dart';
@@ -69,8 +70,10 @@ class OrdersDemoService {
 
   static Future<void> updateOrderStatus(
     String orderId,
-    OrderStatus status,
-  ) async {
+    OrderStatus status, {
+    String? shiftId,
+    String? cashierId,
+  }) async {
     await _ensureInitialized();
 
     final index = _orders.indexWhere((order) => order.id == orderId);
@@ -78,11 +81,20 @@ class OrdersDemoService {
 
     if (!orderId.startsWith('demo-')) {
       try {
-        await ApiService.instance.updateOrderStatus(orderId, status);
+        await ApiService.instance.updateOrderStatus(
+          orderId,
+          status,
+          shiftId: shiftId,
+          cashierId: cashierId,
+        );
       } catch (_) {}
     }
 
-    _orders[index] = _orders[index].copyWith(status: status);
+    _orders[index] = _orders[index].copyWith(
+      status: status,
+      shiftId: shiftId,
+      cashierId: cashierId,
+    );
     _emit();
   }
 
@@ -238,9 +250,18 @@ class OrdersDemoService {
     required String address,
     required String paymentMethod,
     required String invoiceNumber,
+    double? deliveryFee,
+    String? governorate,
+    String? areaName,
+    String? deliveryZoneId,
+    DeliveryAddressDetails? addressDetails,
+    String? orderSource,
+    OrderType? orderType,
   }) {
     final items = cartItems.map(OrderLineItem.fromCartItem).toList();
-    final total = cartItems.fold<double>(0, (sum, item) => sum + item.totalPrice);
+    final subtotal =
+        cartItems.fold<double>(0, (sum, item) => sum + item.totalPrice);
+    final fee = deliveryFee ?? 0;
 
     return Order(
       id: 'pending',
@@ -248,12 +269,19 @@ class OrdersDemoService {
       phone: phone,
       address: address,
       items: items,
-      totalPrice: total,
-      orderType: OrderType.delivery,
+      subtotal: subtotal,
+      deliveryFee: deliveryFee,
+      totalPrice: subtotal + fee,
+      orderType: orderType ?? OrderType.delivery,
       status: OrderStatus.pending,
       createdAt: DateTime.now(),
       invoiceNumber: invoiceNumber,
       paymentMethod: paymentMethod,
+      governorate: governorate,
+      areaName: areaName,
+      deliveryZoneId: deliveryZoneId,
+      addressDetails: addressDetails ?? const DeliveryAddressDetails(),
+      orderSource: orderSource,
     );
   }
 }

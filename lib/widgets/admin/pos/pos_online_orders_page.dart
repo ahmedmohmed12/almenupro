@@ -4,7 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../../../models/order.dart';
+import '../../../models/pos_role.dart';
 import '../../../models/sales_platform_config.dart';
+import '../../../services/admin_auth_service.dart';
 import '../../../services/admin_order_monitor_service.dart';
 import '../../../services/orders_service.dart';
 import '../../../services/pos_operations_service.dart';
@@ -82,6 +84,8 @@ class _PosOnlineOrdersPageState extends State<PosOnlineOrdersPage> {
         await showPosPrintPreviewDialog(
           context,
           order: order.copyWith(status: OrderStatus.confirmed),
+          restaurantName:
+              AdminAuthService.instance.restaurantName ?? 'المطعم',
           platforms: _platforms,
           kind: PosReceiptKind.kitchen,
         );

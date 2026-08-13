@@ -19,6 +19,7 @@ class AdminAuthService {
   bool get isLoggedIn => _session != null && _session!.token.isNotEmpty;
   bool get isSuperAdmin => _session?.isSuperAdmin ?? false;
   bool get isRestaurantAdmin => _session?.isRestaurantAdmin ?? false;
+  bool get isCashier => isLoggedIn && !isRestaurantAdmin && !isSuperAdmin;
   String? get restaurantId => _session?.restaurantId;
   String? get restaurantName => _session?.restaurantName;
   String? get token => _session?.token;
@@ -71,6 +72,20 @@ class AdminAuthService {
     _session = null;
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_sessionKey);
+  }
+
+  Future<void> persistCashierPermissions(
+    Map<String, bool> permissions, {
+    String? roleId,
+  }) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(
+      '${_sessionKey}_cashier_permissions',
+      jsonEncode({
+        'roleId': roleId ?? '',
+        'permissions': permissions,
+      }),
+    );
   }
 
   Future<void> _persist(AdminSession session) async {

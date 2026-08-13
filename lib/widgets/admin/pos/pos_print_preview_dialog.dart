@@ -1,19 +1,21 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
-import '../../models/order.dart';
-import '../../services/pos_print_service.dart';
-import '../../utils/pos_receipt_html.dart';
+import '../../../models/order.dart';
+import '../../../models/sales_platform_config.dart';
+import '../../../services/pos_print_service.dart';
+import '../../../utils/pos_receipt_html.dart';
 import 'pos_theme.dart';
 
 /// Shows thermal receipt preview and triggers browser print on Proceed.
 Future<void> showPosPrintPreviewDialog(
   BuildContext context, {
   required Order order,
-  required String restaurantName,
+  String restaurantName = 'المطعم',
   required PosReceiptKind kind,
   String? restaurantPhone,
   String? restaurantAddress,
+  List<SalesPlatformConfig>? platforms,
 }) {
   return showDialog<void>(
     context: context,

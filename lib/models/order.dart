@@ -151,6 +151,10 @@ class Order {
     this.deliveryZoneId,
     this.addressDetails = const DeliveryAddressDetails(),
     this.orderSource,
+    this.shiftId,
+    this.cashierId,
+    this.externalOrderId,
+    this.platformCommission,
   });
 
   final String id;
@@ -171,6 +175,13 @@ class Order {
   final String? deliveryZoneId;
   final DeliveryAddressDetails addressDetails;
   final String? orderSource;
+  final String? shiftId;
+  final String? cashierId;
+  final String? externalOrderId;
+  final double? platformCommission;
+
+  double get netRevenue =>
+      totalPrice - (platformCommission == null ? 0 : platformCommission!);
 
   factory Order.fromMap(String id, Map<String, dynamic> map) {
     final rawItems = map['items'] as List<dynamic>? ?? [];
@@ -202,6 +213,12 @@ class Order {
       ),
       orderSource:
           map['orderSource']?.toString() ?? map['order_source']?.toString(),
+      shiftId: map['shiftId']?.toString() ?? map['shift_id']?.toString(),
+      cashierId: map['cashierId']?.toString() ?? map['cashier_id']?.toString(),
+      externalOrderId: map['externalOrderId']?.toString() ??
+          map['external_order_id']?.toString(),
+      platformCommission: (map['platformCommission'] as num?)?.toDouble() ??
+          (map['platform_commission'] as num?)?.toDouble(),
     );
   }
 
@@ -212,6 +229,11 @@ class Order {
     double? subtotal,
     double? deliveryFee,
     double? totalPrice,
+    String? shiftId,
+    String? cashierId,
+    String? externalOrderId,
+    double? platformCommission,
+    String? orderSource,
   }) {
     return Order(
       id: id,
@@ -231,7 +253,11 @@ class Order {
       areaName: areaName,
       deliveryZoneId: deliveryZoneId,
       addressDetails: addressDetails,
-      orderSource: orderSource,
+      orderSource: orderSource ?? this.orderSource,
+      shiftId: shiftId ?? this.shiftId,
+      cashierId: cashierId ?? this.cashierId,
+      externalOrderId: externalOrderId ?? this.externalOrderId,
+      platformCommission: platformCommission ?? this.platformCommission,
     );
   }
 
@@ -257,6 +283,11 @@ class Order {
       if (paymentMethod != null && paymentMethod!.isNotEmpty)
         'paymentMethod': paymentMethod,
       if (orderSource != null && orderSource!.isNotEmpty) 'orderSource': orderSource,
+      if (shiftId != null && shiftId!.isNotEmpty) 'shiftId': shiftId,
+      if (cashierId != null && cashierId!.isNotEmpty) 'cashierId': cashierId,
+      if (externalOrderId != null && externalOrderId!.isNotEmpty)
+        'externalOrderId': externalOrderId,
+      if (platformCommission != null) 'platformCommission': platformCommission,
     };
   }
 

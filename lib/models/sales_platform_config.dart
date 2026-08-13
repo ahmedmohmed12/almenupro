@@ -171,6 +171,17 @@ class PlatformCatalog {
     return platforms.firstWhere((p) => p.isLocal, orElse: () => SalesPlatformConfig.defaults().first);
   }
 
+  static SalesPlatformConfig fromAnalyticsRow(
+    Map<String, dynamic> row,
+    List<SalesPlatformConfig> platforms,
+  ) {
+    final source = row['platform']?.toString() ??
+        row['source']?.toString() ??
+        row['orderSource']?.toString() ??
+        row['id']?.toString();
+    return resolve(source, platforms);
+  }
+
   static SalesPlatformConfig _fallback(String id) => SalesPlatformConfig(
         id: id,
         name: id,
@@ -183,4 +194,47 @@ class PlatformCatalog {
 
   static List<SalesPlatformConfig> externalOnly(List<SalesPlatformConfig> platforms) =>
       platforms.where((p) => p.isExternal).toList();
+}
+
+class SalesPlatformBadge extends StatelessWidget {
+  const SalesPlatformBadge({
+    super.key,
+    required this.platform,
+    this.compact = false,
+  });
+
+  final SalesPlatformConfig platform;
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: EdgeInsets.symmetric(
+        horizontal: compact ? 6 : 8,
+        vertical: compact ? 2 : 4,
+      ),
+      decoration: BoxDecoration(
+        color: platform.color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(compact ? 6 : 8),
+        border: Border.all(color: platform.color.withValues(alpha: 0.35)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(platform.icon, size: compact ? 12 : 14, color: platform.color),
+          if (!compact) ...[
+            const SizedBox(width: 4),
+            Text(
+              platform.name,
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                color: platform.color,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
 }

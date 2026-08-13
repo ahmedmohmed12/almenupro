@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../../services/pos_operations_service.dart';
+import '../../../models/staff_user.dart';
+import '../../../services/pos_operations_service.dart';
 
 Future<ManagerOverrideResult?> showPosManagerOverrideDialog(
   BuildContext context, {

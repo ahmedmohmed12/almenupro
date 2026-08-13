@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../../models/cart_item.dart';
 import '../../../models/menu_item.dart';
@@ -147,10 +148,11 @@ class _PosFastModifiersDialogState extends State<_PosFastModifiersDialog> {
   @override
   Widget build(BuildContext context) {
     return Shortcuts(
-      shortcuts: const {
-        SingleActivator(LogicalKeyboardKey.enter): _ConfirmIntent(),
-        SingleActivator(LogicalKeyboardKey.numpadEnter): _ConfirmIntent(),
-        SingleActivator(LogicalKeyboardKey.escape): _CloseIntent(),
+      shortcuts: {
+        const SingleActivator(LogicalKeyboardKey.enter): const _ConfirmIntent(),
+        const SingleActivator(LogicalKeyboardKey.numpadEnter):
+            const _ConfirmIntent(),
+        const SingleActivator(LogicalKeyboardKey.escape): const _CloseIntent(),
       },
       child: Actions(
         actions: {
