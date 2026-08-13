@@ -183,6 +183,7 @@ function posDeps() {
 }
 
 async function handleRequest(req, res) {
+  // Preflight must short-circuit before Mongo/datastore for every /api and /og route.
   applyCorsHeaders(req, res);
   if (handleCorsPreflight(req, res)) {
     return;
@@ -205,11 +206,8 @@ async function handleRequest(req, res) {
     await dataStore.initDataStore();
     extraStore.seed();
   } catch (error) {
-    sendJson(res, 503, {
-      error: 'Data store unavailable',
-      details: String(error.message || error),
-    });
-    return;
+    // Never fail the whole API on store init; JSON/memory fallback keeps dashboard alive.
+    console.error('[apiServer] initDataStore failed, continuing with fallback:', error);
   }
 
   try {
@@ -220,7 +218,32 @@ async function handleRequest(req, res) {
   } catch (error) {
     console.error('[apiServer]', error);
     if (!res.writableEnded) {
+      applyCorsHeaders(req, res);
       sendJson(res, 500, { error: error.message || 'Internal server error' });
+    }
+  }
+}
+
+/**
+ * Vercel/Node entry: guarantee OPTIONS → 200 even if later logic throws.
+ */
+async function vercelHandler(req, res) {
+  try {
+    if (String(req.method || '').toUpperCase() === 'OPTIONS') {
+      applyCorsHeaders(req, res);
+      res.statusCode = 200;
+      res.setHeader('Content-Length', '0');
+      res.end();
+      return;
+    }
+    await handleRequest(req, res);
+  } catch (error) {
+    console.error('[apiServer] unhandled:', error);
+    if (!res.writableEnded) {
+      applyCorsHeaders(req, res);
+      res.statusCode = 500;
+      res.setHeader('Content-Type', 'application/json; charset=utf-8');
+      res.end(JSON.stringify({ error: error.message || 'Internal server error' }));
     }
   }
 }
@@ -890,10 +913,12 @@ async function routeRequest(req, res, url, pathname) {
   return false;
 }
 
-module.exports = handleRequest;
+module.exports = vercelHandler;
+module.exports.handleRequest = handleRequest;
+module.exports.vercelHandler = vercelHandler;
 
 if (require.main === module) {
-  const server = http.createServer(handleRequest);
+  const server = http.createServer(vercelHandler);
   server.listen(PORT, () => {
     console.log(`AlMenuPro API listening on http://localhost:${PORT}`);
   });
