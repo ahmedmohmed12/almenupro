@@ -7,6 +7,7 @@ import 'package:http/http.dart' as http;
 import '../models/customer.dart';
 import '../models/customer_checkout_profile.dart';
 import '../models/delivery_zone.dart';
+import '../models/loyalty_cashback.dart';
 import '../models/menu_item.dart';
 import '../models/order.dart';
 import '../models/restaurant.dart';
@@ -108,6 +109,13 @@ class ApiService {
     required String name,
     required String slug,
     required String adminPassword,
+    String ownerName = '',
+    String phone = '',
+    RestaurantStatus status = RestaurantStatus.active,
+    SubscriptionPlan subscriptionPlan = SubscriptionPlan.free,
+    SubscriptionStatus subscriptionStatus = SubscriptionStatus.active,
+    DateTime? subscriptionExpiresAt,
+    String subscriptionNotes = '',
   }) async {
     final response = await http
         .post(
@@ -117,6 +125,15 @@ class ApiService {
             'name': name,
             'slug': slug,
             'adminPassword': adminPassword,
+            if (ownerName.isNotEmpty) 'ownerName': ownerName,
+            if (phone.isNotEmpty) 'phone': phone,
+            'status': status.apiValue,
+            'subscriptionPlan': subscriptionPlan.apiValue,
+            'subscriptionStatus': subscriptionStatus.apiValue,
+            if (subscriptionExpiresAt != null)
+              'subscriptionExpiresAt':
+                  subscriptionExpiresAt.toUtc().toIso8601String(),
+            if (subscriptionNotes.isNotEmpty) 'subscriptionNotes': subscriptionNotes,
           }),
         )
         .timeout(_fetchTimeout);
@@ -287,13 +304,17 @@ class ApiService {
     }
   }
 
-  Future<RestaurantSettings> updateSettings(RestaurantSettings settings) async {
+  Future<RestaurantSettings> updateSettings(
+    RestaurantSettings settings, {
+    String? restaurantId,
+  }) async {
     try {
       final payload = settings.copyWith(updatedAt: DateTime.now().toUtc());
       final body = payload.toJson();
-      final restaurantId = AdminAuthService.instance.restaurantId;
-      if (restaurantId != null) {
-        body['restaurantId'] = restaurantId;
+      final scopedId = restaurantId ??
+          SuperAdminScopeService.instance.effectiveRestaurantId;
+      if (scopedId.isNotEmpty) {
+        body['restaurantId'] = scopedId;
       }
 
       final response = await http
@@ -321,13 +342,22 @@ class ApiService {
     }
   }
 
-  Future<void> updateOrderStatus(String orderId, OrderStatus status) async {
+  Future<void> updateOrderStatus(
+    String orderId,
+    OrderStatus status, {
+    String? shiftId,
+    String? cashierId,
+  }) async {
     try {
       final response = await http
           .patch(
             _uri('/orders/$orderId/status'),
             headers: _jsonHeaders,
-            body: jsonEncode({'status': status.name}),
+            body: jsonEncode({
+              'status': status.name,
+              if (shiftId != null && shiftId.isNotEmpty) 'shiftId': shiftId,
+              if (cashierId != null && cashierId.isNotEmpty) 'cashierId': cashierId,
+            }),
           )
           .timeout(_fetchTimeout);
 
@@ -487,9 +517,13 @@ class ApiService {
 
   Future<List<MenuItem>> fetchPublicItems({
     String? restaurantId,
+    String? slug,
   }) async {
     try {
-      final query = _publicRestaurantQuery(restaurantId: restaurantId);
+      final query = _publicRestaurantQuery(
+        restaurantId: restaurantId,
+        slug: slug,
+      );
       final response = await http
           .get(_uri('/items', query), headers: _publicHeaders)
           .timeout(_fetchTimeout);
@@ -661,8 +695,11 @@ class ApiService {
 
   Future<List<DeliveryZone>> fetchDeliveryZones({
     String? restaurantId,
+    String? slug,
   }) async {
-    final query = _restaurantQuery(restaurantId: restaurantId);
+    final query = slug != null && slug.trim().isNotEmpty
+        ? _publicRestaurantQuery(slug: slug, restaurantId: restaurantId)
+        : _restaurantQuery(restaurantId: restaurantId);
 
     final headers = AdminAuthService.instance.isLoggedIn
         ? _jsonHeaders
@@ -852,6 +889,101 @@ class ApiService {
       debugPrint('Customer lookup failed: $error');
       return null;
     }
+  }
+
+  Future<Map<String, dynamic>> fetchDailySalesAnalytics({
+    String? restaurantId,
+    int days = 1,
+  }) async {
+    return _getJsonMap(
+      '/analytics/daily-sales',
+      query: {
+        ..._restaurantQuery(restaurantId: restaurantId),
+        'days': '$days',
+      },
+    );
+  }
+
+  Future<Map<String, dynamic>> fetchFoodCostReport({
+    String? restaurantId,
+    int days = 30,
+  }) async {
+    return _getJsonMap(
+      '/analytics/food-cost',
+      query: {
+        ..._restaurantQuery(restaurantId: restaurantId),
+        'days': '$days',
+      },
+    );
+  }
+
+  Future<Map<String, dynamic>> fetchUpsellAnalytics({
+    String? restaurantId,
+    int days = 30,
+  }) async {
+    return _getJsonMap(
+      '/analytics/upsell',
+      query: {
+        ..._restaurantQuery(restaurantId: restaurantId),
+        'days': '$days',
+      },
+    );
+  }
+
+  Future<void> logUpsellEvents({
+    required List<Map<String, dynamic>> events,
+    String? slug,
+    String? restaurantId,
+  }) async {
+    if (events.isEmpty) return;
+    try {
+      await http
+          .post(
+            _uri('/analytics/upsell-events'),
+            headers: _publicHeaders,
+            body: jsonEncode({
+              'events': events,
+              if (slug != null && slug.isNotEmpty) 'slug': slug,
+              'restaurantId': _scopedRestaurantId(restaurantId: restaurantId),
+            }),
+          )
+          .timeout(_writeTimeout);
+    } catch (error) {
+      debugPrint('logUpsellEvents failed: $error');
+    }
+  }
+
+  Future<LoyaltyCashbackPreview> calculateLoyaltyCashback({
+    required double orderTotal,
+    String? restaurantId,
+  }) async {
+    final map = await _getJsonMap(
+      '/loyalty/cashback',
+      query: {
+        ..._restaurantQuery(restaurantId: restaurantId),
+        'orderTotal': '$orderTotal',
+      },
+    );
+    return LoyaltyCashbackPreview.fromMap(map);
+  }
+
+  Future<Map<String, dynamic>> _getJsonMap(
+    String path, {
+    Map<String, String>? query,
+  }) async {
+    final response = await http
+        .get(_uri(path, query), headers: _jsonHeaders)
+        .timeout(_fetchTimeout);
+
+    if (response.statusCode != 200) {
+      throw Exception('فشل في تحميل البيانات (${response.statusCode})');
+    }
+
+    final decoded = jsonDecode(response.body);
+    if (decoded is! Map) {
+      throw Exception('استجابة غير متوقعة من السيرفر');
+    }
+    return Map<String, dynamic>.from(decoded);
   }
 }
 

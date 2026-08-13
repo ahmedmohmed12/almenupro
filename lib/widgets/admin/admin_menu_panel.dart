@@ -3,11 +3,7 @@ import 'package:flutter/material.dart';
 import '../../models/menu_item.dart';
 import '../../services/api_service.dart';
 import '../../services/menu_storage_service.dart';
-enum AdminMenuPanelStatus {
-  active,
-  inactive,
-  loading,
-}
+import 'admin_menu_panel_status.dart';
 class AdminMenuPanel extends StatefulWidget {
   const AdminMenuPanel({
     super.key,
@@ -65,6 +61,15 @@ class _AdminMenuPanelState extends State<AdminMenuPanel> {
 
     if (mounted) {
       setState(() => _loading = false);
+      widget.onStatusChanged?.call(
+        AdminMenuPanelStatus(
+          loading: false,
+          apiOnline: _apiOnline,
+          errorMessage: _errorMessage,
+          savingOrder: false,
+          itemCount: _apiItems.length,
+        ),
+      );
     }
   }
 

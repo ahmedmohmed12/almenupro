@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../services/api_service.dart';
-import '../../models/menu_item.dart';
+import '../../../models/menu_item.dart';
 
 class PosMenuPage extends StatefulWidget {
   const PosMenuPage({super.key});

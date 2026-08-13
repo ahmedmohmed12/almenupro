@@ -129,7 +129,7 @@ class PosPermissionCatalog {
     return {for (final key in allKeys) key: enabled};
   }
 
-  static Map<String, bool> normalizePermissions(Map<String, bool>? raw) {
+  static Map<String, bool> normalizePermissions(Map<String, dynamic>? raw) {
     final normalized = <String, bool>{};
     for (final key in allKeys) {
       normalized[key] = raw?[key] == true;

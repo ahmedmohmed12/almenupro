@@ -158,11 +158,11 @@ class _AdminDashboardState extends State<AdminDashboard> {
 
     try {
       final restaurantId = SuperAdminScopeService.instance.effectiveRestaurantId;
-await RestaurantSettingsService.instance.saveWhatsappNumber(
-  restaurantId,
-  countryCode: _whatsappCountryCode,
-  phone: _whatsappController.text.trim(),
-);
+      await RestaurantSettingsService.instance.saveWhatsappNumber(
+        restaurantId: restaurantId,
+        countryCode: _whatsappCountryCode,
+        phone: _whatsappController.text.trim(),
+      );
       if (!mounted) return;
       final display = WhatsAppPhone.formatDisplay(
         _whatsappCountryCode,
