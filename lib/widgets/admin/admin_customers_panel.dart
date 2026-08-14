@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import '../../models/customer.dart';
 import '../../models/order.dart';
 import '../../services/api_service.dart';
+import '../../services/super_admin_scope_service.dart';
 import '../../theme/app_theme.dart';
 import 'admin_breakpoints.dart';
 import 'order_status_chip.dart';
@@ -19,15 +20,17 @@ class _AdminCustomersPanelState extends State<AdminCustomersPanel> {
   late Future<List<Customer>> _customersFuture;
   String? _selectedCustomerId;
 
+  String get _restaurantId => SuperAdminScopeService.instance.effectiveRestaurantId;
+
   @override
   void initState() {
     super.initState();
-    _customersFuture = ApiService.instance.fetchCustomers();
+    _customersFuture = ApiService.instance.fetchCustomers(restaurantId: _restaurantId);
   }
 
   Future<void> _reloadCustomers() async {
     setState(() {
-      _customersFuture = ApiService.instance.fetchCustomers();
+      _customersFuture = ApiService.instance.fetchCustomers(restaurantId: _restaurantId);
       _selectedCustomerId = null;
     });
     await _customersFuture;
@@ -148,15 +151,23 @@ class AdminCustomerDetailView extends StatefulWidget {
 class _AdminCustomerDetailViewState extends State<AdminCustomerDetailView> {
   late Future<CustomerDetailData> _detailFuture;
 
+  String get _restaurantId => SuperAdminScopeService.instance.effectiveRestaurantId;
+
   @override
   void initState() {
     super.initState();
-    _detailFuture = ApiService.instance.fetchCustomerDetail(widget.customerId);
+    _detailFuture = ApiService.instance.fetchCustomerDetail(
+      widget.customerId,
+      restaurantId: _restaurantId,
+    );
   }
 
   Future<void> _reload() async {
     setState(() {
-      _detailFuture = ApiService.instance.fetchCustomerDetail(widget.customerId);
+      _detailFuture = ApiService.instance.fetchCustomerDetail(
+        widget.customerId,
+        restaurantId: _restaurantId,
+      );
     });
     await _detailFuture;
   }
