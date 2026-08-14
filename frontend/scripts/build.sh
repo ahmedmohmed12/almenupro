@@ -16,7 +16,7 @@ fi
 
 FLUTTER_VERSION="${FLUTTER_VERSION:-stable}"
 FLUTTER_HOME="${FLUTTER_HOME:-$PROJECT_ROOT/.flutter}"
-API_BASE_URL="${API_BASE_URL:-https://almenupro-backend.vercel.app/api}"
+API_BASE_URL="${API_BASE_URL:-https://almenupro-backend-1.onrender.com/api}"
 DIST_DIR="$FRONTEND_DIR/dist"
 
 if [ ! -x "$FLUTTER_HOME/bin/flutter" ]; then

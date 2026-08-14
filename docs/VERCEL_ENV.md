@@ -15,7 +15,7 @@ Add these in **Vercel → Project → Settings → Environment Variables**:
 After adding `MONGODB_URI`, redeploy the backend. Check persistence:
 
 ```text
-GET https://almenupro-backend.vercel.app/api/health
+GET https://almenupro-backend-1.onrender.com/api/health
 ```
 
 Expected: `"storage": "mongodb"`
@@ -24,7 +24,7 @@ Expected: `"storage": "mongodb"`
 
 | Variable | Value | Notes |
 |---|---|---|
-| `API_BASE_URL` | `https://almenupro-backend.vercel.app/api` | Build-time only |
+| `API_BASE_URL` | `https://almenupro-backend-1.onrender.com/api` | Build-time only |
 | `SUPER_ADMIN_USER` | `superadmin` | Optional login label default |
 
 **Do not** add `ADMIN_AUTH_SECRET` or `SUPER_ADMIN_PASSWORD` to the frontend project — they would be exposed in the web bundle.

@@ -105,6 +105,35 @@ async function main() {
     const healthBody = JSON.parse(health.body);
     assert(healthBody.ok === true, 'health.ok should be true');
 
+    const root = await request(port, {
+      method: 'GET',
+      path: '/',
+      headers: { Origin: 'https://external-client.example.com' },
+    });
+    assert(root.status === 200, `GET / expected 200, got ${root.status} ${root.body}`);
+    const rootBody = JSON.parse(root.body);
+    assert(rootBody.ok === true, 'root.ok should be true');
+    assert(rootBody.version, 'root.version should be set');
+    assert(
+      root.headers['access-control-allow-origin'] === 'https://external-client.example.com',
+      `GET / should reflect external Origin, got ${root.headers['access-control-allow-origin']}`,
+    );
+
+    const externalPreflight = await request(port, {
+      method: 'OPTIONS',
+      path: '/api/health',
+      headers: {
+        Origin: 'https://app.onrender.com',
+        'Access-Control-Request-Method': 'GET',
+        'Access-Control-Request-Headers': 'content-type,authorization',
+      },
+    });
+    assert(externalPreflight.status === 200, `external OPTIONS expected 200, got ${externalPreflight.status}`);
+    assert(
+      externalPreflight.headers['access-control-allow-origin'] === 'https://app.onrender.com',
+      `external OPTIONS should reflect Origin, got ${externalPreflight.headers['access-control-allow-origin']}`,
+    );
+
     const login = await request(port, {
       method: 'POST',
       path: '/api/auth/login',
@@ -125,6 +154,8 @@ async function main() {
           itemsStatus: items.status,
           itemCount: parsed.length,
           health: healthBody,
+          root: rootBody,
+          externalAllowOrigin: externalPreflight.headers['access-control-allow-origin'],
         },
         null,
         2,

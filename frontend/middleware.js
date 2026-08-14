@@ -1,7 +1,7 @@
 const SOCIAL_CRAWLER_PATTERN =
   /bot|crawl|spider|slurp|facebook|whatsapp|facebot|twitter|linkedin|telegram|slack|discord|preview|embed|meta-externalagent/i;
 
-const DEFAULT_BACKEND_ORIGIN = 'https://almenupro-backend.vercel.app';
+const DEFAULT_BACKEND_ORIGIN = 'https://almenupro-backend-1.onrender.com';
 
 export const config = {
   matcher: ['/menu/:path*', '/restaurant/:path*', '/:slug'],

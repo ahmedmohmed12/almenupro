@@ -58,6 +58,16 @@ const {
 } = require('./lib/shiftOrderBinding');
 
 const PORT = Number(process.env.PORT || 3000);
+const PKG = require('./package.json');
+
+function rootStatusPayload() {
+  return {
+    ok: true,
+    message: 'AlMenuPro API is running successfully',
+    service: PKG.name || 'almenupro-api',
+    version: PKG.version || '0.0.0',
+  };
+}
 
 function sendJson(res, statusCode, body) {
   applyCorsHeaders(res.req || { headers: {} }, res);
@@ -195,6 +205,12 @@ async function handleRequest(req, res) {
     pathname = pathname.slice(0, -1);
   }
   url.pathname = pathname;
+
+  // Root readiness — no datastore required (Render / local health checks).
+  if (pathname === '/' && req.method === 'GET') {
+    sendJson(res, 200, rootStatusPayload());
+    return;
+  }
 
   const imageMatch = pathname.match(/^\/api\/uploads\/menu\/([^/]+)$/);
   if (imageMatch && (req.method === 'GET' || req.method === 'HEAD')) {

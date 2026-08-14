@@ -6,7 +6,7 @@ Deploy this folder as a **separate Vercel project** with Root Directory = `front
 
 | Variable | Required | Example |
 |----------|----------|---------|
-| `API_BASE_URL` | Recommended | `https://almenupro-backend.vercel.app/api` |
+| `API_BASE_URL` | Recommended | `https://almenupro-backend-1.onrender.com/api` |
 
 Passed to Flutter at build time via `--dart-define=API_BASE_URL=...`.
 

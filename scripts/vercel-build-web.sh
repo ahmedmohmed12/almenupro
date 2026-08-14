@@ -3,7 +3,7 @@ set -euo pipefail
 
 FLUTTER_VERSION="${FLUTTER_VERSION:-stable}"
 FLUTTER_HOME="${FLUTTER_HOME:-$PWD/.flutter}"
-API_BASE_URL="${API_BASE_URL:-https://almenupro-backend.vercel.app/api}"
+API_BASE_URL="${API_BASE_URL:-https://almenupro-backend-1.onrender.com/api}"
 
 if [ ! -x "$FLUTTER_HOME/bin/flutter" ]; then
   echo "Installing Flutter ($FLUTTER_VERSION)..."

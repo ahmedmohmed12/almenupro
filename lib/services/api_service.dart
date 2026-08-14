@@ -27,7 +27,7 @@ class ApiService {
   static String get baseUrl {
     const configured = String.fromEnvironment(
       'API_BASE_URL',
-      defaultValue: 'https://almenupro-backend.vercel.app/api',
+      defaultValue: 'https://almenupro-backend-1.onrender.com/api',
     );
     return configured;
   }

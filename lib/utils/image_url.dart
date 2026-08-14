@@ -1,6 +1,6 @@
 import '../services/api_service.dart';
 
-/// API origin without the `/api` suffix, e.g. https://almenupro-backend.vercel.app
+/// API origin without the `/api` suffix, e.g. https://almenupro-backend-1.onrender.com
 String get menuImageApiOrigin {
   final base = ApiService.baseUrl;
   if (base.endsWith('/api')) {
