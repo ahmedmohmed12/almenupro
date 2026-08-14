@@ -4,8 +4,10 @@ Restaurant menu + admin/POS Flutter app with a Node API (`apiServer.js`) deploye
 
 ## Cursor Cloud specific instructions
 
-- API entry is repo-root `apiServer.js` (`npm start` / Vercel `@vercel/node`). Export is `vercelHandler`, which answers **OPTIONS with HTTP 200** before any route or Mongo work.
-- CORS headers on every response: `Access-Control-Allow-Origin: *`, methods including `GET, POST, PUT, PATCH, DELETE, OPTIONS`, headers including `Content-Type, Authorization, X-Restaurant-Id` / `x-restaurant-id` (`lib/adminAuth.js` + `vercel.json`).
-- Flutter Web sends `Content-Type: application/json` on GETs and may send `Authorization` + `X-Restaurant-Id`, so preflight is required. Do not add work before the OPTIONS short-circuit or browsers will block `https://almenupro-backend.vercel.app/api/...`.
-- If `MONGODB_URI` is missing or Mongo auth fails, `lib/dataStore.js` falls back to bundled JSON under `data/` (in-memory on Vercel). Do not return 503 from init for API routes; keep `GET /api/health` and `GET /api/items` available.
-- Local API smoke: `node scripts/cors-smoke.js` (OPTIONS 200 + `GET /api/items` array).
+- API entry is repo-root `apiServer.js` (`npm start` / Vercel `@vercel/node`). Export is `vercelHandler`, which answers **OPTIONS with HTTP 200** via `writeHead` **before** any route or Mongo work.
+- CORS reflects allowed browser origins (no `*` and no `Access-Control-Allow-Credentials`). Production dashboard origin: `https://almenupro-dashboard-2026-gfwn0j6x9-almenupro.vercel.app`. Extra origins: `CORS_ALLOWED_ORIGINS` (comma-separated) or `*-almenupro.vercel.app` previews.
+- Allowed methods: `GET, POST, PUT, PATCH, DELETE, OPTIONS`. Allowed headers: `Content-Type, Authorization, X-Restaurant-Id, X-Requested-With`.
+- Flutter Web sends `Content-Type: application/json` on GETs plus `Authorization` / `X-Restaurant-Id`, so preflight is required. Do not add work before the OPTIONS short-circuit.
+- If `MONGODB_URI` is missing or Mongo auth fails, `lib/dataStore.js` falls back to bundled JSON under `data/` (in-memory on Vercel). Do not return 503 from init for API routes.
+- The production alias `https://almenupro-backend.vercel.app` can lag behind a working deployment URL. After CORS changes, confirm the **alias** OPTIONS is 200, not only the `*.vercel.app` deployment URL.
+- Local API smoke: `node scripts/cors-smoke.js`.
