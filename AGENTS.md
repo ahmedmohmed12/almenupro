@@ -11,3 +11,4 @@ Restaurant menu + admin/POS Flutter app with a Node API (`apiServer.js`). Produc
 - Flutter Web sends `Content-Type: application/json` on GETs plus `Authorization` / `X-Restaurant-Id`, so preflight is required. Do not add work before the OPTIONS short-circuit.
 - If `MONGODB_URI` is missing or Mongo auth fails, `lib/dataStore.js` falls back to bundled JSON under `data/` (in-memory on Vercel). Do not return 503 from init for API routes.
 - Local API smoke: `node scripts/cors-smoke.js`.
+- **Vercel Node runtime:** pin **22.x** via root `package.json` `engines` and `.nvmrc`. In Vercel → Project → Settings → General → Node.js Version, choose **22.x** (not 24.x) to clear runtime warnings on `@vercel/node`.

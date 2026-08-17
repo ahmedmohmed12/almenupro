@@ -9,7 +9,7 @@
     "test:cors": "node scripts/cors-smoke.js"
   },
   "engines": {
-    "node": ">=18"
+    "node": "22.x"
   },
   "dependencies": {
     "mongodb": "^6.16.0"

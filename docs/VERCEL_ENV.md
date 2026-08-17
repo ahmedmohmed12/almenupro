@@ -2,6 +2,8 @@
 
 ## Backend project (`almenupro-backend`)
 
+**Node.js:** use **22.x** (see root `package.json` `engines` and `.nvmrc`). In Vercel → Settings → General → Node.js Version, select **22.x** — avoid 24.x unless you have tested `@vercel/node` on that runtime.
+
 Add these in **Vercel → Project → Settings → Environment Variables**:
 
 | Variable | Production value | Notes |
@@ -21,6 +23,8 @@ GET https://almenupro-backend-1.onrender.com/api/health
 Expected: `"storage": "mongodb"`
 
 ## Frontend project (`almenupro-frontend`)
+
+**Node.js:** use **22.x** (`frontend/package.json` `engines`, `frontend/.nvmrc`). Match the setting in Vercel → Settings → General → Node.js Version.
 
 | Variable | Value | Notes |
 |---|---|---|
