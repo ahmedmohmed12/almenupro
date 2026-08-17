@@ -119,6 +119,16 @@ async function main() {
       `GET / should reflect external Origin, got ${root.headers['access-control-allow-origin']}`,
     );
 
+    const apiRoot = await request(port, {
+      method: 'GET',
+      path: '/api',
+      headers: { Origin: DASHBOARD_ORIGIN },
+    });
+    assert(apiRoot.status === 200, `GET /api expected 200, got ${apiRoot.status} ${apiRoot.body}`);
+    const apiRootBody = JSON.parse(apiRoot.body);
+    assert(apiRootBody.ok === true, 'GET /api ok should be true');
+    assert(apiRootBody.version, 'GET /api version should be set');
+
     const externalPreflight = await request(port, {
       method: 'OPTIONS',
       path: '/api/health',
@@ -155,6 +165,7 @@ async function main() {
           itemCount: parsed.length,
           health: healthBody,
           root: rootBody,
+          apiRoot: apiRootBody,
           externalAllowOrigin: externalPreflight.headers['access-control-allow-origin'],
         },
         null,

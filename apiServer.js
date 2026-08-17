@@ -207,7 +207,7 @@ async function handleRequest(req, res) {
   url.pathname = pathname;
 
   // Root readiness — no datastore required (Render / local health checks).
-  if (pathname === '/' && req.method === 'GET') {
+  if ((pathname === '/' || pathname === '/api') && req.method === 'GET') {
     sendJson(res, 200, rootStatusPayload());
     return;
   }
