@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import 'admin_smart_upsell_settings_card.dart';
+import 'admin_smart_cart_upsell_settings_card.dart';
+import 'admin_smart_upsell_analytics_card.dart';
 
 class AdminSmartUpsellPanel extends StatelessWidget {
   const AdminSmartUpsellPanel({super.key});
@@ -45,8 +47,8 @@ class AdminSmartUpsellPanel extends StatelessWidget {
                     ),
                     SizedBox(height: 6),
                     Text(
-                      'اضبط شريط التوصيل المجاني واقتراحات «حاجات تنور سفرتك» '
-                      'التي تظهر للعميل في شاشة الدفع.',
+                      'اضبط شريط التوصيل المجاني واقتراحات الدفع (المرحلة 2)، '
+                      'ثم اقتراحات تكملة السلة في الكاشير وCheckout (المرحلة 3).',
                       style: TextStyle(
                         fontSize: 14,
                         color: Color(0xFF555555),
@@ -60,6 +62,10 @@ class AdminSmartUpsellPanel extends StatelessWidget {
           ),
           const SizedBox(height: 24),
           const AdminSmartUpsellSettingsCard(),
+          const SizedBox(height: 24),
+          const AdminSmartCartUpsellSettingsCard(),
+          const SizedBox(height: 24),
+          const AdminSmartUpsellAnalyticsCard(),
         ],
       ),
     );

@@ -132,6 +132,28 @@ class RestaurantSettingsService {
     );
   }
 
+  Future<void> saveStage3UpsellSettings({
+    required bool smartCartUpsellEnabled,
+    required bool smartUpsellDrinksEnabled,
+    required bool smartUpsellSidesEnabled,
+    required bool smartUpsellDessertsEnabled,
+    required double dessertUpsellThreshold,
+    String? restaurantId,
+  }) async {
+    final current = _cached ?? await load(restaurantId: restaurantId);
+    await _persist(
+      current.copyWith(
+        smartCartUpsellEnabled: smartCartUpsellEnabled,
+        smartUpsellDrinksEnabled: smartUpsellDrinksEnabled,
+        smartUpsellSidesEnabled: smartUpsellSidesEnabled,
+        smartUpsellDessertsEnabled: smartUpsellDessertsEnabled,
+        dessertUpsellThreshold: dessertUpsellThreshold,
+        updatedAt: DateTime.now().toUtc(),
+      ),
+      restaurantId: restaurantId,
+    );
+  }
+
   Future<void> saveLoyaltySettings({
     required CashbackType cashbackType,
     required double cashbackValue,

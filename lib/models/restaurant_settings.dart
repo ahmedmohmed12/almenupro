@@ -17,6 +17,11 @@ class RestaurantSettings {
     this.freeDeliveryThreshold = 0,
     this.impulseBumpItemIds = const [],
     this.impulseBumpMaxPrice = 2,
+    this.smartCartUpsellEnabled = true,
+    this.smartUpsellDrinksEnabled = true,
+    this.smartUpsellSidesEnabled = true,
+    this.smartUpsellDessertsEnabled = true,
+    this.dessertUpsellThreshold = 5,
     this.cashbackType = CashbackType.percentage,
     this.cashbackValue = 0,
     this.minOrderForLoyalty = 0,
@@ -43,6 +48,13 @@ class RestaurantSettings {
   final List<int> impulseBumpItemIds;
   /// Used to auto-pick impulse items when [impulseBumpItemIds] is empty.
   final double impulseBumpMaxPrice;
+  /// Stage 3: complementary cart suggestions (drinks / sides / desserts).
+  final bool smartCartUpsellEnabled;
+  final bool smartUpsellDrinksEnabled;
+  final bool smartUpsellSidesEnabled;
+  final bool smartUpsellDessertsEnabled;
+  /// Cart subtotal that unlocks dessert suggestions.
+  final double dessertUpsellThreshold;
   final CashbackType cashbackType;
   final double cashbackValue;
   final double minOrderForLoyalty;
@@ -139,6 +151,18 @@ class RestaurantSettings {
           (json['impulseBumpMaxPrice'] as num?)?.toDouble() ??
               (json['impulse_bump_max_price'] as num?)?.toDouble() ??
               2,
+      smartCartUpsellEnabled: json['smartCartUpsellEnabled'] != false &&
+          json['smart_cart_upsell_enabled'] != false,
+      smartUpsellDrinksEnabled: json['smartUpsellDrinksEnabled'] != false &&
+          json['smart_upsell_drinks_enabled'] != false,
+      smartUpsellSidesEnabled: json['smartUpsellSidesEnabled'] != false &&
+          json['smart_upsell_sides_enabled'] != false,
+      smartUpsellDessertsEnabled: json['smartUpsellDessertsEnabled'] != false &&
+          json['smart_upsell_desserts_enabled'] != false,
+      dessertUpsellThreshold:
+          (json['dessertUpsellThreshold'] as num?)?.toDouble() ??
+              (json['dessert_upsell_threshold'] as num?)?.toDouble() ??
+              5,
       cashbackType: CashbackType.fromStorage(
         json['cashbackType']?.toString() ?? json['cashback_type']?.toString(),
       ),
@@ -184,6 +208,11 @@ class RestaurantSettings {
     double? freeDeliveryThreshold,
     List<int>? impulseBumpItemIds,
     double? impulseBumpMaxPrice,
+    bool? smartCartUpsellEnabled,
+    bool? smartUpsellDrinksEnabled,
+    bool? smartUpsellSidesEnabled,
+    bool? smartUpsellDessertsEnabled,
+    double? dessertUpsellThreshold,
     CashbackType? cashbackType,
     double? cashbackValue,
     double? minOrderForLoyalty,
@@ -215,6 +244,16 @@ class RestaurantSettings {
       freeDeliveryThreshold: freeDeliveryThreshold ?? this.freeDeliveryThreshold,
       impulseBumpItemIds: impulseBumpItemIds ?? this.impulseBumpItemIds,
       impulseBumpMaxPrice: impulseBumpMaxPrice ?? this.impulseBumpMaxPrice,
+      smartCartUpsellEnabled:
+          smartCartUpsellEnabled ?? this.smartCartUpsellEnabled,
+      smartUpsellDrinksEnabled:
+          smartUpsellDrinksEnabled ?? this.smartUpsellDrinksEnabled,
+      smartUpsellSidesEnabled:
+          smartUpsellSidesEnabled ?? this.smartUpsellSidesEnabled,
+      smartUpsellDessertsEnabled:
+          smartUpsellDessertsEnabled ?? this.smartUpsellDessertsEnabled,
+      dessertUpsellThreshold:
+          dessertUpsellThreshold ?? this.dessertUpsellThreshold,
       cashbackType: cashbackType ?? this.cashbackType,
       cashbackValue: cashbackValue ?? this.cashbackValue,
       minOrderForLoyalty: minOrderForLoyalty ?? this.minOrderForLoyalty,
@@ -241,6 +280,11 @@ class RestaurantSettings {
         'freeDeliveryThreshold': freeDeliveryThreshold,
         'impulseBumpItemIds': impulseBumpItemIds,
         'impulseBumpMaxPrice': impulseBumpMaxPrice,
+        'smartCartUpsellEnabled': smartCartUpsellEnabled,
+        'smartUpsellDrinksEnabled': smartUpsellDrinksEnabled,
+        'smartUpsellSidesEnabled': smartUpsellSidesEnabled,
+        'smartUpsellDessertsEnabled': smartUpsellDessertsEnabled,
+        'dessertUpsellThreshold': dessertUpsellThreshold,
         'cashbackType': cashbackType.storageValue,
         'cashbackValue': cashbackValue,
         'minOrderForLoyalty': minOrderForLoyalty,
