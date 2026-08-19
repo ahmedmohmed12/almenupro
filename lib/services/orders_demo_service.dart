@@ -42,7 +42,7 @@ class OrdersDemoService {
       _scheduleDemoSimulation();
     }
 
-    _pollTimer ??= Timer.periodic(const Duration(seconds: 8), (_) {
+    _pollTimer ??= Timer.periodic(const Duration(seconds: 3), (_) {
       unawaited(_refreshFromApi());
     });
   }

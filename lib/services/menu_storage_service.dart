@@ -102,9 +102,9 @@ class MenuStorageService {
 
   Future<void> _refreshFromRemote() async {
     try {
-      final apiItems = await ApiService.instance.fetchMenuItems();
-      if (apiItems.isNotEmpty) {
-        _items = apiItems.map(_recordFromMenuItem).toList();
+      final page = await ApiService.instance.fetchItemsPage(lite: true, limit: 40);
+      if (page.items.isNotEmpty) {
+        _items = page.items.map(_recordFromMenuItem).toList();
         await _saveToPrefs(_items);
         _emit();
         return;

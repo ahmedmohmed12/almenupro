@@ -16,20 +16,75 @@ class MenuScreen extends StatefulWidget {
 }
 
 class _MenuScreenState extends State<MenuScreen> {
-  late Future<List<MenuItem>> _itemsFuture;
+  static const _pageSize = 24;
+  List<MenuItem> _items = [];
+  var _loading = true;
+  var _loadingMore = false;
+  var _retrying = false;
+  var _total = 0;
+  String? _error;
   String _selectedCategory = 'الكل';
 
   @override
   void initState() {
     super.initState();
-    _itemsFuture = ApiService.instance.fetchItems();
+    _loadItems(autoRetry: true);
   }
 
-  Future<void> _reload() async {
-    setState(() {
-      _itemsFuture = ApiService.instance.fetchItems();
-    });
-    await _itemsFuture;
+  Future<void> _loadItems({bool autoRetry = false, bool reset = true}) async {
+    if (reset) {
+      setState(() {
+        _loading = _items.isEmpty;
+        _retrying = _items.isNotEmpty;
+        _error = null;
+      });
+    } else {
+      if (_loadingMore || _items.length >= _total) return;
+      setState(() => _loadingMore = true);
+    }
+
+    try {
+      final page = await ApiService.instance.fetchItemsPage(
+        lite: true,
+        limit: _pageSize,
+        offset: reset ? 0 : _items.length,
+      );
+      if (!mounted) return;
+      setState(() {
+        _items = reset ? page.items : [..._items, ...page.items];
+        _total = page.total;
+        _loading = false;
+        _loadingMore = false;
+        _retrying = false;
+        _error = null;
+      });
+    } catch (error) {
+      if (autoRetry && _items.isEmpty) {
+        try {
+          final page = await ApiService.instance.fetchItemsPage(
+            lite: true,
+            limit: _pageSize,
+            offset: 0,
+          );
+          if (!mounted) return;
+          setState(() {
+            _items = page.items;
+            _total = page.total;
+            _loading = false;
+            _retrying = false;
+            _error = null;
+          });
+          return;
+        } catch (_) {}
+      }
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _loadingMore = false;
+        _retrying = false;
+        _error = error.toString().replaceFirst('Exception: ', '');
+      });
+    }
   }
 
   void _addToCart(MenuItem item) {
@@ -75,97 +130,7 @@ class _MenuScreenState extends State<MenuScreen> {
       textDirection: TextDirection.rtl,
       child: Scaffold(
         backgroundColor: AppTheme.brandBackground,
-        body: FutureBuilder<List<MenuItem>>(
-          future: _itemsFuture,
-          builder: (context, snapshot) {
-            if (snapshot.connectionState == ConnectionState.waiting) {
-              return const Center(
-                child: CircularProgressIndicator(color: AppTheme.brandOrange),
-              );
-            }
-
-            if (snapshot.hasError) {
-              return _ErrorState(
-                message: snapshot.error.toString(),
-                onRetry: _reload,
-              );
-            }
-
-            final items = snapshot.data ?? [];
-            if (items.isEmpty) {
-              return _ErrorState(
-                message: 'لا توجد أصناف متاحة حالياً',
-                onRetry: _reload,
-              );
-            }
-
-            final categories = _categories(items);
-            final filtered = _filteredItems(items);
-
-            return RefreshIndicator(
-              color: AppTheme.brandOrange,
-              onRefresh: _reload,
-              child: CustomScrollView(
-                slivers: [
-                  SliverToBoxAdapter(child: _MenuHeader(onRefresh: _reload)),
-                  SliverToBoxAdapter(
-                    child: _CategoryBar(
-                      categories: categories,
-                      selected: _selectedCategory,
-                      onSelected: (value) {
-                        setState(() => _selectedCategory = value);
-                      },
-                    ),
-                  ),
-                  if (filtered.isEmpty)
-                    const SliverFillRemaining(
-                      hasScrollBody: false,
-                      child: Center(
-                        child: Text(
-                          'لا توجد أصناف في هذا التصنيف',
-                          style: TextStyle(
-                            color: AppTheme.brandBlack,
-                            fontSize: 16,
-                          ),
-                        ),
-                      ),
-                    )
-                  else
-                    SliverLayoutBuilder(
-                      builder: (context, constraints) {
-                        final width = constraints.crossAxisExtent;
-                        final columns = _gridColumns(width);
-                        final cardWidth =
-                            (width - 32 - (columns - 1) * 16) / columns;
-
-                        return SliverPadding(
-                          padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-                          sliver: SliverGrid(
-                            gridDelegate:
-                                SliverGridDelegateWithMaxCrossAxisExtent(
-                              maxCrossAxisExtent: cardWidth,
-                              crossAxisSpacing: 16,
-                              mainAxisSpacing: 16,
-                              mainAxisExtent: columns >= 3 ? 320 : 300,
-                            ),
-                            delegate: SliverChildBuilderDelegate(
-                              (context, index) {
-                                return _MenuItemCard(
-                                  item: filtered[index],
-                                  onAddToCart: () => _addToCart(filtered[index]),
-                                );
-                              },
-                              childCount: filtered.length,
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-                ],
-              ),
-            );
-          },
-        ),
+        body: _buildBody(),
         bottomNavigationBar: cart.isEmpty
             ? null
             : _FloatingCartBar(
@@ -174,6 +139,157 @@ class _MenuScreenState extends State<MenuScreen> {
                 onCheckout: () => MenuCheckoutSheet.show(context),
               ),
       ),
+    );
+  }
+
+  Widget _buildBody() {
+    if (_loading && _items.isEmpty) {
+      return const Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            CircularProgressIndicator(color: AppTheme.brandOrange),
+            SizedBox(height: 16),
+            Text(
+              'جاري تحميل المنيو...',
+              style: TextStyle(color: AppTheme.brandBlack),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (_items.isEmpty) {
+      return _ErrorState(
+        message: _error ?? 'لا توجد أصناف متاحة حالياً',
+        onRetry: () => _loadItems(autoRetry: true),
+      );
+    }
+
+    final categories = _categories(_items);
+    final filtered = _filteredItems(_items);
+
+    return Column(
+      children: [
+        if (_error != null || _retrying)
+          Material(
+            color: const Color(0xFFFFF4E5),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      _retrying
+                          ? 'جاري تحديث المنيو...'
+                          : 'تعذر التحديث. يمكنك متابعة التصفح.',
+                      style: const TextStyle(fontSize: 13),
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: _retrying ? null : () => _loadItems(),
+                    child: const Text('إعادة المحاولة'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        Expanded(
+          child: NotificationListener<ScrollNotification>(
+            onNotification: (notification) {
+              if (notification.metrics.pixels >=
+                      notification.metrics.maxScrollExtent - 480 &&
+                  !_loadingMore &&
+                  _items.length < _total) {
+                _loadItems(reset: false);
+              }
+              return false;
+            },
+            child: RefreshIndicator(
+            color: AppTheme.brandOrange,
+            onRefresh: () => _loadItems(),
+            child: CustomScrollView(
+              slivers: [
+                SliverToBoxAdapter(
+                  child: _MenuHeader(onRefresh: () => _loadItems()),
+                ),
+                SliverToBoxAdapter(
+                  child: _CategoryBar(
+                    categories: categories,
+                    selected: _selectedCategory,
+                    onSelected: (value) {
+                      setState(() => _selectedCategory = value);
+                    },
+                  ),
+                ),
+                if (filtered.isEmpty)
+                  const SliverFillRemaining(
+                    hasScrollBody: false,
+                    child: Center(
+                      child: Text(
+                        'لا توجد أصناف في هذا التصنيف',
+                        style: TextStyle(
+                          color: AppTheme.brandBlack,
+                          fontSize: 16,
+                        ),
+                      ),
+                    ),
+                  )
+                else
+                  SliverLayoutBuilder(
+                    builder: (context, constraints) {
+                      final width = constraints.crossAxisExtent;
+                      final columns = _gridColumns(width);
+                      final cardWidth =
+                          (width - 32 - (columns - 1) * 16) / columns;
+
+                      return SliverPadding(
+                        padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+                        sliver: SliverGrid(
+                          gridDelegate:
+                              SliverGridDelegateWithMaxCrossAxisExtent(
+                            maxCrossAxisExtent: cardWidth,
+                            crossAxisSpacing: 16,
+                            mainAxisSpacing: 16,
+                            mainAxisExtent: columns >= 3 ? 320 : 300,
+                          ),
+                          delegate: SliverChildBuilderDelegate(
+                            (context, index) {
+                              return _MenuItemCard(
+                                item: filtered[index],
+                                onAddToCart: () => _addToCart(filtered[index]),
+                              );
+                            },
+                            childCount: filtered.length,
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                if (_items.length < _total || _loadingMore)
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+                      child: Center(
+                        child: _loadingMore
+                            ? const CircularProgressIndicator(
+                                color: AppTheme.brandOrange,
+                              )
+                            : TextButton(
+                                onPressed: () => _loadItems(reset: false),
+                                child: Text(
+                                  'عرض المزيد (${_items.length}/$_total)',
+                                ),
+                              ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -557,7 +673,7 @@ class _ErrorState extends StatelessWidget {
             ),
             const SizedBox(height: 16),
             Text(
-              message,
+              message.replaceFirst('Exception: ', ''),
               textAlign: TextAlign.center,
               style: const TextStyle(color: AppTheme.brandBlack),
             ),

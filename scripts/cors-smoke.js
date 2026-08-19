@@ -78,16 +78,21 @@ async function main() {
 
     const items = await request(port, {
       method: 'GET',
-      path: '/api/items?restaurant_id=rest_molton',
+      path: '/api/items?restaurant_id=rest_molton&limit=40&lite=1',
       headers: {
         Origin: 'https://almenupro.vercel.app',
         'Content-Type': 'application/json',
       },
     });
     assert(items.status === 200, `GET /api/items expected 200, got ${items.status} ${items.body}`);
-    const parsed = JSON.parse(items.body);
-    assert(Array.isArray(parsed), 'GET /api/items should return a JSON array');
+    const parsedRaw = JSON.parse(items.body);
+    const parsed = Array.isArray(parsedRaw) ? parsedRaw : parsedRaw.items;
+    assert(Array.isArray(parsed), 'GET /api/items should return a JSON array or {items}');
     assert(parsed.length > 0, 'GET /api/items should return seeded menu items');
+    assert(
+      !JSON.stringify(parsed).includes('data:image'),
+      'Items payload must not include base64 images',
+    );
     assert(
       items.headers['access-control-allow-origin'] === '*',
       'GET /api/items missing CORS origin header',
@@ -112,6 +117,70 @@ async function main() {
     const session = JSON.parse(login.body);
     assert(session.token && session.role === 'super_admin', 'login should return super_admin token');
 
+    const invoiceNumber = `test_${Date.now()}`;
+    const createOrder = await request(port, {
+      method: 'POST',
+      path: '/api/orders',
+      headers: {
+        'Content-Type': 'application/json',
+        Origin: 'https://almenupro.vercel.app',
+      },
+      body: JSON.stringify({
+        restaurantId: 'rest_molton',
+        restaurant_id: 'rest_molton',
+        customerName: 'اختبار السلة',
+        phone: '96550000000',
+        address: 'حولي، قطعة 1، شارع 2، منزل 3',
+        paymentMethod: 'كاش',
+        invoiceNumber,
+        orderType: 'delivery',
+        status: 'pending',
+        orderSource: 'customer_web',
+        totalPrice: 7.5,
+        items: [
+          {
+            menuItemId: '1',
+            name: 'كوكيز اختبار',
+            unitPrice: 7.5,
+            quantity: 1,
+            selectedOptions: [],
+          },
+        ],
+      }),
+    });
+    assert(
+      createOrder.status === 201,
+      `POST /api/orders expected 201, got ${createOrder.status} ${createOrder.body}`,
+    );
+    const created = JSON.parse(createOrder.body);
+    assert(created.id, 'created order should have an id');
+    assert(created.status === 'pending', 'created order should be pending');
+    assert(
+      created.restaurantId === 'rest_molton' || created.restaurant_id === 'rest_molton',
+      'created order should be scoped to rest_molton',
+    );
+    assert(Array.isArray(created.items) && created.items.length === 1, 'created order should keep items');
+
+    const listed = await request(port, {
+      method: 'GET',
+      path: '/api/orders?restaurant_id=rest_molton',
+      headers: {
+        Origin: 'https://almenupro.vercel.app',
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${session.token}`,
+        'X-Restaurant-Id': 'rest_molton',
+      },
+    });
+    assert(
+      listed.status === 200,
+      `GET /api/orders expected 200, got ${listed.status} ${listed.body}`,
+    );
+    const orders = JSON.parse(listed.body);
+    assert(Array.isArray(orders), 'GET /api/orders should return an array');
+    const found = orders.find((order) => String(order.id) === String(created.id));
+    assert(found, 'admin GET /api/orders should include the newly created order');
+    assert(found.customerName === 'اختبار السلة', 'admin order should keep customer name');
+
     console.log(
       JSON.stringify(
         {
@@ -121,6 +190,8 @@ async function main() {
           itemsStatus: items.status,
           itemCount: parsed.length,
           health: healthBody,
+          createdOrderId: created.id,
+          adminSawOrder: true,
         },
         null,
         2,

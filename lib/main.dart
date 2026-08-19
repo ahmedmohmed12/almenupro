@@ -3,8 +3,12 @@ import 'dart:async';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import 'firebase_options.dart';
+import 'providers/cart_provider.dart';
+import 'providers/locale_provider.dart';
+import 'providers/order_type_provider.dart';
 import 'screens/admin_dashboard.dart';
 import 'screens/client_menu_page.dart';
 import 'screens/menu_screen.dart';
@@ -13,6 +17,7 @@ import 'services/molton_upload_service.dart';
 import 'services/seed_service.dart';
 import 'theme/app_theme.dart';
 import 'utils/configure_url_strategy.dart';
+import 'widgets/app_error_boundary.dart';
 
 bool get isFirebaseConfigured {
   if (!kIsWeb) return true;
@@ -24,6 +29,7 @@ bool get isFirebaseConfigured {
 Future<void> main() async {
   configureUrlStrategy();
   WidgetsFlutterBinding.ensureInitialized();
+  ErrorWidget.builder = (details) => AppErrorBoundary.releaseFallback(details);
 
   try {
     if (isFirebaseConfigured) {
@@ -95,24 +101,31 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Almenupro',
-      debugShowCheckedModeBanner: false,
-      theme: AppTheme.light(),
-      onGenerateRoute: onGenerateRoute,
-      onUnknownRoute: onGenerateRoute,
-      onGenerateInitialRoutes: onGenerateInitialRoutes,
-      builder: (context, child) {
-        if (child == null) {
-          return const ColoredBox(
-            color: AppTheme.brandBackground,
-            child: Center(
-              child: CircularProgressIndicator(color: AppTheme.brandOrange),
-            ),
-          );
-        }
-        return child;
-      },
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => CartProvider()),
+        ChangeNotifierProvider(create: (_) => LocaleProvider()),
+        ChangeNotifierProvider(create: (_) => OrderTypeProvider()),
+      ],
+      child: MaterialApp(
+        title: 'Almenupro',
+        debugShowCheckedModeBanner: false,
+        theme: AppTheme.light(),
+        onGenerateRoute: onGenerateRoute,
+        onUnknownRoute: onGenerateRoute,
+        onGenerateInitialRoutes: onGenerateInitialRoutes,
+        builder: (context, child) {
+          if (child == null) {
+            return const ColoredBox(
+              color: AppTheme.brandBackground,
+              child: Center(
+                child: CircularProgressIndicator(color: AppTheme.brandOrange),
+              ),
+            );
+          }
+          return child;
+        },
+      ),
     );
   }
 }

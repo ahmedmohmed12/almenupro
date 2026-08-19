@@ -29,7 +29,7 @@ const {
 } = require('./lib/restaurantScopeUtils');
 const { handlePosRoutes } = require('./lib/posRoutes');
 const { ALL_PERMISSION_KEYS } = require('./lib/posPermissions');
-const { serveMenuImage, persistMenuItemsImages } = require('./lib/menuImageStorage');
+const { serveMenuImage, persistMenuItemsImages, proxyExternalImage } = require('./lib/menuImageStorage');
 const { normalizeMenuItemsForApi, normalizeMenuItemForApi } = require('./lib/bilingualItemMigration');
 const { migrateMenuItems } = require('./lib/bilingualMenu');
 const { scrapeTalabatMenu } = require('./lib/talabatScraper');
@@ -199,6 +199,11 @@ async function handleRequest(req, res) {
   const imageMatch = pathname.match(/^\/api\/uploads\/menu\/([^/]+)$/);
   if (imageMatch && (req.method === 'GET' || req.method === 'HEAD')) {
     serveMenuImage(res, decodeURIComponent(imageMatch[1]));
+    return;
+  }
+
+  if (pathname === '/api/image-proxy' && (req.method === 'GET' || req.method === 'HEAD')) {
+    await proxyExternalImage(res, url.searchParams.get('url'));
     return;
   }
 
@@ -387,10 +392,29 @@ async function routeRequest(req, res, url, pathname) {
   }
 
   if (pathname === '/api/items' && req.method === 'GET') {
-    const restaurants = await dataStore.readRestaurants();
-    const restaurantId = resolveRestaurantFromQuery(url, restaurants);
-    const items = filterByRestaurant(await dataStore.readItems(), restaurantId);
-    sendJson(res, 200, normalizeMenuItemsForApi(items));
+    const restaurantId =
+      url.searchParams.get('restaurant_id') ||
+      url.searchParams.get('restaurantId') ||
+      resolveRestaurantFromQuery(url, await dataStore.readRestaurants());
+    const lite =
+      url.searchParams.get('full') !== '1' &&
+      url.searchParams.get('full') !== 'true';
+    const limit = Math.min(
+      Math.max(Number(url.searchParams.get('limit')) || 40, 1),
+      100,
+    );
+    const offset = Math.max(Number(url.searchParams.get('offset')) || 0, 0);
+    const page = await dataStore.readItemsPage({
+      restaurantId,
+      offset,
+      limit,
+      lite,
+    });
+    res.setHeader('Cache-Control', 'public, max-age=20');
+    res.setHeader('X-Total-Count', String(page.total || 0));
+    res.setHeader('X-Limit', String(page.limit || limit));
+    res.setHeader('X-Offset', String(page.offset || offset));
+    sendJson(res, 200, Array.isArray(page.items) ? page.items : []);
     return true;
   }
 
@@ -438,6 +462,22 @@ async function routeRequest(req, res, url, pathname) {
     const auth = requireAuth(req, res);
     if (!auth) return true;
     const itemId = decodeURIComponent(availabilityMatch[1]);
+    const body = parseJson(await readBody(req));
+    const isAvailable = body.isAvailable ?? body.is_available;
+    const existingDoc = await dataStore.findItemDoc(itemId);
+    if (existingDoc) {
+      if (!assertRestaurantAccess(
+        auth,
+        existingDoc.restaurant_id || existingDoc.restaurantId,
+        authError,
+        res,
+      )) {
+        return true;
+      }
+      const fromCollection = await dataStore.patchItemAvailability(itemId, isAvailable);
+      sendJson(res, 200, normalizeMenuItemForApi(fromCollection || existingDoc));
+      return true;
+    }
     const items = await dataStore.readItems();
     const index = items.findIndex((item) => itemMatchesId(item, itemId));
     if (index === -1) {
@@ -446,8 +486,6 @@ async function routeRequest(req, res, url, pathname) {
     }
     const restaurantId = items[index].restaurant_id || items[index].restaurantId;
     if (!assertRestaurantAccess(auth, restaurantId, authError, res)) return true;
-    const body = parseJson(await readBody(req));
-    const isAvailable = body.isAvailable ?? body.is_available;
     items[index] = {
       ...items[index],
       is_available: isAvailable === false || isAvailable === 0 ? 0 : 1,
@@ -473,6 +511,7 @@ async function routeRequest(req, res, url, pathname) {
     if (req.method === 'DELETE') {
       items.splice(index, 1);
       await dataStore.writeItems(items);
+      await dataStore.deleteItemDoc(itemId);
       sendJson(res, 200, { ok: true });
       return true;
     }

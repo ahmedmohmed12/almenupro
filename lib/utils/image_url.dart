@@ -15,7 +15,11 @@ bool isLegacyTalabatImageUrl(String url) {
   final uri = Uri.tryParse(trimmed);
   if (uri == null || !uri.hasScheme) return false;
   final host = uri.host.toLowerCase();
-  return host.contains('deliveryhero.io') || host.contains('talabat.com');
+  return host.contains('deliveryhero.io') ||
+      host.contains('talabat.com') ||
+      host.contains('cloudinary.com') ||
+      host.contains('googleusercontent.com') ||
+      host.contains('fbcdn.net');
 }
 
 bool isLocalMenuImagePath(String url) {
@@ -35,13 +39,28 @@ String? localMenuImageFilename(String url) {
   return parts.isEmpty ? null : parts.last;
 }
 
+Object? firstNonEmptyImageField(Map json) {
+  for (final key in [
+    'image_url',
+    'imageUrl',
+    'image',
+    'photo',
+    'thumbnail',
+    'thumbnail_url',
+  ]) {
+    final value = json[key];
+    if (value == null) continue;
+    final text = value.toString().trim();
+    if (text.isNotEmpty && text != 'null') return value;
+  }
+  return null;
+}
+
 /// Builds a browser-loadable image URL from API payloads or stored paths.
 String resolveImageUrl(String url) {
   final trimmed = url.trim();
-  if (trimmed.isEmpty) return trimmed;
-
-  if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
-    return trimmed;
+  if (trimmed.isEmpty || trimmed == 'null' || trimmed.startsWith('data:')) {
+    return '';
   }
 
   if (isBackendImageProxyPath(trimmed)) {
@@ -50,13 +69,16 @@ String resolveImageUrl(String url) {
         : trimmed;
   }
 
+  if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+    if (isLegacyTalabatImageUrl(trimmed)) {
+      return '$menuImageApiOrigin/api/image-proxy?url=${Uri.encodeComponent(trimmed)}';
+    }
+    return trimmed;
+  }
+
   final filename = localMenuImageFilename(trimmed);
   if (filename != null && filename.isNotEmpty) {
     return '$menuImageApiOrigin/menu-images/$filename';
-  }
-
-  if (isLegacyTalabatImageUrl(trimmed)) {
-    return '$menuImageApiOrigin/api/image-proxy?url=${Uri.encodeComponent(trimmed)}';
   }
 
   if (trimmed.startsWith('/')) {
@@ -69,7 +91,7 @@ String resolveImageUrl(String url) {
 /// Parses API payloads — keeps local paths, proxy paths, and absolute URLs.
 String normalizeMenuImageUrl(Object? raw) {
   final value = (raw ?? '').toString().trim();
-  if (value.isEmpty) return '';
+  if (value.isEmpty || value == 'null' || value.startsWith('data:')) return '';
   if (value.startsWith('http://') || value.startsWith('https://')) {
     return value;
   }

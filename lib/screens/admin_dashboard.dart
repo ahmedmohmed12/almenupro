@@ -37,6 +37,7 @@ import '../widgets/admin/admin_sound_settings_card.dart';
 import '../widgets/admin/admin_top_header.dart';
 import '../widgets/admin/admin_smart_upsell_panel.dart';
 import '../widgets/admin/admin_working_hours_card.dart';
+import '../widgets/app_error_boundary.dart';
 
 class AdminDashboard extends StatefulWidget {
   const AdminDashboard({super.key});
@@ -950,7 +951,16 @@ class _AdminDashboardState extends State<AdminDashboard> {
           Expanded(
             child: ListenableBuilder(
               listenable: SuperAdminScopeService.instance,
-              builder: (context, _) => _buildActiveTab(),
+              builder: (context, _) {
+                try {
+                  return _buildActiveTab();
+                } catch (error) {
+                  return AppErrorBoundary.releaseFallback(
+                    FlutterErrorDetails(exception: error),
+                    onRetry: () => setState(() {}),
+                  );
+                }
+              },
             ),
           ),
         ],

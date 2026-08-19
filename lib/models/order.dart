@@ -192,7 +192,8 @@ class Order {
       phone: map['phone'] as String? ?? '',
       address: map['address'] as String? ?? '',
       items: rawItems
-          .map((item) => OrderLineItem.fromMap(item as Map<String, dynamic>))
+          .whereType<Map>()
+          .map((item) => OrderLineItem.fromMap(Map<String, dynamic>.from(item)))
           .toList(),
       totalPrice: (map['totalPrice'] as num?)?.toDouble() ?? 0,
       orderType: OrderType.fromString(map['orderType'] as String?),
@@ -268,7 +269,7 @@ class Order {
       'address': address,
       'items': items.map((item) => item.toMap()).toList(),
       'totalPrice': totalPrice,
-      'orderType': orderType.label,
+      'orderType': orderType.name,
       'status': status.name,
       'createdAt': createdAt.toUtc().toIso8601String(),
       if (subtotal != null) 'subtotal': subtotal,

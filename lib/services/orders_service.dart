@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart';
+
 import '../models/cart_item.dart';
 import '../models/delivery_address_details.dart';
 import '../models/order.dart';
@@ -18,7 +20,6 @@ class OrdersService {
   bool get isDemoMode => !usesFirebase && OrdersDemoService.isDemoData;
 
   Stream<List<Order>> watchOrders() {
-    if (usesFirebase) return _firebase.watchOrders();
     return OrdersDemoService.watchOrders();
   }
 
@@ -85,16 +86,19 @@ class OrdersService {
       orderType: orderType,
     );
 
-    if (usesFirebase) {
-      await _firebase.addOrder(order);
-      return;
-    }
-
     final created = await ApiService.instance.createOrder(
       order,
       restaurantId: restaurantId ?? ApiService.defaultRestaurantId,
     );
     await OrdersDemoService.registerOrder(created);
     await OrdersDemoService.refreshFromApi();
+
+    if (usesFirebase) {
+      try {
+        await _firebase.addOrder(created);
+      } catch (error) {
+        debugPrint('Firebase order mirror skipped: $error');
+      }
+    }
   }
 }

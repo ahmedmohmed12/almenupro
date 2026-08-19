@@ -25,14 +25,23 @@ class MenuCheckoutSheet extends StatefulWidget {
     BuildContext context, {
     CustomerRestaurantContext? restaurantContext,
   }) {
+    final cart = context.read<CartProvider>();
+    final locale = context.read<LocaleProvider>();
     return showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
+      useSafeArea: true,
       backgroundColor: AppTheme.brandSurface,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      builder: (_) => MenuCheckoutSheet(restaurantContext: restaurantContext),
+      builder: (_) => MultiProvider(
+        providers: [
+          ChangeNotifierProvider<CartProvider>.value(value: cart),
+          ChangeNotifierProvider<LocaleProvider>.value(value: locale),
+        ],
+        child: MenuCheckoutSheet(restaurantContext: restaurantContext),
+      ),
     );
   }
 
@@ -128,10 +137,15 @@ class _MenuCheckoutSheetState extends State<MenuCheckoutSheet> {
       );
       if (!mounted) return;
       setState(() {
-        _zones = zones;
+        _zones = zones.where((zone) => zone.id.isNotEmpty).toList();
         _loadingZones = false;
         if (_availableGovernorates.isNotEmpty) {
           _selectedGovernorate ??= _availableGovernorates.first;
+        }
+        if (_selectedGovernorate != null &&
+            !_availableGovernorates.contains(_selectedGovernorate)) {
+          _selectedGovernorate = _availableGovernorates.first;
+          _selectedZone = null;
         }
       });
     } catch (_) {
@@ -174,6 +188,31 @@ class _MenuCheckoutSheetState extends State<MenuCheckoutSheet> {
     final addressArabic = _formattedAddressArabic();
     final addressEnglish = _formattedAddressEnglish();
 
+    try {
+      await OrdersService.instance.submitOrderFromCart(
+        cartItems: List.from(cart.items),
+        customerName: _nameController.text.trim(),
+        phone: _phoneController.text.trim(),
+        address: addressArabic,
+        paymentMethod: _paymentMethod,
+        invoiceNumber: invoiceNumber,
+        restaurantId: _restaurantId,
+        deliveryFee: _deliveryFee,
+        governorate: _selectedZone?.governorate ?? _selectedGovernorate,
+        areaName: _selectedZone?.areaName,
+        deliveryZoneId: _selectedZone?.id,
+        addressDetails: _addressDetails,
+        orderSource: 'customer_web',
+      );
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _submitting = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('تعذر حفظ الطلب: $error')),
+      );
+      return;
+    }
+
     final message = WhatsAppOrderMessage.build(
       restaurantName: _restaurantName,
       invoiceNumber: invoiceNumber,
@@ -188,48 +227,16 @@ class _MenuCheckoutSheetState extends State<MenuCheckoutSheet> {
       addressArabic: addressArabic,
       addressEnglish: addressEnglish,
     );
-
-    final opened = await openWhatsAppChat(
-      phone: _whatsappNumber,
-      message: message,
-    );
-
-    if (opened) {
-      try {
-        await OrdersService.instance.submitOrderFromCart(
-          cartItems: List.from(cart.items),
-          customerName: _nameController.text.trim(),
-          phone: _phoneController.text.trim(),
-          address: addressArabic,
-          paymentMethod: _paymentMethod,
-          invoiceNumber: invoiceNumber,
-          restaurantId: _restaurantId,
-          deliveryFee: _deliveryFee,
-          governorate: _selectedZone?.governorate ?? _selectedGovernorate,
-          areaName: _selectedZone?.areaName,
-          deliveryZoneId: _selectedZone?.id,
-          addressDetails: _addressDetails,
-        );
-      } catch (error) {
-        debugPrint('Order backend sync failed: $error');
-      }
-    }
+    unawaited(openWhatsAppChat(phone: _whatsappNumber, message: message));
 
     if (!mounted) return;
 
     setState(() => _submitting = false);
-
-    if (opened) {
-      cart.clear();
-      Navigator.pop(context);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(strings.orderSentViaWhatsapp)),
-      );
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(strings.whatsappOpenFailed(_whatsappNumber))),
-      );
-    }
+    cart.clear();
+    Navigator.pop(context);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(strings.orderSentViaWhatsapp)),
+    );
   }
 
   Widget _buildTotals(CartProvider cart, AppStrings strings) {
@@ -276,14 +283,19 @@ class _MenuCheckoutSheetState extends State<MenuCheckoutSheet> {
     final strings = AppStrings(locale.localeCode);
     final grandTotal = cart.totalPrice + _deliveryFee;
 
+    final sheetHeight = MediaQuery.sizeOf(context).height * 0.92;
+
     return Directionality(
       textDirection: locale.textDirection,
       child: Padding(
         padding: EdgeInsets.only(
-          bottom: MediaQuery.of(context).viewInsets.bottom,
+          bottom: MediaQuery.viewInsetsOf(context).bottom,
         ),
-        child: SizedBox(
-          height: MediaQuery.of(context).size.height * 0.92,
+        child: Material(
+          color: AppTheme.brandSurface,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+          child: SizedBox(
+          height: sheetHeight,
           child: Form(
             key: _formKey,
             child: Column(
@@ -326,6 +338,15 @@ class _MenuCheckoutSheetState extends State<MenuCheckoutSheet> {
                   child: ListView(
                     padding: const EdgeInsets.symmetric(horizontal: 20),
                     children: [
+                      if (cart.isEmpty)
+                        Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          child: Text(
+                            locale.isArabic
+                                ? 'السلة فارغة'
+                                : 'Your cart is empty',
+                          ),
+                        ),
                       ...cart.items.map(
                         (item) => ListTile(
                           contentPadding: EdgeInsets.zero,
@@ -396,7 +417,10 @@ class _MenuCheckoutSheetState extends State<MenuCheckoutSheet> {
                         )
                       else ...[
                         DropdownButtonFormField<String>(
-                          initialValue: _selectedGovernorate,
+                          key: ValueKey('gov-$_selectedGovernorate-${_availableGovernorates.length}'),
+                          initialValue: _availableGovernorates.contains(_selectedGovernorate)
+                              ? _selectedGovernorate
+                              : null,
                           decoration: InputDecoration(
                             labelText: strings.governorate,
                             border: const OutlineInputBorder(),
@@ -424,7 +448,13 @@ class _MenuCheckoutSheetState extends State<MenuCheckoutSheet> {
                         ),
                         const SizedBox(height: 12),
                         DropdownButtonFormField<String>(
-                          initialValue: _selectedZone?.id,
+                          key: ValueKey(
+                            'area-${_selectedZone?.id}-${_areasForGovernorate.length}',
+                          ),
+                          initialValue: _areasForGovernorate
+                                  .any((zone) => zone.id == _selectedZone?.id)
+                              ? _selectedZone?.id
+                              : null,
                           decoration: InputDecoration(
                             labelText: strings.area,
                             border: const OutlineInputBorder(),
@@ -568,6 +598,7 @@ class _MenuCheckoutSheetState extends State<MenuCheckoutSheet> {
               ],
             ),
           ),
+        ),
         ),
       ),
     );
