@@ -37,10 +37,12 @@ class DeliveryZone {
 
   Map<String, dynamic> toMap() {
     return {
+      'id': id,
       'governorate': governorate,
       'areaName': areaName,
       'deliveryFee': deliveryFee,
       if (restaurantId != null) 'restaurantId': restaurantId,
+      if (restaurantId != null) 'restaurant_id': restaurantId,
       if (defaultKitchenId != null && defaultKitchenId!.isNotEmpty)
         'defaultKitchenId': defaultKitchenId,
       'isActive': isActive,

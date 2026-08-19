@@ -34,6 +34,18 @@ class _AdminDeliveryZonesPanelState extends State<AdminDeliveryZonesPanel> {
   @override
   void initState() {
     super.initState();
+    SuperAdminScopeService.instance.addListener(_onScopeChanged);
+    _loadZones();
+  }
+
+  @override
+  void dispose() {
+    SuperAdminScopeService.instance.removeListener(_onScopeChanged);
+    super.dispose();
+  }
+
+  void _onScopeChanged() {
+    if (!mounted) return;
     _loadZones();
   }
 
@@ -78,6 +90,7 @@ class _AdminDeliveryZonesPanelState extends State<AdminDeliveryZonesPanel> {
     try {
       final zones = await ApiService.instance.fetchDeliveryZones(
         restaurantId: _restaurantId,
+        activeOnly: false,
       );
       if (!mounted) return;
       setState(() {
@@ -395,7 +408,8 @@ class _AdminDeliveryZonesPanelState extends State<AdminDeliveryZonesPanel> {
 
   Widget _buildZoneTile(DeliveryZone zone) {
     return ListTile(
-      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      isThreeLine: true,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       leading: CircleAvatar(
         backgroundColor: _burgundy.withValues(alpha: 0.12),
         child: const Icon(Icons.location_on_outlined, color: _burgundy, size: 22),
@@ -403,12 +417,12 @@ class _AdminDeliveryZonesPanelState extends State<AdminDeliveryZonesPanel> {
       title: Text(zone.areaName, style: const TextStyle(fontWeight: FontWeight.bold)),
       subtitle: Text('${zone.governorate} • ${zone.deliveryFee.toStringAsFixed(3)} د.ك'),
       trailing: Wrap(
-        spacing: 0,
+        spacing: 4,
         children: [
-          IconButton(
-            tooltip: 'تعديل',
+          FilledButton.tonalIcon(
             onPressed: _saving ? null : () => _showZoneDialog(existing: zone),
-            icon: const Icon(Icons.edit_outlined, color: _burgundy),
+            icon: const Icon(Icons.edit_outlined, size: 18),
+            label: const Text('تعديل المنطقة'),
           ),
           IconButton(
             tooltip: 'حذف',

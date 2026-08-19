@@ -866,6 +866,7 @@ class ApiService {
   Future<List<DeliveryZone>> fetchDeliveryZones({
     String? restaurantId,
     String? slug,
+    bool activeOnly = true,
   }) async {
     final query = slug != null && slug.trim().isNotEmpty
         ? _publicRestaurantQuery(slug: slug, restaurantId: restaurantId)
@@ -886,11 +887,12 @@ class ApiService {
     final decoded = jsonDecode(response.body);
     if (decoded is! List) return const [];
 
-    return decoded
+    final zones = decoded
         .whereType<Map>()
         .map((raw) => DeliveryZone.fromMap(Map<String, dynamic>.from(raw)))
-        .where((zone) => zone.isActive)
         .toList();
+    if (!activeOnly) return zones;
+    return zones.where((zone) => zone.isActive).toList();
   }
 
   Future<DeliveryZone> createDeliveryZone(DeliveryZone zone) async {

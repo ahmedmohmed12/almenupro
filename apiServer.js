@@ -871,7 +871,9 @@ async function routeRequest(req, res, url, pathname) {
 
   if (pathname === '/api/delivery-zones' && req.method === 'GET') {
     const restaurants = await dataStore.readRestaurants();
-    const restaurantId = resolveRestaurantFromQuery(url, restaurants);
+    const restaurantId =
+      readRestaurantIdParam(req, url) ||
+      resolveRestaurantFromQuery(url, restaurants);
     const zones = filterByRestaurant(await extraStore.deliveryZones.read(), restaurantId);
     sendJson(res, 200, zones);
     return true;
