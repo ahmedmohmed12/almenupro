@@ -3,6 +3,9 @@
 const http = require('http');
 const handler = require('../apiServer');
 
+const DASHBOARD_ORIGIN =
+  'https://almenupro-dashboard-2026-gfwn0j6x9-almenupro.vercel.app';
+
 function request(port, { method, path, headers = {}, body }) {
   return new Promise((resolve, reject) => {
     const req = http.request(
@@ -51,37 +54,37 @@ async function main() {
       method: 'OPTIONS',
       path: '/api/items?restaurant_id=rest_molton',
       headers: {
-        Origin: 'https://almenupro.vercel.app',
+        Origin: DASHBOARD_ORIGIN,
         'Access-Control-Request-Method': 'GET',
         'Access-Control-Request-Headers':
-          'content-type,authorization,x-restaurant-id',
+          'content-type,authorization,x-restaurant-id,x-requested-with',
       },
     });
     const preflightMs = Date.now() - preflightStarted;
 
     assert(preflight.status === 200, `OPTIONS expected 200, got ${preflight.status}`);
     assert(
-      preflight.headers['access-control-allow-origin'] === '*',
-      'Missing Access-Control-Allow-Origin: *',
+      preflight.headers['access-control-allow-origin'] === DASHBOARD_ORIGIN,
+      `Allow-Origin should echo dashboard origin, got ${preflight.headers['access-control-allow-origin']}`,
     );
     assert(
-      String(preflight.headers['access-control-allow-methods'] || '').includes('GET'),
-      'Allow-Methods should include GET',
+      String(preflight.headers['access-control-allow-methods'] || '').includes('GET') &&
+        String(preflight.headers['access-control-allow-methods'] || '').includes('DELETE'),
+      'Allow-Methods should include GET and DELETE',
     );
-    assert(
-      String(preflight.headers['access-control-allow-headers'] || '')
-        .toLowerCase()
-        .includes('authorization'),
-      'Allow-Headers should include Authorization',
-    );
+    const allowHeaders = String(preflight.headers['access-control-allow-headers'] || '').toLowerCase();
+    assert(allowHeaders.includes('authorization'), 'Allow-Headers should include Authorization');
+    assert(allowHeaders.includes('x-restaurant-id'), 'Allow-Headers should include X-Restaurant-Id');
+    assert(allowHeaders.includes('x-requested-with'), 'Allow-Headers should include X-Requested-With');
     assert(preflightMs < 1500, `OPTIONS should not wait on datastore (${preflightMs}ms)`);
 
     const items = await request(port, {
       method: 'GET',
       path: '/api/items?restaurant_id=rest_molton&limit=40&lite=1',
       headers: {
-        Origin: 'https://almenupro.vercel.app',
+        Origin: DASHBOARD_ORIGIN,
         'Content-Type': 'application/json',
+        'X-Restaurant-Id': 'rest_molton',
       },
     });
     assert(items.status === 200, `GET /api/items expected 200, got ${items.status} ${items.body}`);
@@ -94,23 +97,63 @@ async function main() {
       'Items payload must not include base64 images',
     );
     assert(
-      items.headers['access-control-allow-origin'] === '*',
+      items.headers['access-control-allow-origin'] === '*' ||
+        items.headers['access-control-allow-origin'] === DASHBOARD_ORIGIN,
       'GET /api/items missing CORS origin header',
     );
 
     const health = await request(port, {
       method: 'GET',
       path: '/api/health',
-      headers: { Origin: 'https://almenupro.vercel.app' },
+      headers: { Origin: DASHBOARD_ORIGIN },
     });
     assert(health.status === 200, `GET /api/health expected 200, got ${health.status}`);
     const healthBody = JSON.parse(health.body);
     assert(healthBody.ok === true, 'health.ok should be true');
 
+    const root = await request(port, {
+      method: 'GET',
+      path: '/',
+      headers: { Origin: 'https://external-client.example.com' },
+    });
+    assert(root.status === 200, `GET / expected 200, got ${root.status} ${root.body}`);
+    const rootBody = JSON.parse(root.body);
+    assert(rootBody.ok === true, 'root.ok should be true');
+    assert(rootBody.version, 'root.version should be set');
+    assert(
+      root.headers['access-control-allow-origin'] === 'https://external-client.example.com',
+      `GET / should reflect external Origin, got ${root.headers['access-control-allow-origin']}`,
+    );
+
+    const apiRoot = await request(port, {
+      method: 'GET',
+      path: '/api',
+      headers: { Origin: DASHBOARD_ORIGIN },
+    });
+    assert(apiRoot.status === 200, `GET /api expected 200, got ${apiRoot.status} ${apiRoot.body}`);
+    const apiRootBody = JSON.parse(apiRoot.body);
+    assert(apiRootBody.ok === true, 'GET /api ok should be true');
+    assert(apiRootBody.version, 'GET /api version should be set');
+
+    const externalPreflight = await request(port, {
+      method: 'OPTIONS',
+      path: '/api/health',
+      headers: {
+        Origin: 'https://app.onrender.com',
+        'Access-Control-Request-Method': 'GET',
+        'Access-Control-Request-Headers': 'content-type,authorization',
+      },
+    });
+    assert(externalPreflight.status === 200, `external OPTIONS expected 200, got ${externalPreflight.status}`);
+    assert(
+      externalPreflight.headers['access-control-allow-origin'] === 'https://app.onrender.com',
+      `external OPTIONS should reflect Origin, got ${externalPreflight.headers['access-control-allow-origin']}`,
+    );
+
     const login = await request(port, {
       method: 'POST',
       path: '/api/auth/login',
-      headers: { 'Content-Type': 'application/json', Origin: 'https://almenupro.vercel.app' },
+      headers: { 'Content-Type': 'application/json', Origin: DASHBOARD_ORIGIN },
       body: JSON.stringify({ username: 'superadmin', password: 'almenupro2026' }),
     });
     assert(login.status === 200, `login expected 200, got ${login.status} ${login.body}`);
@@ -187,11 +230,15 @@ async function main() {
           ok: true,
           optionsStatus: preflight.status,
           optionsMs: preflightMs,
+          allowOrigin: preflight.headers['access-control-allow-origin'],
           itemsStatus: items.status,
           itemCount: parsed.length,
           health: healthBody,
           createdOrderId: created.id,
           adminSawOrder: true,
+          root: rootBody,
+          apiRoot: apiRootBody,
+          externalAllowOrigin: externalPreflight.headers['access-control-allow-origin'],
         },
         null,
         2,

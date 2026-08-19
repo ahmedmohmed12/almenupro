@@ -1,5 +1,6 @@
 {
   "name": "almenupro-api",
+  "version": "1.6.0",
   "private": true,
   "main": "apiServer.js",
   "scripts": {
@@ -8,7 +9,7 @@
     "test:cors": "node scripts/cors-smoke.js"
   },
   "engines": {
-    "node": ">=18"
+    "node": "22.x"
   },
   "dependencies": {
     "@langchain/anthropic": "^1.5.4",

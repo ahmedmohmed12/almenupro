@@ -20,7 +20,7 @@
   "rewrites": [
     {
       "source": "/",
-      "destination": "/"
+      "destination": "/apiServer.js"
     },
     {
       "source": "/og/(.*)",
@@ -55,15 +55,16 @@
         { "key": "Access-Control-Allow-Methods", "value": "GET, HEAD, POST, PUT, PATCH, DELETE, OPTIONS" },
         { "key": "Access-Control-Allow-Headers", "value": "Content-Type, Authorization, X-Restaurant-Id, x-restaurant-id, X-Requested-With, Accept, Origin" },
         { "key": "Access-Control-Expose-Headers", "value": "X-Total-Count, X-Limit, X-Offset" },
-        { "key": "Access-Control-Max-Age", "value": "86400" }
+        { "key": "Access-Control-Max-Age", "value": "86400" },
+        { "key": "Vary", "value": "Origin, Access-Control-Request-Headers" }
       ]
     },
     {
       "source": "/og/(.*)",
       "headers": [
-        { "key": "Access-Control-Allow-Origin", "value": "*" },
-        { "key": "Access-Control-Allow-Methods", "value": "GET, HEAD, OPTIONS" },
-        { "key": "Access-Control-Allow-Headers", "value": "Content-Type, Authorization, X-Restaurant-Id, x-restaurant-id" }
+        { "key": "Access-Control-Allow-Methods", "value": "GET, OPTIONS" },
+        { "key": "Access-Control-Allow-Headers", "value": "Content-Type, Authorization, X-Restaurant-Id, X-Requested-With" },
+        { "key": "Vary", "value": "Origin" }
       ]
     }
   ]

@@ -59,16 +59,26 @@ const {
 } = require('./lib/shiftOrderBinding');
 
 const PORT = Number(process.env.PORT || 3000);
+const PKG = require('./package.json');
+
+function rootStatusPayload() {
+  return {
+    ok: true,
+    message: 'AlMenuPro API is running successfully',
+    service: PKG.name || 'almenupro-api',
+    version: PKG.version || '0.0.0',
+  };
+}
 
 function sendJson(res, statusCode, body) {
-  applyCorsHeaders({ headers: {} }, res);
+  applyCorsHeaders(res.req || { headers: {} }, res);
   res.statusCode = statusCode;
   res.setHeader('Content-Type', 'application/json; charset=utf-8');
   res.end(JSON.stringify(body));
 }
 
 function sendHtml(res, statusCode, html) {
-  applyCorsHeaders({ headers: {} }, res);
+  applyCorsHeaders(res.req || { headers: {} }, res);
   res.statusCode = statusCode;
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
   res.end(html);
@@ -198,6 +208,12 @@ async function handleRequest(req, res) {
   }
   url.pathname = pathname;
 
+  // Root readiness — no datastore required (Render / local health checks).
+  if ((pathname === '/' || pathname === '/api') && req.method === 'GET') {
+    sendJson(res, 200, rootStatusPayload());
+    return;
+  }
+
   const imageMatch = pathname.match(/^\/api\/uploads\/menu\/([^/]+)$/);
   if (imageMatch && (req.method === 'GET' || req.method === 'HEAD')) {
     serveMenuImage(res, decodeURIComponent(imageMatch[1]));
@@ -232,15 +248,12 @@ async function handleRequest(req, res) {
 }
 
 /**
- * Vercel/Node entry: guarantee OPTIONS → 200 even if later logic throws.
+ * Vercel/Node entry: OPTIONS is answered with writeHead(200) inside
+ * handleCorsPreflight BEFORE any Mongo/datastore work.
  */
 async function vercelHandler(req, res) {
   try {
-    if (String(req.method || '').toUpperCase() === 'OPTIONS') {
-      applyCorsHeaders(req, res);
-      res.statusCode = 200;
-      res.setHeader('Content-Length', '0');
-      res.end();
+    if (handleCorsPreflight(req, res)) {
       return;
     }
     await handleRequest(req, res);
