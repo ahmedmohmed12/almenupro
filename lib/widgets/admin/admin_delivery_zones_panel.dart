@@ -308,16 +308,22 @@ class _AdminDeliveryZonesPanelState extends State<AdminDeliveryZonesPanel> {
             subtitle: widget.canManage
                 ? 'إدارة مناطق ورسوم التوصيل للمطعم: $_restaurantLabel'
                 : 'اختر مطعماً من القائمة أعلاه لإدارة مناطقه.',
-            actions: [
-              if (widget.canManage)
-                FilledButton.icon(
-                  style: FilledButton.styleFrom(backgroundColor: _burgundy),
-                  onPressed: _saving ? null : () => _showZoneDialog(),
-                  icon: const Icon(Icons.add_location_alt_outlined),
-                  label: const Text('إضافة منطقة'),
-                ),
-            ],
           ),
+          if (widget.canManage) ...[
+            const SizedBox(height: 12),
+            Align(
+              alignment: AlignmentDirectional.centerStart,
+              child: FilledButton.icon(
+                style: FilledButton.styleFrom(
+                  backgroundColor: _burgundy,
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                ),
+                onPressed: _saving ? null : () => _showZoneDialog(),
+                icon: const Icon(Icons.add_location_alt_outlined),
+                label: const Text('إضافة منطقة جديدة'),
+              ),
+            ),
+          ],
           const SizedBox(height: 16),
           if (!widget.canManage)
             _messageCard(
@@ -439,25 +445,28 @@ class _ZoneCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
+    final name = zone.displayName;
+    final governorate = zone.displayGovernorate;
+    final fee = '${zone.deliveryFee.toStringAsFixed(3)} د.ك';
+
+    return Material(
+      color: Colors.white,
       elevation: 0,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(14),
         side: BorderSide(color: Colors.grey.shade300),
       ),
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final stacked = constraints.maxWidth < 560;
-            final info = Row(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 CircleAvatar(
                   backgroundColor: _burgundy.withValues(alpha: 0.1),
-                  child: const Icon(
-                    Icons.location_on_outlined,
-                    color: _burgundy,
-                  ),
+                  child: const Icon(Icons.location_on_outlined, color: _burgundy),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -465,46 +474,51 @@ class _ZoneCard extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        zone.displayName,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+                        name,
                         style: const TextStyle(
                           fontWeight: FontWeight.w800,
                           fontSize: 16,
+                          height: 1.35,
                         ),
                       ),
-                      const SizedBox(height: 2),
+                      const SizedBox(height: 4),
                       Text(
-                        zone.displayGovernorate,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(color: Colors.grey.shade700),
+                        governorate,
+                        style: TextStyle(
+                          color: Colors.grey.shade700,
+                          height: 1.35,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Align(
+                        alignment: AlignmentDirectional.centerStart,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 6,
+                          ),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFFF4E5),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Text(
+                            fee,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w800,
+                              color: _burgundy,
+                            ),
+                          ),
+                        ),
                       ),
                     ],
                   ),
                 ),
-                const SizedBox(width: 8),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFFFF4E5),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Text(
-                    '${zone.deliveryFee.toStringAsFixed(3)} د.ك',
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w800,
-                      color: _burgundy,
-                    ),
-                  ),
-                ),
               ],
-            );
-
-            final actions = Wrap(
+            ),
+            const SizedBox(height: 12),
+            Wrap(
               spacing: 8,
               runSpacing: 8,
-              alignment: stacked ? WrapAlignment.start : WrapAlignment.end,
               children: [
                 FilledButton.icon(
                   style: FilledButton.styleFrom(backgroundColor: _burgundy),
@@ -512,33 +526,17 @@ class _ZoneCard extends StatelessWidget {
                   icon: const Icon(Icons.edit_outlined, size: 18),
                   label: const Text('تعديل المنطقة'),
                 ),
-                IconButton(
-                  tooltip: 'حذف',
+                OutlinedButton.icon(
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.red.shade700,
+                  ),
                   onPressed: saving ? null : onDelete,
-                  icon: Icon(Icons.delete_outline, color: Colors.red.shade400),
+                  icon: const Icon(Icons.delete_outline, size: 18),
+                  label: const Text('حذف'),
                 ),
               ],
-            );
-
-            if (stacked) {
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  info,
-                  const SizedBox(height: 12),
-                  actions,
-                ],
-              );
-            }
-
-            return Row(
-              children: [
-                Expanded(child: info),
-                const SizedBox(width: 12),
-                actions,
-              ],
-            );
-          },
+            ),
+          ],
         ),
       ),
     );

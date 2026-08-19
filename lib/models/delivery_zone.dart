@@ -23,14 +23,20 @@ class DeliveryZone {
   String get displayGovernorate =>
       governorate.trim().isEmpty ? 'بدون محافظة' : governorate;
 
+  static double _parseFee(Object? value) {
+    if (value is num) return value.toDouble();
+    return double.tryParse(value?.toString() ?? '') ?? 0;
+  }
+
   factory DeliveryZone.fromMap(Map<String, dynamic> map) {
     return DeliveryZone(
       id: map['id']?.toString() ?? '',
       governorate: map['governorate']?.toString() ?? '',
-      areaName: map['areaName']?.toString() ?? map['area_name']?.toString() ?? '',
-      deliveryFee: (map['deliveryFee'] as num?)?.toDouble() ??
-          (map['delivery_fee'] as num?)?.toDouble() ??
-          0,
+      areaName: map['areaName']?.toString() ??
+          map['area_name']?.toString() ??
+          map['name']?.toString() ??
+          '',
+      deliveryFee: _parseFee(map['deliveryFee'] ?? map['delivery_fee'] ?? map['fee']),
       restaurantId:
           map['restaurantId']?.toString() ?? map['restaurant_id']?.toString(),
       defaultKitchenId: map['defaultKitchenId']?.toString() ??
