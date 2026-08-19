@@ -176,29 +176,23 @@ class _AdminMenuPanelState extends State<AdminMenuPanel> {
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final maxH = constraints.maxHeight.isFinite
-            ? constraints.maxHeight
-            : MediaQuery.sizeOf(context).height;
-        return SizedBox(
-          width: constraints.maxWidth,
-          height: maxH,
-          child: ColoredBox(
-            color: const Color(0xFFF4F6F8),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.start,
-              mainAxisSize: MainAxisSize.max,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                _buildToolbar(),
-                if (_errorMessage != null) _retryBanner(),
-                Expanded(child: _buildContent()),
-              ],
+    return ColoredBox(
+      color: Colors.white,
+      child: Column(
+        mainAxisSize: MainAxisSize.max,
+        mainAxisAlignment: MainAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _buildToolbar(),
+          if (_errorMessage != null) _retryBanner(),
+          Expanded(
+            child: Align(
+              alignment: Alignment.topCenter,
+              child: _buildContent(),
             ),
           ),
-        );
-      },
+        ],
+      ),
     );
   }
 
@@ -208,11 +202,10 @@ class _AdminMenuPanelState extends State<AdminMenuPanel> {
   }
 
   Widget _buildToolbar() {
-    return Material(
-      color: Colors.white,
-      elevation: 0,
+    return ColoredBox(
+      color: const Color(0xFFF8F1F3),
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+        padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
         child: Row(
           children: [
             const Expanded(
@@ -223,6 +216,7 @@ class _AdminMenuPanelState extends State<AdminMenuPanel> {
                 style: TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
+                  color: burgundy,
                 ),
               ),
             ),
@@ -234,11 +228,11 @@ class _AdminMenuPanelState extends State<AdminMenuPanel> {
               ),
             ),
             const SizedBox(width: 8),
-            ElevatedButton.icon(
-              style: ElevatedButton.styleFrom(
+            FilledButton.icon(
+              style: FilledButton.styleFrom(
                 backgroundColor: burgundy,
                 foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               ),
               onPressed: widget.canManageItems
                   ? () async {
@@ -246,10 +240,10 @@ class _AdminMenuPanelState extends State<AdminMenuPanel> {
                       if (mounted) await _loadFromApi();
                     }
                   : null,
-              icon: const Icon(Icons.add, color: Colors.white, size: 18),
+              icon: const Icon(Icons.add, size: 20),
               label: const Text(
                 'إضافة صنف جديد',
-                style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+                style: TextStyle(fontWeight: FontWeight.w800),
               ),
             ),
           ],
@@ -322,49 +316,43 @@ class _AdminMenuPanelState extends State<AdminMenuPanel> {
     return LayoutBuilder(
       builder: (context, constraints) {
         final wide = constraints.maxWidth >= 900;
-        final showMore = items.length < _totalItems;
-        final headerCount = wide ? 1 : 0;
-        final moreCount = showMore ? 1 : 0;
-
-        return Material(
+        return ColoredBox(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          clipBehavior: Clip.antiAlias,
-          child: ListView.separated(
+          child: ListView(
             padding: EdgeInsets.zero,
-            primary: true,
-            shrinkWrap: false,
-            itemCount: headerCount + items.length + moreCount,
-            separatorBuilder: (context, index) {
-              if (wide && index == 0) return const SizedBox.shrink();
-              return const Divider(height: 1);
-            },
-            itemBuilder: (context, index) {
-              if (wide && index == 0) return _buildWideHeader();
-              final itemIndex = index - headerCount;
-              if (itemIndex >= 0 && itemIndex < items.length) {
-                final item = items[itemIndex];
-                return wide ? _buildWideRow(item) : _buildCompactRow(item);
-              }
-              return Padding(
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                child: Center(
-                  child: OutlinedButton(
-                    onPressed:
-                        _loadingMore ? null : () => _loadFromApi(reset: false),
-                    child: _loadingMore
-                        ? const SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : Text(
-                            'تحميل المزيد (${items.length}/$_totalItems)',
-                          ),
+            shrinkWrap: true,
+            primary: false,
+            physics: const AlwaysScrollableScrollPhysics(),
+            children: [
+              if (wide) _buildWideHeader(),
+              for (final item in items)
+                Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    wide ? _buildWideRow(item) : _buildCompactRow(item),
+                    const Divider(height: 1),
+                  ],
+                ),
+              if (items.length < _totalItems)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  child: Center(
+                    child: OutlinedButton(
+                      onPressed:
+                          _loadingMore ? null : () => _loadFromApi(reset: false),
+                      child: _loadingMore
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : Text(
+                              'تحميل المزيد (${items.length}/$_totalItems)',
+                            ),
+                    ),
                   ),
                 ),
-              );
-            },
+            ],
           ),
         );
       },
