@@ -155,6 +155,7 @@ class Order {
     this.cashierId,
     this.externalOrderId,
     this.platformCommission,
+    this.walletRedeemAmount,
   });
 
   final String id;
@@ -179,6 +180,7 @@ class Order {
   final String? cashierId;
   final String? externalOrderId;
   final double? platformCommission;
+  final double? walletRedeemAmount;
 
   double get netRevenue =>
       totalPrice - (platformCommission == null ? 0 : platformCommission!);
@@ -220,6 +222,9 @@ class Order {
           map['external_order_id']?.toString(),
       platformCommission: (map['platformCommission'] as num?)?.toDouble() ??
           (map['platform_commission'] as num?)?.toDouble(),
+      walletRedeemAmount: (map['walletRedeemAmount'] as num?)?.toDouble() ??
+          (map['wallet_redeem_amount'] as num?)?.toDouble() ??
+          (map['walletRedeemed'] as num?)?.toDouble(),
     );
   }
 
@@ -235,6 +240,7 @@ class Order {
     String? externalOrderId,
     double? platformCommission,
     String? orderSource,
+    double? walletRedeemAmount,
   }) {
     return Order(
       id: id,
@@ -259,6 +265,7 @@ class Order {
       cashierId: cashierId ?? this.cashierId,
       externalOrderId: externalOrderId ?? this.externalOrderId,
       platformCommission: platformCommission ?? this.platformCommission,
+      walletRedeemAmount: walletRedeemAmount ?? this.walletRedeemAmount,
     );
   }
 
@@ -289,6 +296,8 @@ class Order {
       if (externalOrderId != null && externalOrderId!.isNotEmpty)
         'externalOrderId': externalOrderId,
       if (platformCommission != null) 'platformCommission': platformCommission,
+      if (walletRedeemAmount != null && walletRedeemAmount! > 0)
+        'walletRedeemAmount': walletRedeemAmount,
     };
   }
 

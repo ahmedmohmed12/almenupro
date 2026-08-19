@@ -115,46 +115,138 @@ class _SmartSalesmanWidgetState extends State<SmartSalesmanWidget> {
     if (widget.cartItems.isEmpty) return const SizedBox.shrink();
     if (!_loading && _recommendations.isEmpty) return const SizedBox.shrink();
 
-    return Container(
-      margin: const EdgeInsets.only(top: 12),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: const Color(0xFFFFF7ED),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppTheme.brandMaroon.withValues(alpha: 0.12)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final wide = constraints.maxWidth >= 640;
+        return Container(
+          margin: const EdgeInsets.only(top: 12),
+          padding: EdgeInsets.all(wide ? 14 : 12),
+          decoration: BoxDecoration(
+            color: const Color(0xFFFFF7ED),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: AppTheme.brandMaroon.withValues(alpha: 0.12),
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const Icon(Icons.auto_awesome, color: AppTheme.brandMaroon, size: 18),
-              const SizedBox(width: 8),
-              const Expanded(
-                child: Text(
-                  'البياع الشاطر',
-                  style: TextStyle(
-                    fontWeight: FontWeight.w800,
+              Row(
+                children: [
+                  const Icon(
+                    Icons.auto_awesome,
                     color: AppTheme.brandMaroon,
+                    size: 18,
                   ),
-                ),
+                  const SizedBox(width: 8),
+                  const Expanded(
+                    child: Text(
+                      'البياع الشاطر',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontWeight: FontWeight.w800,
+                        color: AppTheme.brandMaroon,
+                      ),
+                    ),
+                  ),
+                  if (_loading)
+                    const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                ],
               ),
-              if (_loading)
-                const SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                ),
+              const SizedBox(height: 4),
+              const Text(
+                'اقتراحات لتكبير السلة بإضافة واحدة',
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+              ),
+              const SizedBox(height: 10),
+              if (wide)
+                SizedBox(
+                  height: 168,
+                  child: ListView.separated(
+                    scrollDirection: Axis.horizontal,
+                    itemCount: _recommendations.length,
+                    separatorBuilder: (context, index) =>
+                        const SizedBox(width: 10),
+                    itemBuilder: (context, index) {
+                      return SizedBox(
+                        width: 220,
+                        child: _buildCard(_recommendations[index]),
+                      );
+                    },
+                  ),
+                )
+              else
+                ..._recommendations.map(_buildRow),
             ],
           ),
-          const SizedBox(height: 4),
-          const Text(
-            'اقتراحات لتكبير السلة بإضافة واحدة',
-            style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
-          ),
-          const SizedBox(height: 10),
-          ..._recommendations.map(_buildRow),
-        ],
+        );
+      },
+    );
+  }
+
+  Widget _buildCard(UpsellRecommendation recommendation) {
+    final item = recommendation.item;
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(12),
+      child: Padding(
+        padding: const EdgeInsets.all(10),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Expanded(
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: item.imageUrl.trim().isEmpty
+                    ? const ColoredBox(
+                        color: Color(0xFFF4ECE9),
+                        child: Icon(Icons.restaurant, size: 28),
+                      )
+                    : NetworkMenuImage(
+                        imageUrl: item.imageUrl,
+                        fit: BoxFit.cover,
+                      ),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              item.localizedName('ar'),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontWeight: FontWeight.w700),
+            ),
+            Text(
+              '${item.price.toStringAsFixed(3)} د.ك',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: AppTheme.brandMaroon,
+              ),
+            ),
+            const SizedBox(height: 6),
+            SizedBox(
+              height: 36,
+              child: FilledButton(
+                style: FilledButton.styleFrom(
+                  backgroundColor: AppTheme.brandMaroon,
+                  foregroundColor: Colors.white,
+                  padding: EdgeInsets.zero,
+                ),
+                onPressed: () => widget.onAddItem(item),
+                child: const Text('إضافة'),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -170,7 +262,7 @@ class _SmartSalesmanWidgetState extends State<SmartSalesmanWidget> {
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
           child: LayoutBuilder(
             builder: (context, constraints) {
-              final stacked = constraints.maxWidth < 320;
+              final stacked = constraints.maxWidth < 380;
               final addButton = FilledButton(
                 style: FilledButton.styleFrom(
                   backgroundColor: AppTheme.brandMaroon,
@@ -220,6 +312,8 @@ class _SmartSalesmanWidgetState extends State<SmartSalesmanWidget> {
                         ),
                         Text(
                           recommendation.reasonLabel('ar'),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
                             fontSize: 11,
                             color: Color(0xFF64748B),

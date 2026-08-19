@@ -37,13 +37,14 @@ const { computeTopMenuItems } = require('./lib/topItemsAnalytics');
 const { computeDailySalesAnalytics } = require('./lib/platformSalesAnalytics');
 const { computeFoodCostReport } = require('./lib/foodCostReportAnalytics');
 const { computeUpsellAnalytics, normalizeIncomingEvent, trimEvents } = require('./lib/upsellAnalytics');
-const { previewEarnedCashback, applyLoyaltyCashbackToOrder } = require('./lib/loyaltyCashback');
+const { previewEarnedCashback, applyLoyaltyCashbackToOrder, redeemCustomerWallet, normalizeLoyaltySettings, isDeliveredStatus } = require('./lib/loyaltyCashback');
 const {
   enrichCustomersForRestaurant,
   upsertCustomerFromSource,
   findCustomerByPhone,
   customerProfileFromRecord,
   migrateCustomersFromOrders,
+  identifyCustomerByPhone,
 } = require('./lib/customersStore');
 const { normalizeWhatsappSettings } = require('./lib/whatsappPhone');
 const {
@@ -549,14 +550,29 @@ async function routeRequest(req, res, url, pathname) {
       status: body.status || 'pending',
       createdAt: body.createdAt || new Date().toISOString(),
     };
+    let customers = await extraStore.customers.read();
+    const requestedRedeem = Number(
+      body.walletRedeemAmount ?? body.wallet_redeem_amount ?? 0,
+    ) || 0;
+    if (requestedRedeem > 0 && created.phone) {
+      const redemption = redeemCustomerWallet(customers, {
+        phone: created.phone,
+        restaurantId,
+        amount: requestedRedeem,
+        orderId: created.id,
+      });
+      customers = redemption.customers;
+      created.walletRedeemed = redemption.redeemed;
+      created.wallet_redeemed = redemption.redeemed;
+      const currentTotal = Number(created.totalPrice ?? created.total_price ?? 0) || 0;
+      created.totalPrice = Math.max(0, Number((currentTotal - redemption.redeemed).toFixed(3)));
+    }
     orders.unshift(created);
     await dataStore.writeOrders(orders);
     if (created.phone) {
-      const customers = await extraStore.customers.read();
-      await extraStore.customers.write(
-        upsertCustomerFromSource(customers, created, restaurantId),
-      );
+      customers = upsertCustomerFromSource(customers, created, restaurantId);
     }
+    await extraStore.customers.write(customers);
     sendJson(res, 201, created);
     return true;
   }
@@ -603,7 +619,7 @@ async function routeRequest(req, res, url, pathname) {
     if (cancelled.shifts) {
       await extraStore.shiftSessions.write(cancelled.shifts);
     }
-    if (String(next.status || '').toLowerCase() === 'delivered') {
+    if (isDeliveredStatus(next.status)) {
       const settingsMap = await dataStore.readSettingsMap();
       const settings = settingsMap.byRestaurant?.[restaurantId] || {};
       const customers = await extraStore.customers.read();
@@ -875,6 +891,39 @@ async function routeRequest(req, res, url, pathname) {
     };
     await extraStore.deliveryZones.write(zones);
     sendJson(res, 200, zones[index]);
+    return true;
+  }
+
+  if (pathname === '/api/customers/identify' && req.method === 'POST') {
+    try {
+      const body = parseJson(await readBody(req));
+      const restaurants = await dataStore.readRestaurants();
+      const restaurantId =
+        body.restaurantId ||
+        body.restaurant_id ||
+        resolveRestaurantFromQuery(url, restaurants);
+      const phone = body.phone || '';
+      const customers = migrateCustomersFromOrders(
+        await extraStore.customers.read(),
+        await dataStore.readOrders(),
+      );
+      const identified = identifyCustomerByPhone(customers, restaurantId, phone);
+      await extraStore.customers.write(identified.customers);
+      const settingsMap = await dataStore.readSettingsMap();
+      const loyalty = normalizeLoyaltySettings(
+        settingsMap.byRestaurant?.[restaurantId] || {},
+      );
+      const profile = customerProfileFromRecord(identified.customer);
+      sendJson(res, 200, {
+        ok: true,
+        isNew: identified.isNew,
+        isReturning: !identified.isNew && Number(profile.totalOrders || 0) > 0,
+        profile,
+        loyalty,
+      });
+    } catch (error) {
+      sendJson(res, 400, { error: error.message || 'Invalid phone' });
+    }
     return true;
   }
 

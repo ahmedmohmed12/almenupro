@@ -1002,6 +1002,31 @@ class ApiService {
     }
   }
 
+  Future<Map<String, dynamic>> identifyCustomer({
+    required String phone,
+    String? restaurantId,
+  }) async {
+    final response = await http
+        .post(
+          _uri('/customers/identify'),
+          headers: _publicHeaders,
+          body: jsonEncode({
+            'phone': phone,
+            'restaurantId': _scopedRestaurantId(restaurantId: restaurantId),
+          }),
+        )
+        .timeout(_fetchTimeout);
+
+    if (response.statusCode != 200) {
+      throw Exception('تعذر التحقق من رقم الهاتف');
+    }
+    final decoded = jsonDecode(response.body);
+    if (decoded is! Map) {
+      throw Exception('استجابة غير متوقعة من السيرفر');
+    }
+    return Map<String, dynamic>.from(decoded);
+  }
+
   Future<Map<String, dynamic>> fetchDailySalesAnalytics({
     String? restaurantId,
     int days = 1,

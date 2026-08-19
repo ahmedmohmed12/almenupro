@@ -69,6 +69,7 @@ class OrdersService {
     DeliveryAddressDetails? addressDetails,
     String? orderSource,
     OrderType? orderType,
+    double? walletRedeemAmount,
   }) async {
     final order = OrdersDemoService.orderFromCart(
       cartItems: cartItems,
@@ -84,6 +85,7 @@ class OrdersService {
       addressDetails: addressDetails,
       orderSource: orderSource,
       orderType: orderType,
+      walletRedeemAmount: walletRedeemAmount,
     );
 
     final created = await ApiService.instance.createOrder(

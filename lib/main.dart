@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 
 import 'firebase_options.dart';
 import 'providers/cart_provider.dart';
+import 'providers/customer_session_provider.dart';
 import 'providers/locale_provider.dart';
 import 'providers/order_type_provider.dart';
 import 'screens/admin_dashboard.dart';
@@ -106,6 +107,7 @@ class MyApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => CartProvider()),
         ChangeNotifierProvider(create: (_) => LocaleProvider()),
         ChangeNotifierProvider(create: (_) => OrderTypeProvider()),
+        ChangeNotifierProvider(create: (_) => CustomerSessionProvider()),
       ],
       child: MaterialApp(
         title: 'Almenupro',

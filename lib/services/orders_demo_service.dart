@@ -257,6 +257,7 @@ class OrdersDemoService {
     DeliveryAddressDetails? addressDetails,
     String? orderSource,
     OrderType? orderType,
+    double? walletRedeemAmount,
   }) {
     final items = cartItems.map(OrderLineItem.fromCartItem).toList();
     final subtotal =
@@ -282,6 +283,7 @@ class OrdersDemoService {
       deliveryZoneId: deliveryZoneId,
       addressDetails: addressDetails ?? const DeliveryAddressDetails(),
       orderSource: orderSource,
+      walletRedeemAmount: walletRedeemAmount,
     );
   }
 }
