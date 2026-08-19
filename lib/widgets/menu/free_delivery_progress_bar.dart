@@ -19,7 +19,7 @@ class FreeDeliveryProgressBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (threshold <= 0 || baseDeliveryFee <= 0) {
+    if (threshold <= 0) {
       return const SizedBox.shrink();
     }
 

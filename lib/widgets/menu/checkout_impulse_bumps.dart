@@ -13,6 +13,8 @@ class CheckoutImpulseBumps extends StatelessWidget {
     required this.strings,
     required this.onAddItem,
     this.freeDeliveryHint,
+    this.restaurantId,
+    this.restaurantSlug,
   });
 
   /// Legacy constructor accepting flat [MenuItem] list.
@@ -44,6 +46,8 @@ class CheckoutImpulseBumps extends StatelessWidget {
   final AppStrings strings;
   final ValueChanged<UpsellRecommendation> onAddItem;
   final String? freeDeliveryHint;
+  final String? restaurantId;
+  final String? restaurantSlug;
 
   @override
   Widget build(BuildContext context) {
@@ -55,6 +59,8 @@ class CheckoutImpulseBumps extends StatelessWidget {
       strings: strings,
       onAddItem: onAddItem,
       surface: 'impulse_bumps',
+      restaurantId: restaurantId,
+      restaurantSlug: restaurantSlug,
       compact: true,
     );
   }

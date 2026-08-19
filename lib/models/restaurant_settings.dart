@@ -88,6 +88,9 @@ class RestaurantSettings {
   bool get hasFreeDeliveryGoal =>
       smartUpsellEnabled && freeDeliveryThreshold > 0;
 
+  bool unlocksFreeDelivery(double subtotal) =>
+      hasFreeDeliveryGoal && subtotal >= freeDeliveryThreshold;
+
   factory RestaurantSettings.defaults() {
     return RestaurantSettings(
       whatsappCountryCode: WhatsAppPhone.defaultCountryCode,

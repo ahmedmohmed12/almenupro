@@ -117,9 +117,9 @@ class _SmartSalesmanWidgetState extends State<SmartSalesmanWidget> {
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        final wide = constraints.maxWidth >= 640;
+        final wide = widget.compact || constraints.maxWidth >= 640;
         return Container(
-          margin: const EdgeInsets.only(top: 12),
+          margin: EdgeInsets.only(top: widget.compact ? 0 : 12),
           padding: EdgeInsets.all(wide ? 14 : 12),
           decoration: BoxDecoration(
             color: const Color(0xFFFFF7ED),

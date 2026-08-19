@@ -8,16 +8,22 @@ import '../../l10n/app_strings.dart';
 import '../../models/customer_restaurant_context.dart';
 import '../../models/delivery_address_details.dart';
 import '../../models/delivery_zone.dart';
+import '../../models/menu_item.dart';
 import '../../models/payment_method_config.dart';
+import '../../models/restaurant_settings.dart';
+import '../../models/upsell_recommendation.dart';
 import '../../providers/cart_provider.dart';
 import '../../providers/customer_session_provider.dart';
 import '../../providers/locale_provider.dart';
 import '../../services/api_service.dart';
 import '../../services/orders_service.dart';
 import '../../theme/app_theme.dart';
+import '../../utils/upsell_item_resolver.dart';
 import '../../utils/whatsapp_launcher.dart';
 import '../../utils/whatsapp_order_message.dart';
 import '../pos/smart_salesman_widget.dart';
+import 'checkout_impulse_bumps.dart';
+import 'free_delivery_progress_bar.dart';
 
 class MenuCheckoutSheet extends StatefulWidget {
   const MenuCheckoutSheet({super.key, this.restaurantContext});
@@ -94,6 +100,8 @@ class _MenuCheckoutSheetState extends State<MenuCheckoutSheet> {
   var _applyWallet = false;
 
   List<DeliveryZone> _zones = [];
+  List<MenuItem> _menuItems = [];
+  RestaurantSettings? _settings;
   List<PaymentMethodConfig> _paymentMethods = PaymentMethodConfig.defaults()
       .where((method) => method.enabled)
       .toList();
@@ -113,7 +121,15 @@ class _MenuCheckoutSheetState extends State<MenuCheckoutSheet> {
 
   String? get _restaurantSlug => widget.restaurantContext?.slug;
 
-  double get _deliveryFee => _selectedZone?.deliveryFee ?? 0;
+  double get _zoneDeliveryFee => _selectedZone?.deliveryFee ?? 0;
+
+  double _deliveryFeeFor(double subtotal) {
+    final settings = _settings;
+    if (settings != null && settings.unlocksFreeDelivery(subtotal)) {
+      return 0;
+    }
+    return _zoneDeliveryFee;
+  }
 
   CustomerSessionProvider get _session =>
       context.read<CustomerSessionProvider>();
@@ -121,14 +137,14 @@ class _MenuCheckoutSheetState extends State<MenuCheckoutSheet> {
   double _walletAvailable() => _session.walletBalance;
 
   double _walletRedeemable(double subtotal) {
-    final due = subtotal + _deliveryFee;
+    final due = subtotal + _deliveryFeeFor(subtotal);
     final available = _walletAvailable();
     if (!_applyWallet || available <= 0 || due <= 0) return 0;
     return available < due ? available : due;
   }
 
   double _grandTotal(double subtotal) =>
-      (subtotal + _deliveryFee - _walletRedeemable(subtotal)).clamp(0, double.infinity);
+      (subtotal + _deliveryFeeFor(subtotal) - _walletRedeemable(subtotal)).clamp(0, double.infinity);
 
   List<String> get _availableGovernorates {
     if (_zones.isEmpty) return kuwaitGovernorates;
@@ -175,7 +191,7 @@ class _MenuCheckoutSheetState extends State<MenuCheckoutSheet> {
   void initState() {
     super.initState();
     unawaited(_loadDeliveryZones());
-    unawaited(_loadPaymentMethods());
+    unawaited(_loadRestaurantData());
     WidgetsBinding.instance.addPostFrameCallback((_) => _prefillFromSession());
   }
 
@@ -207,7 +223,7 @@ class _MenuCheckoutSheetState extends State<MenuCheckoutSheet> {
     setState(() {});
   }
 
-  Future<void> _loadPaymentMethods() async {
+  Future<void> _loadRestaurantData() async {
     try {
       final settings = await ApiService.instance.fetchSettings(
         restaurantId: _restaurantId,
@@ -217,12 +233,33 @@ class _MenuCheckoutSheetState extends State<MenuCheckoutSheet> {
           .where((method) => method.id != 'wallet')
           .toList();
       setState(() {
+        _settings = settings;
         if (methods.isNotEmpty) _paymentMethods = methods;
         if (!_paymentMethods.any((method) => method.storageValue == _paymentMethod)) {
           _paymentMethod = _paymentMethods.first.storageValue;
         }
       });
     } catch (_) {}
+
+    try {
+      final items = await ApiService.instance.fetchItems(
+        restaurantId: _restaurantId,
+        limit: 200,
+        lite: true,
+      );
+      if (!mounted) return;
+      setState(() => _menuItems = items);
+    } catch (_) {}
+  }
+
+  List<UpsellRecommendation> _impulseBumpsFor(CartProvider cart) {
+    final settings = _settings;
+    if (settings == null || _menuItems.isEmpty) return const [];
+    return UpsellItemResolver.impulseBumpRecommendations(
+      allItems: _menuItems,
+      settings: settings,
+      cartItemIds: cart.items.map((item) => item.menuItem.id).toSet(),
+    );
   }
 
   Future<void> _loadDeliveryZones() async {
@@ -301,7 +338,7 @@ class _MenuCheckoutSheetState extends State<MenuCheckoutSheet> {
         paymentMethod: _paymentMethod,
         invoiceNumber: invoiceNumber,
         restaurantId: _restaurantId,
-        deliveryFee: _deliveryFee,
+        deliveryFee: _deliveryFeeFor(subtotal),
         governorate: _selectedZone?.governorate ?? _selectedGovernorate,
         areaName: _selectedZone?.areaName,
         deliveryZoneId: _selectedZone?.id,
@@ -332,7 +369,7 @@ class _MenuCheckoutSheetState extends State<MenuCheckoutSheet> {
       orderTime: orderTime,
       cartItems: cart.items,
       subtotal: subtotal,
-      deliveryFee: _deliveryFee,
+      deliveryFee: _deliveryFeeFor(subtotal),
       grandTotal: grandTotal,
       addressArabic: addressArabic,
       addressEnglish: addressEnglish,
@@ -353,6 +390,8 @@ class _MenuCheckoutSheetState extends State<MenuCheckoutSheet> {
     final subtotal = cart.totalPrice;
     final wallet = _walletRedeemable(subtotal);
     final grandTotal = _grandTotal(subtotal);
+    final deliveryFee = _deliveryFeeFor(subtotal);
+    final freeDelivery = _settings?.unlocksFreeDelivery(subtotal) ?? false;
 
     return Container(
       padding: const EdgeInsets.all(14),
@@ -370,10 +409,12 @@ class _MenuCheckoutSheetState extends State<MenuCheckoutSheet> {
           ),
           const SizedBox(height: 6),
           _TotalRow(
-            label: strings.deliveryFee,
-            value: _deliveryFee,
+            label: freeDelivery
+                ? '${strings.deliveryFee} (${strings.freeDeliveryUnlocked})'
+                : strings.deliveryFee,
+            value: deliveryFee,
             currency: strings.currency,
-            highlight: _selectedZone != null,
+            highlight: freeDelivery || _selectedZone != null,
           ),
           if (wallet > 0) ...[
             const SizedBox(height: 6),
@@ -393,6 +434,47 @@ class _MenuCheckoutSheetState extends State<MenuCheckoutSheet> {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _stage2And3Offers(CartProvider cart, AppStrings strings, String localeCode) {
+    final settings = _settings;
+    final remaining = settings != null &&
+            settings.hasFreeDeliveryGoal &&
+            cart.totalPrice < settings.freeDeliveryThreshold
+        ? settings.freeDeliveryThreshold - cart.totalPrice
+        : 0.0;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (settings != null && settings.hasFreeDeliveryGoal)
+          FreeDeliveryProgressBar(
+            subtotal: cart.totalPrice,
+            threshold: settings.freeDeliveryThreshold,
+            baseDeliveryFee: _zoneDeliveryFee,
+            strings: strings,
+          ),
+        CheckoutImpulseBumps(
+          recommendations: _impulseBumpsFor(cart),
+          localeCode: localeCode,
+          strings: strings,
+          restaurantId: _restaurantId,
+          restaurantSlug: _restaurantSlug,
+          freeDeliveryHint: remaining > 0
+              ? strings.freeDeliveryRemaining(remaining.toStringAsFixed(3))
+              : null,
+          onAddItem: (rec) => cart.addMenuItem(rec.item),
+        ),
+        if (!cart.isEmpty)
+          SmartSalesmanWidget(
+            compact: true,
+            cartItems: cart.items,
+            cartTotal: cart.totalPrice,
+            restaurantId: _restaurantId,
+            onAddItem: (item) => cart.addMenuItem(item),
+          ),
+      ],
     );
   }
 
@@ -549,11 +631,10 @@ class _MenuCheckoutSheetState extends State<MenuCheckoutSheet> {
                             ),
                           ),
                           if (!cart.isEmpty)
-                            SmartSalesmanWidget(
-                              cartItems: cart.items,
-                              cartTotal: cart.totalPrice,
-                              restaurantId: _restaurantId,
-                              onAddItem: (item) => cart.addMenuItem(item),
+                            _stage2And3Offers(
+                              cart,
+                              strings,
+                              locale.localeCode,
                             ),
                           const SizedBox(height: 12),
                           _buildTotals(cart, strings),
@@ -842,6 +923,14 @@ class _MenuCheckoutSheetState extends State<MenuCheckoutSheet> {
                             }).toList(),
                           ),
                           const SizedBox(height: 16),
+                          if (_settings != null &&
+                              _settings!.hasFreeDeliveryGoal)
+                            FreeDeliveryProgressBar(
+                              subtotal: cart.totalPrice,
+                              threshold: _settings!.freeDeliveryThreshold,
+                              baseDeliveryFee: _zoneDeliveryFee,
+                              strings: strings,
+                            ),
                           _buildTotals(cart, strings),
                           const SizedBox(height: 12),
                         ],

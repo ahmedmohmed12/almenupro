@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../models/cart_item.dart';
 import '../models/delivery_zone.dart';
 import '../models/menu_item.dart';
 import '../models/restaurant_settings.dart';
@@ -9,8 +10,11 @@ import '../providers/customer_session_provider.dart';
 import '../services/api_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/menu/customer_phone_gate.dart';
+import '../widgets/menu/free_delivery_progress_bar.dart';
 import '../widgets/menu/menu_checkout_sheet.dart';
 import '../widgets/menu/storefront_header.dart';
+import '../widgets/pos/smart_salesman_widget.dart';
+import '../l10n/app_strings.dart';
 
 class MenuScreen extends StatefulWidget {
   const MenuScreen({super.key});
@@ -123,7 +127,10 @@ class _MenuScreenState extends State<MenuScreen> {
   }
 
   List<String> _categories(List<MenuItem> items) {
-    final categories = <String>{_smartCategory, 'الكل'};
+    final categories = <String>{
+      if (_settings?.smartUpsellEnabled != false) _smartCategory,
+      'الكل',
+    };
     for (final item in items) {
       if (item.categoryName.trim().isNotEmpty) {
         categories.add(item.categoryName.trim());
@@ -134,6 +141,9 @@ class _MenuScreenState extends State<MenuScreen> {
 
   List<MenuItem> _filteredItems(List<MenuItem> items) {
     if (_selectedCategory == _smartCategory) {
+      if (_settings?.smartUpsellEnabled == false) {
+        return items;
+      }
       final bumpIds = _settings?.impulseBumpItemIds ?? const <int>[];
       if (bumpIds.isNotEmpty) {
         final byId = {for (final item in items) item.id: item};
@@ -187,6 +197,11 @@ class _MenuScreenState extends State<MenuScreen> {
             : _FloatingCartBar(
                 itemCount: cart.itemCount,
                 totalPrice: cart.totalPrice,
+                cartItems: cart.items,
+                settings: _settings,
+                restaurantId: ApiService.defaultRestaurantId,
+                onAddSuggested: (item) =>
+                    context.read<CartProvider>().addMenuItem(item),
                 onCheckout: () => MenuCheckoutSheet.show(context),
               ),
       ),
@@ -371,17 +386,27 @@ class _FloatingCartBar extends StatelessWidget {
   const _FloatingCartBar({
     required this.itemCount,
     required this.totalPrice,
+    required this.cartItems,
     required this.onCheckout,
+    required this.onAddSuggested,
+    required this.restaurantId,
+    this.settings,
   });
 
   final int itemCount;
   final double totalPrice;
+  final List<CartItem> cartItems;
   final VoidCallback onCheckout;
+  final ValueChanged<MenuItem> onAddSuggested;
+  final String restaurantId;
+  final RestaurantSettings? settings;
 
   @override
   Widget build(BuildContext context) {
+    final strings = AppStrings.of(context);
+
     return Container(
-      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 10),
       decoration: BoxDecoration(
         color: Colors.white,
         boxShadow: [
@@ -394,76 +419,96 @@ class _FloatingCartBar extends StatelessWidget {
       ),
       child: SafeArea(
         top: false,
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final narrow = constraints.maxWidth < 360;
-            return Align(
-              alignment: Alignment.center,
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 720),
-                child: FilledButton(
-                  style: FilledButton.styleFrom(
-                    backgroundColor: AppTheme.brandMaroon,
-                    padding: EdgeInsets.symmetric(
-                      vertical: narrow ? 12 : 14,
-                      horizontal: narrow ? 12 : 20,
-                    ),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(30),
-                    ),
+        child: Align(
+          alignment: Alignment.center,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 720),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (settings != null && settings!.hasFreeDeliveryGoal)
+                  FreeDeliveryProgressBar(
+                    subtotal: totalPrice,
+                    threshold: settings!.freeDeliveryThreshold,
+                    baseDeliveryFee: 1,
+                    strings: strings,
                   ),
-                  onPressed: onCheckout,
-                  child: Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 4,
+                SmartSalesmanWidget(
+                  compact: true,
+                  cartItems: cartItems,
+                  cartTotal: totalPrice,
+                  restaurantId: restaurantId,
+                  onAddItem: onAddSuggested,
+                ),
+                const SizedBox(height: 8),
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    final narrow = constraints.maxWidth < 360;
+                    return FilledButton(
+                      style: FilledButton.styleFrom(
+                        backgroundColor: AppTheme.brandMaroon,
+                        padding: EdgeInsets.symmetric(
+                          vertical: narrow ? 12 : 14,
+                          horizontal: narrow ? 12 : 20,
                         ),
-                        decoration: BoxDecoration(
-                          color: AppTheme.brandOrange,
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Text(
-                          '$itemCount',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                      Expanded(
-                        child: Text(
-                          'متابعة الطلب',
-                          textAlign: TextAlign.center,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: narrow ? 14 : 16,
-                            fontWeight: FontWeight.bold,
-                          ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(30),
                         ),
                       ),
-                      Flexible(
-                        child: FittedBox(
-                          fit: BoxFit.scaleDown,
-                          alignment: AlignmentDirectional.centerEnd,
-                          child: Text(
-                            '${totalPrice.toStringAsFixed(3)} د.ك',
-                            maxLines: 1,
-                            style: TextStyle(
-                              fontSize: narrow ? 13 : 16,
-                              fontWeight: FontWeight.bold,
+                      onPressed: onCheckout,
+                      child: Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 4,
+                            ),
+                            decoration: BoxDecoration(
+                              color: AppTheme.brandOrange,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Text(
+                              '$itemCount',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
                           ),
-                        ),
+                          Expanded(
+                            child: Text(
+                              'متابعة الطلب',
+                              textAlign: TextAlign.center,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: narrow ? 14 : 16,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                          Flexible(
+                            child: FittedBox(
+                              fit: BoxFit.scaleDown,
+                              alignment: AlignmentDirectional.centerEnd,
+                              child: Text(
+                                '${totalPrice.toStringAsFixed(3)} د.ك',
+                                maxLines: 1,
+                                style: TextStyle(
+                                  fontSize: narrow ? 13 : 16,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
-                    ],
-                  ),
+                    );
+                  },
                 ),
-              ),
-            );
-          },
+              ],
+            ),
+          ),
         ),
       ),
     );
