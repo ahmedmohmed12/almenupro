@@ -120,10 +120,4 @@ class FirebaseService {
   Future<void> refreshOrders() async {
     // Orders are delivered via [watchOrders]; this exists for API compatibility.
   }
-
-  Future<void> refreshOrders() async {
-    // Firebase streams provide real-time updates, so explicit refresh might not be needed.
-    // If a more complex refresh mechanism is required (e.g., clearing cache, re-fetching data),
-    // it would be implemented here based on specific requirements.
-  }
 }
