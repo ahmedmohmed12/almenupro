@@ -55,6 +55,12 @@ extension UpsellReasonApi on UpsellReason {
         return 'impulse';
       case UpsellReason.adminPick:
         return 'admin_pick';
+      case UpsellReason.drink:
+        return 'drink';
+      case UpsellReason.side:
+        return 'side';
+      case UpsellReason.dessert:
+        return 'dessert';
     }
   }
 }
