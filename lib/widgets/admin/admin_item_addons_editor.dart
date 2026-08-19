@@ -5,10 +5,12 @@ class AdminItemAddonsEditor extends StatelessWidget {
     super.key,
     required this.options,
     required this.onChanged,
+    this.itemId,
   });
 
   final List<Map<String, dynamic>> options;
   final ValueChanged<List<Map<String, dynamic>>> onChanged;
+  final int? itemId;
 
   static const burgundy = Color(0xFF6B1124);
 

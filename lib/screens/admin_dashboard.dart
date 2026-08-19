@@ -37,6 +37,7 @@ import '../widgets/admin/admin_sound_settings_card.dart';
 import '../widgets/admin/admin_top_header.dart';
 import '../widgets/admin/admin_smart_upsell_panel.dart';
 import '../widgets/admin/admin_working_hours_card.dart';
+import '../widgets/app_error_boundary.dart';
 
 class AdminDashboard extends StatefulWidget {
   const AdminDashboard({super.key});
@@ -158,11 +159,11 @@ class _AdminDashboardState extends State<AdminDashboard> {
 
     try {
       final restaurantId = SuperAdminScopeService.instance.effectiveRestaurantId;
-await RestaurantSettingsService.instance.saveWhatsappNumber(
-  restaurantId: restaurantId,
-  countryCode: _whatsappCountryCode,
-  phone: _whatsappController.text.trim(),
-);
+      await RestaurantSettingsService.instance.saveWhatsappNumber(
+        restaurantId: restaurantId,
+        countryCode: _whatsappCountryCode,
+        phone: _whatsappController.text.trim(),
+      );
       if (!mounted) return;
       final display = WhatsAppPhone.formatDisplay(
         _whatsappCountryCode,
@@ -385,8 +386,14 @@ await RestaurantSettingsService.instance.saveWhatsappNumber(
         return StatefulBuilder(
           builder: (context, setDialogState) {
             return AlertDialog(
+              insetPadding: const EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: 24,
+              ),
               title: Text(isEditing ? 'تعديل الصنف' : 'إضافة صنف جديد'),
-              content: SingleChildScrollView(
+              content: SizedBox(
+                width: 520,
+                child: SingleChildScrollView(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -487,6 +494,7 @@ await RestaurantSettingsService.instance.saveWhatsappNumber(
                     ),
                   ],
                 ),
+              ),
               ),
               actions: [
                 TextButton(
@@ -950,7 +958,16 @@ await RestaurantSettingsService.instance.saveWhatsappNumber(
           Expanded(
             child: ListenableBuilder(
               listenable: SuperAdminScopeService.instance,
-              builder: (context, _) => _buildActiveTab(),
+              builder: (context, _) {
+                try {
+                  return SizedBox.expand(child: _buildActiveTab());
+                } catch (error) {
+                  return AppErrorBoundary.releaseFallback(
+                    FlutterErrorDetails(exception: error),
+                    onRetry: () => setState(() {}),
+                  );
+                }
+              },
             ),
           ),
         ],
@@ -965,7 +982,7 @@ await RestaurantSettingsService.instance.saveWhatsappNumber(
             backgroundColor: AdminSidebar.sidebarBg,
             child: SafeArea(child: buildSidebar(inDrawer: true)),
           ),
-          body: content,
+          body: SafeArea(child: content),
         );
       }
 
@@ -998,6 +1015,33 @@ await RestaurantSettingsService.instance.saveWhatsappNumber(
     );
   }
 
+  List<Widget> get _menuHeaderActions {
+    if (!_isMenuTabSelected) return const [];
+    return [
+      Tooltip(
+        message: 'تحديث من طلبات',
+        child: IconButton(
+          onPressed: () {
+            print('Updating from Talabat...');
+          },
+          visualDensity: VisualDensity.compact,
+          icon: const Icon(Icons.sync, color: Color(0xFF6B1124)),
+        ),
+      ),
+      FilledButton.icon(
+        style: FilledButton.styleFrom(
+          backgroundColor: const Color(0xFF6B1124),
+          foregroundColor: Colors.white,
+          visualDensity: VisualDensity.compact,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        ),
+        onPressed: () => _showItemDialog(),
+        icon: const Icon(Icons.add, size: 18),
+        label: const Text('إضافة صنف جديد'),
+      ),
+    ];
+  }
+
   Widget _buildTopHeader({VoidCallback? onMenuTap}) {
     if (_isSuperAdmin) {
       return AdminTopHeader(
@@ -1006,6 +1050,7 @@ await RestaurantSettingsService.instance.saveWhatsappNumber(
         restaurantLabel: _restaurantLabel,
         onMenuTap: onMenuTap,
         onLogout: _logout,
+        actions: _menuHeaderActions,
       );
     }
 
@@ -1019,6 +1064,7 @@ await RestaurantSettingsService.instance.saveWhatsappNumber(
           pendingOrdersCount: pendingCount,
           onMenuTap: onMenuTap,
           onLogout: _logout,
+          actions: _menuHeaderActions,
           onNotificationsTap: () {
             setState(() => _selectedIndex = AdminSidebar.ordersIndex);
             _ordersPanelKey.currentState?.selectNewOrdersTab();
@@ -1097,7 +1143,6 @@ await RestaurantSettingsService.instance.saveWhatsappNumber(
       case AdminSidebar.posIndex:
         return AdminPosPanel(
           restaurantId: SuperAdminScopeService.instance.effectiveRestaurantId,
-          deliveryFee: _loadedSettings?.defaultDeliveryFee ?? 0.0,
           onOrderSubmitted: () {
             unawaited(OrdersService.instance.refreshOrders());
           },

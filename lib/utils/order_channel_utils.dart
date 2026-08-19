@@ -1,11 +1,11 @@
 import '../models/order.dart';
 
-const _onlineSourcePattern = RegExp(
+final _onlineSourcePattern = RegExp(
   r'menu|web|whatsapp|direct|online|site|app|qr',
   caseSensitive: false,
 );
 
-const _cashPaymentPattern = RegExp(
+final _cashPaymentPattern = RegExp(
   r'cash|كاش|cod|cash_on_delivery|نقد|نقداً|نقدا|عند\s*الاستلام',
   caseSensitive: false,
 );

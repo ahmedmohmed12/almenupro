@@ -25,15 +25,20 @@ import '../../utils/whatsapp_phone.dart';
 import 'pos/pos_fast_modifiers_dialog.dart';
 import 'pos/pos_theme.dart';
 import 'pos/pos_ui_components.dart';
+import '../pos/smart_salesman_widget.dart';
 class AdminPosPanel extends StatefulWidget {
   const AdminPosPanel({
     super.key,
     this.onOrderSubmitted,
+    this.onOrdersSubmitted,
+    this.onOpenMenu,
     this.restaurantId,
     this.deliveryFee,
   });
 
   final VoidCallback? onOrderSubmitted;
+  final VoidCallback? onOrdersSubmitted;
+  final VoidCallback? onOpenMenu;
   final String? restaurantId;
   final double? deliveryFee;
 
@@ -85,7 +90,9 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
   int _customerOrderCount = 0;
 
   String get _restaurantId =>
-      AdminAuthService.instance.restaurantId ?? ApiService.defaultRestaurantId;
+      widget.restaurantId ??
+      AdminAuthService.instance.restaurantId ??
+      ApiService.defaultRestaurantId;
 
   String get _restaurantName =>
       AdminAuthService.instance.restaurantName ?? 'المطعم';
@@ -516,7 +523,7 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
       );
 
       _clearCart();
-      widget.onOrderSubmitted?.call();
+      (widget.onOrderSubmitted ?? widget.onOrdersSubmitted)?.call();
       _showMessage('تم حفظ الطلب بنجاح');
       return order;
     } catch (error) {
@@ -935,6 +942,14 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
                         onDecrease: () =>
                             _updateCartQuantity(item.id, item.quantity - 1),
                       ),
+                    ),
+                  if (_cart.isNotEmpty)
+                    SmartSalesmanWidget(
+                      cartItems: List.from(_cart),
+                      cartTotal: _subtotal,
+                      restaurantId: _restaurantId,
+                      compact: true,
+                      onAddItem: _addToCart,
                     ),
                 ],
               ),

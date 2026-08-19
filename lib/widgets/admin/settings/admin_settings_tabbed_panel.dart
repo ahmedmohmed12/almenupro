@@ -57,6 +57,16 @@ class _AdminSettingsTabbedPanelState extends State<AdminSettingsTabbedPanel> {
         return Icons.card_giftcard_outlined;
       case AdminSettingsTab.email:
         return Icons.mail_outline;
+      case AdminSettingsTab.platforms:
+        return Icons.hub_outlined;
+      case AdminSettingsTab.paymentMethods:
+        return Icons.payments_outlined;
+      case AdminSettingsTab.roles:
+        return Icons.badge_outlined;
+      case AdminSettingsTab.workingHours:
+        return Icons.schedule_outlined;
+      case AdminSettingsTab.audioNotifications:
+        return Icons.notifications_active_outlined;
     }
   }
 
@@ -122,6 +132,16 @@ class _AdminSettingsTabbedPanelState extends State<AdminSettingsTabbedPanel> {
         return const AdminLoyaltySettingsCard();
       case AdminSettingsTab.email:
         return const AdminEmailNotificationsCard();
+      case AdminSettingsTab.platforms:
+        return const AdminPlatformSettingsCard();
+      case AdminSettingsTab.paymentMethods:
+        return const AdminPaymentSettingsCard();
+      case AdminSettingsTab.roles:
+        return const AdminPosRolesStaffCard();
+      case AdminSettingsTab.workingHours:
+        return const AdminWorkingHoursCard();
+      case AdminSettingsTab.audioNotifications:
+        return const AdminSoundSettingsCard();
     }
   }
 
@@ -183,19 +203,19 @@ class _AdminSettingsTabbedPanelState extends State<AdminSettingsTabbedPanel> {
               '⚙️ إعدادات إضافية (الدفع، POS، ساعات العمل)',
               style: TextStyle(fontWeight: FontWeight.w600, color: burgundy),
             ),
-            children: const [
-              SizedBox(height: 8),
-              AdminPaymentSettingsCard(),
-              SizedBox(height: 16),
-              AdminPlatformSettingsCard(),
-              SizedBox(height: 16),
-              AdminPosRolesStaffCard(),
-              SizedBox(height: 16),
-              AdminWorkingHoursCard(),
-              SizedBox(height: 8),
+            children: [
+              const SizedBox(height: 8),
+              const AdminPaymentSettingsCard(),
+              const SizedBox(height: 16),
+              const AdminPlatformSettingsCard(),
+              const SizedBox(height: 16),
+              const AdminPosRolesStaffCard(),
+              const SizedBox(height: 16),
+              const AdminWorkingHoursCard(),
+              const SizedBox(height: 8),
               if (!widget.isSuperAdmin) ...[
-                AdminSoundSettingsCard(),
-                SizedBox(height: 8),
+                const AdminSoundSettingsCard(),
+                const SizedBox(height: 8),
               ],
             ],
           ),

@@ -151,6 +151,11 @@ class Order {
     this.deliveryZoneId,
     this.addressDetails = const DeliveryAddressDetails(),
     this.orderSource,
+    this.shiftId,
+    this.cashierId,
+    this.externalOrderId,
+    this.platformCommission,
+    this.walletRedeemAmount,
   });
 
   final String id;
@@ -171,6 +176,14 @@ class Order {
   final String? deliveryZoneId;
   final DeliveryAddressDetails addressDetails;
   final String? orderSource;
+  final String? shiftId;
+  final String? cashierId;
+  final String? externalOrderId;
+  final double? platformCommission;
+  final double? walletRedeemAmount;
+
+  double get netRevenue =>
+      totalPrice - (platformCommission == null ? 0 : platformCommission!);
 
   factory Order.fromMap(String id, Map<String, dynamic> map) {
     final rawItems = map['items'] as List<dynamic>? ?? [];
@@ -181,7 +194,8 @@ class Order {
       phone: map['phone'] as String? ?? '',
       address: map['address'] as String? ?? '',
       items: rawItems
-          .map((item) => OrderLineItem.fromMap(item as Map<String, dynamic>))
+          .whereType<Map>()
+          .map((item) => OrderLineItem.fromMap(Map<String, dynamic>.from(item)))
           .toList(),
       totalPrice: (map['totalPrice'] as num?)?.toDouble() ?? 0,
       orderType: OrderType.fromString(map['orderType'] as String?),
@@ -202,6 +216,15 @@ class Order {
       ),
       orderSource:
           map['orderSource']?.toString() ?? map['order_source']?.toString(),
+      shiftId: map['shiftId']?.toString() ?? map['shift_id']?.toString(),
+      cashierId: map['cashierId']?.toString() ?? map['cashier_id']?.toString(),
+      externalOrderId: map['externalOrderId']?.toString() ??
+          map['external_order_id']?.toString(),
+      platformCommission: (map['platformCommission'] as num?)?.toDouble() ??
+          (map['platform_commission'] as num?)?.toDouble(),
+      walletRedeemAmount: (map['walletRedeemAmount'] as num?)?.toDouble() ??
+          (map['wallet_redeem_amount'] as num?)?.toDouble() ??
+          (map['walletRedeemed'] as num?)?.toDouble(),
     );
   }
 
@@ -212,6 +235,12 @@ class Order {
     double? subtotal,
     double? deliveryFee,
     double? totalPrice,
+    String? shiftId,
+    String? cashierId,
+    String? externalOrderId,
+    double? platformCommission,
+    String? orderSource,
+    double? walletRedeemAmount,
   }) {
     return Order(
       id: id,
@@ -231,7 +260,12 @@ class Order {
       areaName: areaName,
       deliveryZoneId: deliveryZoneId,
       addressDetails: addressDetails,
-      orderSource: orderSource,
+      orderSource: orderSource ?? this.orderSource,
+      shiftId: shiftId ?? this.shiftId,
+      cashierId: cashierId ?? this.cashierId,
+      externalOrderId: externalOrderId ?? this.externalOrderId,
+      platformCommission: platformCommission ?? this.platformCommission,
+      walletRedeemAmount: walletRedeemAmount ?? this.walletRedeemAmount,
     );
   }
 
@@ -242,7 +276,7 @@ class Order {
       'address': address,
       'items': items.map((item) => item.toMap()).toList(),
       'totalPrice': totalPrice,
-      'orderType': orderType.label,
+      'orderType': orderType.name,
       'status': status.name,
       'createdAt': createdAt.toUtc().toIso8601String(),
       if (subtotal != null) 'subtotal': subtotal,
@@ -257,6 +291,13 @@ class Order {
       if (paymentMethod != null && paymentMethod!.isNotEmpty)
         'paymentMethod': paymentMethod,
       if (orderSource != null && orderSource!.isNotEmpty) 'orderSource': orderSource,
+      if (shiftId != null && shiftId!.isNotEmpty) 'shiftId': shiftId,
+      if (cashierId != null && cashierId!.isNotEmpty) 'cashierId': cashierId,
+      if (externalOrderId != null && externalOrderId!.isNotEmpty)
+        'externalOrderId': externalOrderId,
+      if (platformCommission != null) 'platformCommission': platformCommission,
+      if (walletRedeemAmount != null && walletRedeemAmount! > 0)
+        'walletRedeemAmount': walletRedeemAmount,
     };
   }
 

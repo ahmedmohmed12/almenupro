@@ -1,4 +1,7 @@
+import 'package:flutter/foundation.dart';
+
 import '../models/cart_item.dart';
+import '../models/delivery_address_details.dart';
 import '../models/order.dart';
 import '../utils/firebase_config.dart';
 import 'firebase_service.dart';
@@ -17,16 +20,30 @@ class OrdersService {
   bool get isDemoMode => !usesFirebase && OrdersDemoService.isDemoData;
 
   Stream<List<Order>> watchOrders() {
-    if (usesFirebase) return _firebase.watchOrders();
     return OrdersDemoService.watchOrders();
   }
 
-  Future<void> updateOrderStatus(String orderId, OrderStatus status) async {
+  Future<void> updateOrderStatus(
+    String orderId,
+    OrderStatus status, {
+    String? shiftId,
+    String? cashierId,
+  }) async {
     if (usesFirebase) {
-      await _firebase.updateOrderStatus(orderId, status);
+      await _firebase.updateOrderStatus(
+        orderId,
+        status,
+        shiftId: shiftId,
+        cashierId: cashierId,
+      );
       return;
     }
-    await OrdersDemoService.updateOrderStatus(orderId, status);
+    await OrdersDemoService.updateOrderStatus(
+      orderId,
+      status,
+      shiftId: shiftId,
+      cashierId: cashierId,
+    );
   }
 
   Future<void> refreshOrders() async {
@@ -44,6 +61,15 @@ class OrdersService {
     required String address,
     required String paymentMethod,
     required String invoiceNumber,
+    String? restaurantId,
+    double? deliveryFee,
+    String? governorate,
+    String? areaName,
+    String? deliveryZoneId,
+    DeliveryAddressDetails? addressDetails,
+    String? orderSource,
+    OrderType? orderType,
+    double? walletRedeemAmount,
   }) async {
     final order = OrdersDemoService.orderFromCart(
       cartItems: cartItems,
@@ -52,15 +78,29 @@ class OrdersService {
       address: address,
       paymentMethod: paymentMethod,
       invoiceNumber: invoiceNumber,
+      deliveryFee: deliveryFee,
+      governorate: governorate,
+      areaName: areaName,
+      deliveryZoneId: deliveryZoneId,
+      addressDetails: addressDetails,
+      orderSource: orderSource,
+      orderType: orderType,
+      walletRedeemAmount: walletRedeemAmount,
     );
 
-    if (usesFirebase) {
-      await _firebase.addOrder(order);
-      return;
-    }
-
-    final created = await ApiService.instance.createOrder(order);
+    final created = await ApiService.instance.createOrder(
+      order,
+      restaurantId: restaurantId ?? ApiService.defaultRestaurantId,
+    );
     await OrdersDemoService.registerOrder(created);
     await OrdersDemoService.refreshFromApi();
+
+    if (usesFirebase) {
+      try {
+        await _firebase.addOrder(created);
+      } catch (error) {
+        debugPrint('Firebase order mirror skipped: $error');
+      }
+    }
   }
 }

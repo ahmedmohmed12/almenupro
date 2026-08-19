@@ -3,7 +3,8 @@ set -euo pipefail
 
 FLUTTER_VERSION="${FLUTTER_VERSION:-stable}"
 FLUTTER_HOME="${FLUTTER_HOME:-$PWD/.flutter}"
-API_BASE_URL="${API_BASE_URL:-https://almenupro-backend.vercel.app/api}"
+# Production Mongo API. Do not inherit a stale Vercel API_BASE_URL.
+API_BASE_URL="https://backend-henna-chi-76.vercel.app/api"
 
 if [ ! -x "$FLUTTER_HOME/bin/flutter" ]; then
   echo "Installing Flutter ($FLUTTER_VERSION)..."
@@ -17,7 +18,6 @@ flutter precache --web
 flutter pub get
 flutter build web \
   --release \
-  --web-renderer html \
   --dart-define=API_BASE_URL="$API_BASE_URL"
 
 echo "Flutter web build completed."

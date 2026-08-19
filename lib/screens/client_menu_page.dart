@@ -1,9 +1,12 @@
 import 'dart:math';
 
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_firestore/cloud_firestore.dart' hide Order;
 import 'package:flutter/material.dart';
 
+import '../models/order.dart';
+import '../services/api_service.dart';
 import '../services/menu_storage_service.dart';
+import '../services/orders_demo_service.dart';
 import '../utils/whatsapp_launcher.dart';
 import '../widgets/network_menu_image.dart';
 
@@ -317,6 +320,7 @@ $itemsDetails
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
+      useSafeArea: true,
       backgroundColor: lightBgColor,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
@@ -331,14 +335,11 @@ $itemsDetails
                 left: 20,
                 right: 20,
               ),
-              child: Container(
-                constraints: BoxConstraints(
-                  maxHeight: MediaQuery.of(context).size.height * 0.85,
-                ),
+              child: SizedBox(
+                height: MediaQuery.of(context).size.height * 0.85,
                 child: Form(
                   key: _formKey,
                   child: Column(
-                    mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Row(
@@ -537,23 +538,32 @@ $itemsDetails
                                       .toList();
 
                                   try {
-                                    await FirebaseFirestore.instance
-                                        .collection('orders')
-                                        .add({
-                                      'invoiceNumber': invoiceNumber,
-                                      'customerName':
+                                    final order = Order(
+                                      id: '',
+                                      customerName:
                                           _nameController.text.trim(),
-                                      'phone': _phoneController.text.trim(),
-                                      'address':
-                                          _addressController.text.trim(),
-                                      'paymentMethod': _paymentMethod,
-                                      'orderType': 'delivery',
-                                      'items': orderItems,
-                                      'totalPrice': _totalCartPrice,
-                                      'status': 'pending',
-                                      'createdAt':
-                                          FieldValue.serverTimestamp(),
-                                    });
+                                      phone: _phoneController.text.trim(),
+                                      address: _addressController.text.trim(),
+                                      items: orderItems
+                                          .map(
+                                            (item) => OrderLineItem.fromMap(
+                                              Map<String, dynamic>.from(item),
+                                            ),
+                                          )
+                                          .toList(),
+                                      totalPrice: _totalCartPrice,
+                                      orderType: OrderType.delivery,
+                                      status: OrderStatus.pending,
+                                      createdAt: DateTime.now(),
+                                      invoiceNumber: invoiceNumber,
+                                      paymentMethod: _paymentMethod,
+                                      orderSource: 'customer_web',
+                                    );
+                                    final created = await ApiService.instance
+                                        .createOrder(order);
+                                    await OrdersDemoService.registerOrder(
+                                      created,
+                                    );
                                   } catch (e) {
                                     debugPrint('Order save error: $e');
                                     if (context.mounted) {

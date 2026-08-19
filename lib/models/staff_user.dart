@@ -4,6 +4,7 @@ class StaffUser {
     required this.name,
     required this.roleId,
     this.isActive = true,
+    this.pin,
     this.createdAt,
     this.updatedAt,
   });
@@ -12,8 +13,16 @@ class StaffUser {
   final String name;
   final String roleId;
   final bool isActive;
+  final String? pin;
   final DateTime? createdAt;
   final DateTime? updatedAt;
+
+  String get maskedPin {
+    final value = pin?.trim() ?? '';
+    if (value.isEmpty) return '••••';
+    if (value.length <= 2) return '••';
+    return '${'*' * (value.length - 2)}${value.substring(value.length - 2)}';
+  }
 
   factory StaffUser.fromJson(Map<String, dynamic> json) {
     return StaffUser(
@@ -21,6 +30,7 @@ class StaffUser {
       name: json['name']?.toString() ?? '',
       roleId: json['roleId']?.toString() ?? json['role_id']?.toString() ?? 'cashier',
       isActive: json['isActive'] != false && json['is_active'] != false,
+      pin: json['pin']?.toString() ?? json['maskedPin']?.toString(),
       createdAt: DateTime.tryParse(json['createdAt']?.toString() ?? ''),
       updatedAt: DateTime.tryParse(json['updatedAt']?.toString() ?? ''),
     );

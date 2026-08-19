@@ -60,9 +60,12 @@ class DeliveryAddressDetails {
     return parts.join('، ');
   }
 
-  String formatEnglish() {
+  String formatEnglish({
+    String governorate = '',
+    String areaName = '',
+  }) {
     final parts = <String>[
-      if (governorate.isNotEmpty) '', // governorate is not included in english format
+      if (governorate.isNotEmpty) governorate,
       if (areaName.isNotEmpty) areaName,
       if (avenue.isNotEmpty) avenue,
       if (street.isNotEmpty) street,

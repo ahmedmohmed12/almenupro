@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-import '../../models/pos_role.dart';
-import '../../services/pos_operations_service.dart';
+import '../../../models/pos_role.dart';
+import '../../../services/pos_operations_service.dart';
 
 /// POS sub-routes (synced with `/admin/pos/...` on web).
 enum PosRoute {

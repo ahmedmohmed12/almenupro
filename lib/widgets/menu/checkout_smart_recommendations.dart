@@ -27,6 +27,7 @@ class CheckoutSmartRecommendations extends StatelessWidget {
       localeCode: localeCode,
       strings: strings,
       onAddItem: onAddItem,
+      surface: 'smart_recommendations',
     );
   }
 }

@@ -8,6 +8,9 @@ enum UpsellReason {
   freeDelivery,
   impulse,
   adminPick,
+  drink,
+  side,
+  dessert,
 }
 
 class UpsellRecommendation {
@@ -38,6 +41,12 @@ class UpsellRecommendation {
         return isArabic ? 'إضافة سريعة' : 'Quick add';
       case UpsellReason.adminPick:
         return isArabic ? 'مختار لك' : 'Staff pick';
+      case UpsellReason.drink:
+        return isArabic ? 'مشروب مكمل' : 'Add a drink';
+      case UpsellReason.side:
+        return isArabic ? 'مقبلات / سلطة' : 'Add a side';
+      case UpsellReason.dessert:
+        return isArabic ? 'حلويات' : 'Add dessert';
     }
   }
 
@@ -69,6 +78,12 @@ class UpsellRecommendation {
         return UpsellReason.adminPick;
       case 'impulse':
         return UpsellReason.impulse;
+      case 'drink':
+        return UpsellReason.drink;
+      case 'side':
+        return UpsellReason.side;
+      case 'dessert':
+        return UpsellReason.dessert;
       default:
         return UpsellReason.popular;
     }

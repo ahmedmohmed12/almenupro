@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../services/api_service.dart';
-import '../../models/menu_item.dart';
+import '../../../models/menu_item.dart';
 
 class PosMenuPage extends StatefulWidget {
   const PosMenuPage({super.key});
@@ -27,10 +27,10 @@ class _PosMenuPageState extends State<PosMenuPage> {
       _error = null;
     });
     try {
-      final items = await ApiService.instance.fetchMenuItems();
+      final page = await ApiService.instance.fetchItemsPage(lite: true, limit: 40);
       if (!mounted) return;
       setState(() {
-        _items = items;
+        _items = page.items;
         _loading = false;
       });
     } catch (error) {

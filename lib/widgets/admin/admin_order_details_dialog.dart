@@ -5,6 +5,7 @@ import '../../models/order.dart';
 import '../../models/sales_platform_config.dart';
 import '../../services/admin_auth_service.dart';
 import '../../services/restaurant_settings_service.dart';
+import '../../utils/pos_receipt_html.dart';
 import 'pos/pos_print_preview_dialog.dart';
 
 Future<void> showAdminOrderDetailsDialog(

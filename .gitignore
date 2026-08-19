@@ -33,6 +33,9 @@ migrate_working_dir/
 /build/
 /coverage/
 
+# Node API
+node_modules/
+
 # Symbolication related
 app.*.symbols
 
@@ -46,3 +49,5 @@ app.*.map.json
 
 # Stakpak session files
 .stakpak/session*
+.vercel
+.env*

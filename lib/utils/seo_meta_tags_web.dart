@@ -73,9 +73,10 @@ class SeoMetaTags {
   static void _setMetaName(String name, String content) {
     final selector = 'meta[name="$name"]';
     html.Element? element = html.document.querySelector(selector);
-    element ??= html.MetaElement()
-      ..name = name
-      ..parent = html.document.head;
+    if (element == null) {
+      element = html.MetaElement()..name = name;
+      html.document.head?.append(element);
+    }
     element.setAttribute('content', content);
   }
 

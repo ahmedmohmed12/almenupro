@@ -77,7 +77,6 @@ class _AdminSoundSettingsCardState extends State<AdminSoundSettingsCard> {
               children: [
                 Container(
                   padding: const EdgeInsets.all(10),
-                  backgroundColor: null,
                   decoration: BoxDecoration(
                     color: const Color(0xFF6B1124).withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(10),

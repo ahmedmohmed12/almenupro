@@ -56,7 +56,7 @@ class MenuOption {
       nameAr: map['name_ar']?.toString() ?? map['nameAr']?.toString() ?? '',
       nameEn: map['name_en']?.toString() ?? map['nameEn']?.toString() ?? '',
       group: map['group']?.toString() ?? 'إضافات',
-      price: (map['price'] as num?)?.toDouble() ?? 0,
+      price: double.tryParse(map['price']?.toString() ?? '') ?? 0,
       isRequired: groupRequired,
       groupRequired: groupRequired,
       allowMultiple:
@@ -191,10 +191,8 @@ class MenuItem {
         json['description_en']?.toString() ?? json['descriptionEn']?.toString() ?? '';
 
     return MenuItem(
-      id: json['id'] is int ? json['id'] as int : int.parse(json['id'].toString()),
-      categoryId: json['category_id'] is int
-          ? json['category_id'] as int
-          : int.parse(json['category_id']?.toString() ?? '0'),
+      id: _readInt(json['id']),
+      categoryId: _readInt(json['category_id'] ?? json['categoryId']),
       categoryName: json['category_name']?.toString() ?? '',
       categoryNameEn: json['category_name_en']?.toString() ??
           json['categoryNameEn']?.toString() ??
@@ -205,21 +203,28 @@ class MenuItem {
       nameEn: nameEn,
       descriptionAr: descriptionAr,
       descriptionEn: descriptionEn,
-      price: double.parse(json['price'].toString()),
-      imageUrl: normalizeMenuImageUrl(json['image_url'] ?? json['imageUrl']),
+      price: double.tryParse(json['price']?.toString() ?? '') ?? 0,
+      imageUrl: normalizeMenuImageUrl(firstNonEmptyImageField(json)),
       talabatId: json['talabat_id'] is int
           ? json['talabat_id'] as int
           : int.tryParse(json['talabat_id']?.toString() ?? ''),
-      isAvailable: json['is_available'] == 1 || json['is_available'] == true,
-      displayOrder: (json['display_order'] as num?)?.toInt() ??
-          (json['displayOrder'] as num?)?.toInt() ??
-          0,
+      isAvailable: json['is_available'] == 1 ||
+          json['is_available'] == true ||
+          json['isAvailable'] == true ||
+          json['isAvailable'] == 1,
+      displayOrder: _readInt(json['display_order'] ?? json['displayOrder']),
       options: (json['options'] as List<dynamic>? ?? [])
           .whereType<Map>()
           .map((option) => MenuOption.fromMap(Map<String, dynamic>.from(option)))
           .toList(),
       linkedItemIds: _parseLinkedItemIds(json),
     );
+  }
+
+  static int _readInt(dynamic value) {
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    return int.tryParse(value?.toString() ?? '') ?? 0;
   }
 
   static List<int> _parseLinkedItemIds(Map<String, dynamic> json) {
@@ -269,7 +274,7 @@ class MenuItem {
       price: (map['price'] as num?)?.toDouble() ??
           double.tryParse(map['price']?.toString() ?? '') ??
           0,
-      imageUrl: normalizeMenuImageUrl(map['imageUrl'] ?? map['image_url']),
+      imageUrl: normalizeMenuImageUrl(firstNonEmptyImageField(map)),
       talabatId: map['talabat_id'] is int
           ? map['talabat_id'] as int
           : int.tryParse(map['talabat_id']?.toString() ?? ''),
@@ -330,5 +335,32 @@ class MenuItem {
       'displayOrder': displayOrder,
       if (linkedItemIds.isNotEmpty) 'linkedItemIds': linkedItemIds,
     };
+  }
+
+  MenuItem copyWith({
+    bool? isAvailable,
+    String? imageUrl,
+    String? name,
+    double? price,
+  }) {
+    return MenuItem(
+      id: id,
+      categoryId: categoryId,
+      categoryName: categoryName,
+      categoryNameEn: categoryNameEn,
+      name: name ?? this.name,
+      description: description,
+      nameAr: nameAr,
+      nameEn: nameEn,
+      descriptionAr: descriptionAr,
+      descriptionEn: descriptionEn,
+      price: price ?? this.price,
+      imageUrl: imageUrl ?? this.imageUrl,
+      talabatId: talabatId,
+      isAvailable: isAvailable ?? this.isAvailable,
+      displayOrder: displayOrder,
+      options: options,
+      linkedItemIds: linkedItemIds,
+    );
   }
 }

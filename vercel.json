@@ -1,7 +1,7 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "version": 2,
-  "installCommand": "node scripts/preparePublicUploads.js",
+  "installCommand": "npm install",
   "buildCommand": "node scripts/preparePublicUploads.js",
   "builds": [
     {
@@ -12,7 +12,7 @@
           "data/**",
           "uploads/menu/**",
           "public/menu-images/**",
-          "lib/menuImageStorage.js"
+          "lib/**"
         ]
       }
     }
@@ -52,10 +52,19 @@
       "source": "/api/(.*)",
       "headers": [
         { "key": "Access-Control-Allow-Origin", "value": "*" },
-        { "key": "Access-Control-Allow-Methods", "value": "GET, POST, PATCH, PUT, OPTIONS" },
-        { "key": "Access-Control-Allow-Headers", "value": "Content-Type" }
+        { "key": "Access-Control-Allow-Methods", "value": "GET, HEAD, POST, PUT, PATCH, DELETE, OPTIONS" },
+        { "key": "Access-Control-Allow-Headers", "value": "Content-Type, Authorization, X-Restaurant-Id, x-restaurant-id, X-Requested-With, Accept, Origin" },
+        { "key": "Access-Control-Expose-Headers", "value": "X-Total-Count, X-Limit, X-Offset" },
+        { "key": "Access-Control-Max-Age", "value": "86400" }
+      ]
+    },
+    {
+      "source": "/og/(.*)",
+      "headers": [
+        { "key": "Access-Control-Allow-Origin", "value": "*" },
+        { "key": "Access-Control-Allow-Methods", "value": "GET, HEAD, OPTIONS" },
+        { "key": "Access-Control-Allow-Headers", "value": "Content-Type, Authorization, X-Restaurant-Id, x-restaurant-id" }
+      ]
+    }
   ]
 }
-  ]
-}
-

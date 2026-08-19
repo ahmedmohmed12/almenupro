@@ -1,12 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../models/delivery_zone.dart';
 import '../models/menu_item.dart';
+import '../models/restaurant_settings.dart';
 import '../providers/cart_provider.dart';
+import '../providers/customer_session_provider.dart';
 import '../services/api_service.dart';
 import '../theme/app_theme.dart';
+import '../widgets/menu/customer_phone_gate.dart';
 import '../widgets/menu/menu_checkout_sheet.dart';
-import '../widgets/network_menu_image.dart';
+import '../widgets/menu/storefront_header.dart';
 
 class MenuScreen extends StatefulWidget {
   const MenuScreen({super.key});
@@ -16,20 +20,95 @@ class MenuScreen extends StatefulWidget {
 }
 
 class _MenuScreenState extends State<MenuScreen> {
-  late Future<List<MenuItem>> _itemsFuture;
-  String _selectedCategory = 'الكل';
+  static const _pageSize = 24;
+  static const _smartCategory = 'اختيارات على ذوقك';
+  List<MenuItem> _items = [];
+  RestaurantSettings? _settings;
+  List<DeliveryZone> _zones = const [];
+  var _loading = true;
+  var _loadingMore = false;
+  var _retrying = false;
+  var _total = 0;
+  String? _error;
+  String _selectedCategory = 'اختيارات على ذوقك';
 
   @override
   void initState() {
     super.initState();
-    _itemsFuture = ApiService.instance.fetchItems();
+    _loadItems(autoRetry: true);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<CustomerSessionProvider>().restore();
+    });
   }
 
-  Future<void> _reload() async {
-    setState(() {
-      _itemsFuture = ApiService.instance.fetchItems();
-    });
-    await _itemsFuture;
+  Future<void> _loadItems({bool autoRetry = false, bool reset = true}) async {
+    if (reset) {
+      setState(() {
+        _loading = _items.isEmpty;
+        _retrying = _items.isNotEmpty;
+        _error = null;
+      });
+    } else {
+      if (_loadingMore || _items.length >= _total) return;
+      setState(() => _loadingMore = true);
+    }
+
+    try {
+      final page = await ApiService.instance.fetchItemsPage(
+        lite: true,
+        limit: _pageSize,
+        offset: reset ? 0 : _items.length,
+      );
+      if (reset) {
+        try {
+          final settings = await ApiService.instance.fetchSettings(
+            restaurantId: ApiService.defaultRestaurantId,
+          );
+          final zones = await ApiService.instance.fetchDeliveryZones(
+            restaurantId: ApiService.defaultRestaurantId,
+          );
+          if (mounted) {
+            _settings = settings;
+            _zones = zones;
+          }
+        } catch (_) {}
+      }
+      if (!mounted) return;
+      setState(() {
+        _items = reset ? page.items : [..._items, ...page.items];
+        _total = page.total;
+        _loading = false;
+        _loadingMore = false;
+        _retrying = false;
+        _error = null;
+      });
+    } catch (error) {
+      if (autoRetry && _items.isEmpty) {
+        try {
+          final page = await ApiService.instance.fetchItemsPage(
+            lite: true,
+            limit: _pageSize,
+            offset: 0,
+          );
+          if (!mounted) return;
+          setState(() {
+            _items = page.items;
+            _total = page.total;
+            _loading = false;
+            _retrying = false;
+            _error = null;
+          });
+          return;
+        } catch (_) {}
+      }
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _loadingMore = false;
+        _retrying = false;
+        _error = error.toString().replaceFirst('Exception: ', '');
+      });
+    }
   }
 
   void _addToCart(MenuItem item) {
@@ -44,7 +123,7 @@ class _MenuScreenState extends State<MenuScreen> {
   }
 
   List<String> _categories(List<MenuItem> items) {
-    final categories = <String>{'الكل'};
+    final categories = <String>{_smartCategory, 'الكل'};
     for (final item in items) {
       if (item.categoryName.trim().isNotEmpty) {
         categories.add(item.categoryName.trim());
@@ -54,6 +133,23 @@ class _MenuScreenState extends State<MenuScreen> {
   }
 
   List<MenuItem> _filteredItems(List<MenuItem> items) {
+    if (_selectedCategory == _smartCategory) {
+      final bumpIds = _settings?.impulseBumpItemIds ?? const <int>[];
+      if (bumpIds.isNotEmpty) {
+        final byId = {for (final item in items) item.id: item};
+        final picked = bumpIds
+            .map((id) => byId[id])
+            .whereType<MenuItem>()
+            .toList();
+        if (picked.isNotEmpty) return picked;
+      }
+      final maxPrice = _settings?.impulseBumpMaxPrice ?? 2;
+      final cheap = items.where((item) => item.price <= maxPrice).toList()
+        ..sort((a, b) => a.price.compareTo(b.price));
+      if (cheap.isNotEmpty) return cheap.take(8).toList();
+      final sorted = [...items]..sort((a, b) => a.price.compareTo(b.price));
+      return sorted.take(8).toList();
+    }
     if (_selectedCategory == 'الكل') return items;
     return items
         .where((item) => item.categoryName.trim() == _selectedCategory)
@@ -61,110 +157,30 @@ class _MenuScreenState extends State<MenuScreen> {
   }
 
   int _gridColumns(double width) {
-    if (width >= 1200) return 4;
-    if (width >= 900) return 3;
-    if (width >= 600) return 2;
-    return 2;
+    if (width >= 1400) return 5;
+    if (width >= 1100) return 4;
+    if (width >= 800) return 3;
+    if (width >= 520) return 2;
+    return 1;
   }
 
   @override
   Widget build(BuildContext context) {
     final cart = context.watch<CartProvider>();
+    final session = context.watch<CustomerSessionProvider>();
 
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
         backgroundColor: AppTheme.brandBackground,
-        body: FutureBuilder<List<MenuItem>>(
-          future: _itemsFuture,
-          builder: (context, snapshot) {
-            if (snapshot.connectionState == ConnectionState.waiting) {
-              return const Center(
-                child: CircularProgressIndicator(color: AppTheme.brandOrange),
-              );
-            }
-
-            if (snapshot.hasError) {
-              return _ErrorState(
-                message: snapshot.error.toString(),
-                onRetry: _reload,
-              );
-            }
-
-            final items = snapshot.data ?? [];
-            if (items.isEmpty) {
-              return _ErrorState(
-                message: 'لا توجد أصناف متاحة حالياً',
-                onRetry: _reload,
-              );
-            }
-
-            final categories = _categories(items);
-            final filtered = _filteredItems(items);
-
-            return RefreshIndicator(
-              color: AppTheme.brandOrange,
-              onRefresh: _reload,
-              child: CustomScrollView(
-                slivers: [
-                  SliverToBoxAdapter(child: _MenuHeader(onRefresh: _reload)),
-                  SliverToBoxAdapter(
-                    child: _CategoryBar(
-                      categories: categories,
-                      selected: _selectedCategory,
-                      onSelected: (value) {
-                        setState(() => _selectedCategory = value);
-                      },
-                    ),
-                  ),
-                  if (filtered.isEmpty)
-                    const SliverFillRemaining(
-                      hasScrollBody: false,
-                      child: Center(
-                        child: Text(
-                          'لا توجد أصناف في هذا التصنيف',
-                          style: TextStyle(
-                            color: AppTheme.brandBlack,
-                            fontSize: 16,
-                          ),
-                        ),
-                      ),
-                    )
-                  else
-                    SliverLayoutBuilder(
-                      builder: (context, constraints) {
-                        final width = constraints.crossAxisExtent;
-                        final columns = _gridColumns(width);
-                        final cardWidth =
-                            (width - 32 - (columns - 1) * 16) / columns;
-
-                        return SliverPadding(
-                          padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-                          sliver: SliverGrid(
-                            gridDelegate:
-                                SliverGridDelegateWithMaxCrossAxisExtent(
-                              maxCrossAxisExtent: cardWidth,
-                              crossAxisSpacing: 16,
-                              mainAxisSpacing: 16,
-                              mainAxisExtent: columns >= 3 ? 320 : 300,
-                            ),
-                            delegate: SliverChildBuilderDelegate(
-                              (context, index) {
-                                return _MenuItemCard(
-                                  item: filtered[index],
-                                  onAddToCart: () => _addToCart(filtered[index]),
-                                );
-                              },
-                              childCount: filtered.length,
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-                ],
-              ),
-            );
-          },
+        body: SafeArea(
+          bottom: false,
+          child: Stack(
+            children: [
+              _buildBody(),
+              if (!session.identified) const CustomerPhoneGate(),
+            ],
+          ),
         ),
         bottomNavigationBar: cart.isEmpty
             ? null
@@ -174,6 +190,179 @@ class _MenuScreenState extends State<MenuScreen> {
                 onCheckout: () => MenuCheckoutSheet.show(context),
               ),
       ),
+    );
+  }
+
+  Widget _buildBody() {
+    if (_loading && _items.isEmpty) {
+      return const Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            CircularProgressIndicator(color: AppTheme.brandOrange),
+            SizedBox(height: 16),
+            Text(
+              'جاري تحميل المنيو...',
+              style: TextStyle(color: AppTheme.brandBlack),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (_items.isEmpty) {
+      return _ErrorState(
+        message: _error ?? 'لا توجد أصناف متاحة حالياً',
+        onRetry: () => _loadItems(autoRetry: true),
+      );
+    }
+
+    final categories = _categories(_items);
+    final filtered = _filteredItems(_items);
+
+    return Column(
+      children: [
+        if (_error != null || _retrying)
+          Material(
+            color: const Color(0xFFFFF4E5),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              child: Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  Text(
+                    _retrying
+                        ? 'جاري تحديث المنيو...'
+                        : 'تعذر التحديث. يمكنك متابعة التصفح.',
+                    style: const TextStyle(fontSize: 13),
+                  ),
+                  TextButton(
+                    onPressed: _retrying ? null : () => _loadItems(),
+                    child: const Text('إعادة المحاولة'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        Expanded(
+          child: NotificationListener<ScrollNotification>(
+            onNotification: (notification) {
+              if (notification.metrics.pixels >=
+                      notification.metrics.maxScrollExtent - 480 &&
+                  !_loadingMore &&
+                  _items.length < _total) {
+                _loadItems(reset: false);
+              }
+              return false;
+            },
+            child: RefreshIndicator(
+            color: AppTheme.brandOrange,
+            onRefresh: () => _loadItems(),
+            child: LayoutBuilder(
+              builder: (context, viewport) {
+                final maxWidth = viewport.maxWidth >= 1280 ? 1240.0 : viewport.maxWidth;
+                return Align(
+                  alignment: Alignment.topCenter,
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(maxWidth: maxWidth),
+                    child: CustomScrollView(
+              slivers: [
+                SliverToBoxAdapter(
+                  child: StorefrontHero(
+                    restaurantName: 'Molten Cookies',
+                    description: _settings?.restaurantDescription ?? '',
+                    logoUrl: _settings?.logoUrl ?? '',
+                    deliveryFee: _zones.isEmpty ? 0 : _zones.first.deliveryFee,
+                    session: context.watch<CustomerSessionProvider>(),
+                  ),
+                ),
+                SliverToBoxAdapter(
+                  child: _CategoryBar(
+                    categories: categories,
+                    selected: _selectedCategory,
+                    onSelected: (value) {
+                      setState(() => _selectedCategory = value);
+                    },
+                  ),
+                ),
+                if (filtered.isEmpty)
+                  const SliverFillRemaining(
+                    hasScrollBody: false,
+                    child: Center(
+                      child: Text(
+                        'لا توجد أصناف في هذا التصنيف',
+                        style: TextStyle(
+                          color: AppTheme.brandBlack,
+                          fontSize: 16,
+                        ),
+                      ),
+                    ),
+                  )
+                else
+                  SliverLayoutBuilder(
+                    builder: (context, constraints) {
+                      final width = constraints.crossAxisExtent;
+                      final columns = _gridColumns(width);
+                      final pad = width >= 900 ? 28.0 : 16.0;
+                      final gap = width >= 900 ? 20.0 : 12.0;
+                      final cardWidth =
+                          (width - pad * 2 - (columns - 1) * gap) / columns;
+                      final imageHeight = (cardWidth * 0.68).clamp(110.0, 230.0);
+                      final textHeight = columns == 1 ? 132.0 : 124.0;
+
+                      return SliverPadding(
+                        padding: EdgeInsets.fromLTRB(pad, 8, pad, 24),
+                        sliver: SliverGrid(
+                          gridDelegate:
+                              SliverGridDelegateWithMaxCrossAxisExtent(
+                            maxCrossAxisExtent: cardWidth + 0.5,
+                            crossAxisSpacing: gap,
+                            mainAxisSpacing: gap,
+                            mainAxisExtent: imageHeight + textHeight,
+                          ),
+                          delegate: SliverChildBuilderDelegate(
+                            (context, index) {
+                              return StorefrontItemCard(
+                                item: filtered[index],
+                                onAdd: () => _addToCart(filtered[index]),
+                              );
+                            },
+                            childCount: filtered.length,
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                if (_items.length < _total || _loadingMore)
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+                      child: Center(
+                        child: _loadingMore
+                            ? const CircularProgressIndicator(
+                                color: AppTheme.brandOrange,
+                              )
+                            : TextButton(
+                                onPressed: () => _loadItems(reset: false),
+                                child: Text(
+                                  'عرض المزيد (${_items.length}/$_total)',
+                                ),
+                              ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+                  ),
+                );
+              },
+            ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -192,7 +381,7 @@ class _FloatingCartBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
       decoration: BoxDecoration(
         color: Colors.white,
         boxShadow: [
@@ -205,120 +394,76 @@ class _FloatingCartBar extends StatelessWidget {
       ),
       child: SafeArea(
         top: false,
-        child: FilledButton(
-          style: FilledButton.styleFrom(
-            backgroundColor: AppTheme.brandMaroon,
-            padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 20),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(30),
-            ),
-          ),
-          onPressed: onCheckout,
-          child: Row(
-            children: [
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                decoration: BoxDecoration(
-                  color: AppTheme.brandOrange,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Text(
-                  '$itemCount',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-              const Expanded(
-                child: Text(
-                  'متابعة الطلب',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-              Text(
-                '${totalPrice.toStringAsFixed(3)} د.ك',
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _MenuHeader extends StatelessWidget {
-  const _MenuHeader({required this.onRefresh});
-
-  final VoidCallback onRefresh;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
-      decoration: const BoxDecoration(
-        color: AppTheme.brandSurface,
-        border: Border(
-          bottom: BorderSide(color: Color(0xFFE8E0D8), width: 1),
-        ),
-      ),
-      child: SafeArea(
-        bottom: false,
-        child: Row(
-          children: [
-            Container(
-              width: 48,
-              height: 48,
-              decoration: BoxDecoration(
-                color: AppTheme.brandOrange.withValues(alpha: 0.15),
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: const Icon(
-                Icons.cookie_outlined,
-                color: AppTheme.brandOrange,
-                size: 28,
-              ),
-            ),
-            const SizedBox(width: 14),
-            const Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Molten Cookies',
-                    style: TextStyle(
-                      color: AppTheme.brandBlack,
-                      fontSize: 22,
-                      fontWeight: FontWeight.w800,
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final narrow = constraints.maxWidth < 360;
+            return Align(
+              alignment: Alignment.center,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 720),
+                child: FilledButton(
+                  style: FilledButton.styleFrom(
+                    backgroundColor: AppTheme.brandMaroon,
+                    padding: EdgeInsets.symmetric(
+                      vertical: narrow ? 12 : 14,
+                      horizontal: narrow ? 12 : 20,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(30),
                     ),
                   ),
-                  SizedBox(height: 2),
-                  Text(
-                    'قائمة الطعام — ميني بايتس وكوكيز',
-                    style: TextStyle(
-                      color: Color(0xFF666666),
-                      fontSize: 13,
-                    ),
+                  onPressed: onCheckout,
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: AppTheme.brandOrange,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          '$itemCount',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                      Expanded(
+                        child: Text(
+                          'متابعة الطلب',
+                          textAlign: TextAlign.center,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: narrow ? 14 : 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                      Flexible(
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          alignment: AlignmentDirectional.centerEnd,
+                          child: Text(
+                            '${totalPrice.toStringAsFixed(3)} د.ك',
+                            maxLines: 1,
+                            style: TextStyle(
+                              fontSize: narrow ? 13 : 16,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-                ],
+                ),
               ),
-            ),
-            IconButton(
-              tooltip: 'تحديث',
-              onPressed: onRefresh,
-              icon: const Icon(Icons.refresh_rounded, color: AppTheme.brandOrange),
-            ),
-          ],
+            );
+          },
         ),
       ),
     );
@@ -339,27 +484,40 @@ class _CategoryBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: 56,
+      height: 60,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         itemCount: categories.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 8),
+        separatorBuilder: (context, index) => const SizedBox(width: 8),
         itemBuilder: (context, index) {
           final category = categories[index];
+          final isSmart = category == 'اختيارات على ذوقك';
           final isSelected = category == selected;
 
           return FilterChip(
-            label: Text(category),
+            avatar: isSmart
+                ? Icon(
+                    Icons.auto_awesome,
+                    size: 16,
+                    color: isSelected ? Colors.white : AppTheme.brandMaroon,
+                  )
+                : null,
+            label: Text(
+              category,
+              overflow: TextOverflow.ellipsis,
+            ),
+            visualDensity: VisualDensity.compact,
             selected: isSelected,
             showCheckmark: false,
             labelStyle: TextStyle(
               color: isSelected ? Colors.white : AppTheme.brandBlack,
-              fontWeight: FontWeight.w600,
+              fontWeight: FontWeight.w700,
               fontSize: 13,
             ),
-            backgroundColor: Colors.white,
-            selectedColor: AppTheme.brandOrange,
+            backgroundColor: isSmart ? const Color(0xFFFFF4E5) : Colors.white,
+            selectedColor:
+                isSmart ? AppTheme.brandMaroon : AppTheme.brandOrange,
             side: BorderSide(
               color: isSelected
                   ? AppTheme.brandOrange
@@ -371,163 +529,6 @@ class _CategoryBar extends StatelessWidget {
             onSelected: (_) => onSelected(category),
           );
         },
-      ),
-    );
-  }
-}
-
-class _MenuItemCard extends StatelessWidget {
-  const _MenuItemCard({
-    required this.item,
-    required this.onAddToCart,
-  });
-
-  final MenuItem item;
-  final VoidCallback onAddToCart;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(18),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onAddToCart,
-        child: Container(
-          decoration: BoxDecoration(
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.06),
-                blurRadius: 14,
-                offset: const Offset(0, 4),
-              ),
-            ],
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Expanded(
-                child: _MenuItemImage(imageUrl: item.imageUrl),
-              ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(14, 12, 14, 8),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      item.name,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: AppTheme.brandBlack,
-                        fontSize: 15,
-                        fontWeight: FontWeight.w700,
-                        height: 1.25,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      item.description.isNotEmpty
-                          ? item.description
-                          : 'لا يوجد وصف',
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: Color(0xFF555555),
-                        fontSize: 12,
-                        height: 1.35,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              _PriceBar(price: item.price, onAddToCart: onAddToCart),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _PriceBar extends StatelessWidget {
-  const _PriceBar({
-    required this.price,
-    required this.onAddToCart,
-  });
-
-  final double price;
-  final VoidCallback onAddToCart;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: AppTheme.brandOrange,
-      child: InkWell(
-        onTap: onAddToCart,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Icon(
-                Icons.add_shopping_cart_outlined,
-                color: Colors.white,
-                size: 18,
-              ),
-              Text(
-                '${price.toStringAsFixed(3)} د.ك',
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 15,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _MenuItemImage extends StatelessWidget {
-  const _MenuItemImage({required this.imageUrl});
-
-  final String imageUrl;
-
-  @override
-  Widget build(BuildContext context) {
-    if (imageUrl.trim().isEmpty) {
-      return _placeholder();
-    }
-
-    return NetworkMenuImage(
-      imageUrl: imageUrl,
-      fit: BoxFit.cover,
-      loadingBuilder: (context, child, loadingProgress) {
-        if (loadingProgress == null) return child;
-        return Container(
-          color: AppTheme.brandSurface,
-          alignment: Alignment.center,
-          child: const CircularProgressIndicator(
-            strokeWidth: 2,
-            color: AppTheme.brandOrange,
-          ),
-        );
-      },
-      errorBuilder: (_, __, ___) => _placeholder(),
-    );
-  }
-
-  Widget _placeholder() {
-    return Container(
-      color: AppTheme.brandSurface,
-      alignment: Alignment.center,
-      child: const Icon(
-        Icons.cookie_outlined,
-        size: 48,
-        color: AppTheme.brandOrange,
       ),
     );
   }
@@ -557,7 +558,7 @@ class _ErrorState extends StatelessWidget {
             ),
             const SizedBox(height: 16),
             Text(
-              message,
+              message.replaceFirst('Exception: ', ''),
               textAlign: TextAlign.center,
               style: const TextStyle(color: AppTheme.brandBlack),
             ),
