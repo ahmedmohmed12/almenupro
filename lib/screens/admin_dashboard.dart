@@ -386,8 +386,14 @@ class _AdminDashboardState extends State<AdminDashboard> {
         return StatefulBuilder(
           builder: (context, setDialogState) {
             return AlertDialog(
+              insetPadding: const EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: 24,
+              ),
               title: Text(isEditing ? 'تعديل الصنف' : 'إضافة صنف جديد'),
-              content: SingleChildScrollView(
+              content: SizedBox(
+                width: 520,
+                child: SingleChildScrollView(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -488,6 +494,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                     ),
                   ],
                 ),
+              ),
               ),
               actions: [
                 TextButton(
@@ -975,7 +982,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
             backgroundColor: AdminSidebar.sidebarBg,
             child: SafeArea(child: buildSidebar(inDrawer: true)),
           ),
-          body: content,
+          body: SafeArea(child: content),
         );
       }
 
@@ -1017,18 +1024,19 @@ class _AdminDashboardState extends State<AdminDashboard> {
           onPressed: () {
             print('Updating from Talabat...');
           },
+          visualDensity: VisualDensity.compact,
           icon: const Icon(Icons.sync, color: Color(0xFF6B1124)),
         ),
       ),
-      const SizedBox(width: 4),
-      ElevatedButton.icon(
-        style: ElevatedButton.styleFrom(
+      FilledButton.icon(
+        style: FilledButton.styleFrom(
           backgroundColor: const Color(0xFF6B1124),
           foregroundColor: Colors.white,
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          visualDensity: VisualDensity.compact,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         ),
         onPressed: () => _showItemDialog(),
-        icon: const Icon(Icons.add, color: Colors.white, size: 18),
+        icon: const Icon(Icons.add, size: 18),
         label: const Text('إضافة صنف جديد'),
       ),
     ];

@@ -4,6 +4,7 @@ import '../../models/menu_item.dart';
 import '../../services/api_service.dart';
 import '../../services/menu_storage_service.dart';
 import '../network_menu_image.dart';
+import 'admin_breakpoints.dart';
 import 'admin_menu_panel_status.dart';
 
 class AdminMenuPanel extends StatefulWidget {
@@ -185,12 +186,7 @@ class _AdminMenuPanelState extends State<AdminMenuPanel> {
         children: [
           _buildToolbar(),
           if (_errorMessage != null) _retryBanner(),
-          Expanded(
-            child: Align(
-              alignment: Alignment.topCenter,
-              child: _buildContent(),
-            ),
-          ),
+          Expanded(child: _buildContent()),
         ],
       ),
     );
@@ -201,52 +197,84 @@ class _AdminMenuPanelState extends State<AdminMenuPanel> {
     widget.onAutofillTalabat?.call();
   }
 
+  Widget _addItemButton({required bool expanded}) {
+    final button = FilledButton.icon(
+      style: FilledButton.styleFrom(
+        backgroundColor: burgundy,
+        foregroundColor: Colors.white,
+        minimumSize: expanded ? const Size.fromHeight(44) : const Size(0, 40),
+        padding: EdgeInsets.symmetric(
+          horizontal: expanded ? 12 : 14,
+          vertical: 10,
+        ),
+      ),
+      onPressed: widget.canManageItems
+          ? () async {
+              await widget.onAddItem();
+              if (mounted) await _loadFromApi();
+            }
+          : null,
+      icon: const Icon(Icons.add, size: 20),
+      label: const Text(
+        'إضافة صنف جديد',
+        style: TextStyle(fontWeight: FontWeight.w800),
+      ),
+    );
+    return expanded ? button : Flexible(child: button);
+  }
+
   Widget _buildToolbar() {
     return ColoredBox(
       color: const Color(0xFFF8F1F3),
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
-        child: Row(
-          children: [
-            const Expanded(
-              child: Text(
-                'إدارة المنيو والأصناف',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: burgundy,
-                ),
+        padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final stacked = constraints.maxWidth < 720;
+            final title = const Text(
+              'إدارة المنيو والأصناف',
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: burgundy,
               ),
-            ),
-            Tooltip(
+            );
+            final sync = Tooltip(
               message: 'تحديث من طلبات',
               child: IconButton(
                 onPressed: _onUpdateFromTalabat,
+                visualDensity: VisualDensity.compact,
                 icon: const Icon(Icons.sync, color: burgundy),
               ),
-            ),
-            const SizedBox(width: 8),
-            FilledButton.icon(
-              style: FilledButton.styleFrom(
-                backgroundColor: burgundy,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              ),
-              onPressed: widget.canManageItems
-                  ? () async {
-                      await widget.onAddItem();
-                      if (mounted) await _loadFromApi();
-                    }
-                  : null,
-              icon: const Icon(Icons.add, size: 20),
-              label: const Text(
-                'إضافة صنف جديد',
-                style: TextStyle(fontWeight: FontWeight.w800),
-              ),
-            ),
-          ],
+            );
+
+            if (stacked) {
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(child: title),
+                      sync,
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  _addItemButton(expanded: true),
+                ],
+              );
+            }
+
+            return Row(
+              children: [
+                Expanded(child: title),
+                sync,
+                const SizedBox(width: 8),
+                _addItemButton(expanded: false),
+              ],
+            );
+          },
         ),
       ),
     );
@@ -318,41 +346,49 @@ class _AdminMenuPanelState extends State<AdminMenuPanel> {
         final wide = constraints.maxWidth >= 900;
         return ColoredBox(
           color: Colors.white,
-          child: ListView(
-            padding: EdgeInsets.zero,
-            shrinkWrap: true,
-            primary: false,
-            physics: const AlwaysScrollableScrollPhysics(),
-            children: [
-              if (wide) _buildWideHeader(),
-              for (final item in items)
-                Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    wide ? _buildWideRow(item) : _buildCompactRow(item),
-                    const Divider(height: 1),
-                  ],
-                ),
-              if (items.length < _totalItems)
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  child: Center(
-                    child: OutlinedButton(
-                      onPressed:
-                          _loadingMore ? null : () => _loadFromApi(reset: false),
-                      child: _loadingMore
-                          ? const SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : Text(
-                              'تحميل المزيد (${items.length}/$_totalItems)',
+          child: Directionality(
+            textDirection: TextDirection.ltr,
+            child: ListView(
+              padding: EdgeInsets.zero,
+              physics: const AlwaysScrollableScrollPhysics(),
+              children: [
+                Directionality(
+                  textDirection: TextDirection.rtl,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (wide) _buildWideHeader(),
+                      for (final item in items) ...[
+                        wide ? _buildWideRow(item) : _buildCompactRow(item),
+                        const Divider(height: 1),
+                      ],
+                      if (items.length < _totalItems)
+                        Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          child: Center(
+                            child: OutlinedButton(
+                              onPressed: _loadingMore
+                                  ? null
+                                  : () => _loadFromApi(reset: false),
+                              child: _loadingMore
+                                  ? const SizedBox(
+                                      width: 18,
+                                      height: 18,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                      ),
+                                    )
+                                  : Text(
+                                      'تحميل المزيد (${items.length}/$_totalItems)',
+                                    ),
                             ),
-                    ),
+                          ),
+                        ),
+                    ],
                   ),
                 ),
-            ],
+              ],
+            ),
           ),
         );
       },
@@ -464,16 +500,25 @@ class _AdminMenuPanelState extends State<AdminMenuPanel> {
 
   Widget _itemActions(MenuItem item) {
     final busy = _togglingId == item.id.toString();
+    final compact = AdminBreakpoints.isMobile(context);
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
         IconButton(
           tooltip: 'تعديل',
+          visualDensity: VisualDensity.compact,
+          constraints: compact
+              ? const BoxConstraints(minWidth: 36, minHeight: 36)
+              : null,
           onPressed: widget.canManageItems ? () => _editItem(item) : null,
           icon: const Icon(Icons.edit_outlined, color: Colors.blue),
         ),
         IconButton(
           tooltip: item.isAvailable ? 'إخفاء من المنيو' : 'إظهار في المنيو',
+          visualDensity: VisualDensity.compact,
+          constraints: compact
+              ? const BoxConstraints(minWidth: 36, minHeight: 36)
+              : null,
           onPressed: widget.canManageItems && !busy
               ? () => _toggleAvailability(item)
               : null,
@@ -492,6 +537,10 @@ class _AdminMenuPanelState extends State<AdminMenuPanel> {
         ),
         IconButton(
           tooltip: 'حذف',
+          visualDensity: VisualDensity.compact,
+          constraints: compact
+              ? const BoxConstraints(minWidth: 36, minHeight: 36)
+              : null,
           onPressed:
               widget.canManageItems ? () => _deleteApiItem(item) : null,
           icon: const Icon(Icons.delete_outline, color: Colors.red),

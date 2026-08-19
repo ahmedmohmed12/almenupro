@@ -65,10 +65,21 @@ class AdminTopHeader extends StatelessWidget {
         Expanded(child: _buildTitleBlock(compact: false)),
         if (isSuperAdmin) ...[
           const AdminRestaurantSelector(),
-          const SizedBox(width: 16),
+          const SizedBox(width: 12),
         ],
-        ...actions,
-        if (actions.isNotEmpty) const SizedBox(width: 12),
+        if (actions.isNotEmpty)
+          Flexible(
+            child: Align(
+              alignment: AlignmentDirectional.centerEnd,
+              child: Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                alignment: WrapAlignment.end,
+                children: actions,
+              ),
+            ),
+          ),
+        if (actions.isNotEmpty) const SizedBox(width: 8),
         ..._trailingActions(compact: false),
       ],
     );
