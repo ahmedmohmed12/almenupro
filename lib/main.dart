@@ -13,11 +13,13 @@ import 'providers/order_type_provider.dart';
 import 'screens/admin_dashboard.dart';
 import 'screens/client_menu_page.dart';
 import 'screens/menu_screen.dart';
+import 'screens/restaurant_directory_screen.dart';
 import 'services/menu_storage_service.dart';
 import 'services/molton_upload_service.dart';
 import 'services/seed_service.dart';
 import 'theme/app_theme.dart';
 import 'utils/configure_url_strategy.dart';
+import 'utils/restaurant_route.dart';
 import 'widgets/app_error_boundary.dart';
 
 bool get isFirebaseConfigured {
@@ -69,7 +71,14 @@ class MyApp extends StatelessWidget {
   }
 
   static Route<dynamic> onGenerateRoute(RouteSettings settings) {
-    switch (normalizeRoute(settings.name)) {
+    final path = normalizeRoute(settings.name);
+    final uri = Uri.tryParse(settings.name ?? path) ?? Uri(path: path);
+    final query = <String, String>{
+      if (kIsWeb) ...Uri.base.queryParameters,
+      ...uri.queryParameters,
+    };
+
+    switch (path) {
       case '/admin':
         return MaterialPageRoute(
           settings: settings,
@@ -80,17 +89,18 @@ class MyApp extends StatelessWidget {
           settings: settings,
           builder: (_) => const ClientMenuPage(),
         );
-      case '/':
+      case '/restaurants':
         return MaterialPageRoute(
           settings: settings,
-          builder: (_) => const MenuScreen(),
-        );
-      default:
-        return MaterialPageRoute(
-          settings: settings,
-          builder: (_) => const MenuScreen(),
+          builder: (_) => const RestaurantDirectoryScreen(),
         );
     }
+
+    final slug = RestaurantRoute.parseSlug(path, query: query);
+    return MaterialPageRoute(
+      settings: settings,
+      builder: (_) => MenuScreen(slug: slug),
+    );
   }
 
   static List<Route<dynamic>> onGenerateInitialRoutes(String initialRoute) {

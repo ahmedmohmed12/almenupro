@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 
-import '../../../services/api_service.dart';
 import '../../../models/menu_item.dart';
+import '../../../services/api_service.dart';
+import '../../../services/super_admin_scope_service.dart';
 
 class PosMenuPage extends StatefulWidget {
   const PosMenuPage({super.key});
@@ -18,8 +19,17 @@ class _PosMenuPageState extends State<PosMenuPage> {
   @override
   void initState() {
     super.initState();
+    SuperAdminScopeService.instance.addListener(_onScopeChanged);
     _load();
   }
+
+  @override
+  void dispose() {
+    SuperAdminScopeService.instance.removeListener(_onScopeChanged);
+    super.dispose();
+  }
+
+  void _onScopeChanged() => _load();
 
   Future<void> _load() async {
     setState(() {
@@ -27,7 +37,11 @@ class _PosMenuPageState extends State<PosMenuPage> {
       _error = null;
     });
     try {
-      final page = await ApiService.instance.fetchItemsPage(lite: true, limit: 40);
+      final page = await ApiService.instance.fetchItemsPage(
+        restaurantId: SuperAdminScopeService.instance.effectiveRestaurantId,
+        lite: true,
+        limit: 40,
+      );
       if (!mounted) return;
       setState(() {
         _items = page.items;

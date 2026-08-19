@@ -6,6 +6,8 @@ import '../models/menu_item.dart';
 class CartProvider extends ChangeNotifier {
   final List<CartItem> _items = [];
 
+  String? _boundRestaurantId;
+
   List<CartItem> get items => List.unmodifiable(_items);
 
   int get itemCount => _items.fold(0, (sum, item) => sum + item.quantity);
@@ -14,6 +16,17 @@ class CartProvider extends ChangeNotifier {
       _items.fold(0, (sum, item) => sum + item.totalPrice);
 
   bool get isEmpty => _items.isEmpty;
+
+  void bindRestaurant(String restaurantId) {
+    if (restaurantId.isEmpty) return;
+    final switched = _boundRestaurantId != null &&
+        _boundRestaurantId != restaurantId;
+    if (switched && _items.isNotEmpty) {
+      _items.clear();
+    }
+    _boundRestaurantId = restaurantId;
+    if (switched) notifyListeners();
+  }
 
   void addMenuItem(MenuItem menuItem, {int quantity = 1}) {
     final existingIndex =

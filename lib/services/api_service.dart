@@ -43,6 +43,7 @@ class ApiService {
   Map<String, String> get _jsonHeaders => {
         'Content-Type': 'application/json',
         ...AdminAuthService.instance.authHeaders,
+        ...SuperAdminScopeService.instance.scopeHeaders,
       };
 
   Map<String, String> get _publicHeaders => const {
@@ -124,6 +125,66 @@ class ApiService {
         .toList();
   }
 
+  Future<List<Restaurant>> fetchPublicRestaurants() async {
+    final response = await http
+        .get(_uri('/public/restaurants'), headers: _publicHeaders)
+        .timeout(_fetchTimeout);
+
+    if (response.statusCode != 200) {
+      throw Exception('فشل في تحميل المطاعم (${response.statusCode})');
+    }
+
+    final decoded = jsonDecode(response.body);
+    if (decoded is! List) {
+      throw Exception('استجابة غير متوقعة من السيرفر');
+    }
+
+    return decoded
+        .whereType<Map>()
+        .map((entry) => Restaurant.fromJson(Map<String, dynamic>.from(entry)))
+        .where((entry) => entry.isActive)
+        .toList();
+  }
+
+  Future<Restaurant> fetchPublicRestaurant({
+    String? slug,
+    String? restaurantId,
+  }) async {
+    final cleanSlug = slug?.trim().toLowerCase();
+    final path = (cleanSlug != null && cleanSlug.isNotEmpty)
+        ? '/public/restaurants/${Uri.encodeComponent(cleanSlug)}'
+        : '/public/restaurants';
+    final query = (cleanSlug == null || cleanSlug.isEmpty)
+        ? _publicRestaurantQuery(restaurantId: restaurantId)
+        : null;
+    final response = await http
+        .get(_uri(path, query), headers: _publicHeaders)
+        .timeout(_fetchTimeout);
+
+    if (response.statusCode == 404) {
+      throw Exception('المطعم غير موجود');
+    }
+    if (response.statusCode != 200) {
+      throw Exception('فشل في تحميل المطعم (${response.statusCode})');
+    }
+
+    final decoded = jsonDecode(response.body);
+    if (decoded is List) {
+      final restaurants = decoded
+          .whereType<Map>()
+          .map((entry) => Restaurant.fromJson(Map<String, dynamic>.from(entry)))
+          .toList();
+      if (restaurants.isEmpty) {
+        throw Exception('المطعم غير موجود');
+      }
+      return restaurants.first;
+    }
+    if (decoded is! Map) {
+      throw Exception('استجابة غير متوقعة من السيرفر');
+    }
+    return Restaurant.fromJson(Map<String, dynamic>.from(decoded));
+  }
+
   Future<Restaurant> createRestaurant({
     required String name,
     required String slug,
@@ -193,9 +254,8 @@ class ApiService {
   }) async {
     try {
       final query = <String, String>{};
-      final scopedId = restaurantId ?? AdminAuthService.instance.restaurantId;
-      query['restaurant_id'] =
-          (scopedId != null && scopedId.isNotEmpty) ? scopedId : defaultRestaurantId;
+      final scopedId = _scopedRestaurantId(restaurantId: restaurantId);
+      query['restaurant_id'] = scopedId;
       if (lite) query['lite'] = '1';
       query['limit'] = '${limit != null && limit > 0 ? limit : 40}';
       if (offset != null && offset > 0) query['offset'] = '$offset';
@@ -382,13 +442,7 @@ class ApiService {
 
   Future<RestaurantSettings> fetchSettings({String? restaurantId}) async {
     try {
-      final query = <String, String>{};
-      final scopedId = restaurantId ?? AdminAuthService.instance.restaurantId;
-      if (scopedId != null) {
-        query['restaurant_id'] = scopedId;
-      } else {
-        query['restaurant_id'] = defaultRestaurantId;
-      }
+      final query = _restaurantQuery(restaurantId: restaurantId);
 
       final response = await http
           .get(_uri('/settings', query), headers: _jsonHeaders)
@@ -506,11 +560,16 @@ class ApiService {
 
   Future<MenuItem> createMenuItem(Map<String, dynamic> data) async {
     invalidateItemsCache();
+    final restaurantId = _scopedRestaurantId();
     final response = await http
         .post(
           _uri('/items'),
           headers: _jsonHeaders,
-          body: jsonEncode(_itemPayload(data)),
+          body: jsonEncode({
+            ..._itemPayload(data),
+            'restaurant_id': restaurantId,
+            'restaurantId': restaurantId,
+          }),
         )
         .timeout(_fetchTimeout);
 

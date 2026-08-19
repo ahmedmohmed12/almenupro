@@ -1094,8 +1094,10 @@ class _AdminDashboardState extends State<AdminDashboard> {
           return AdminMenuPanel(
             key: ValueKey(
               SuperAdminScopeService.instance.selectedRestaurantId ??
-                  ApiService.defaultRestaurantId,
+                  'super-menu-none',
             ),
+            restaurantId:
+                SuperAdminScopeService.instance.effectiveRestaurantId,
             onAddItem: () => _showItemDialog(),
             onEditItem: (record) => _showItemDialog(record: record),
             onDeleteItem: _deleteItem,
@@ -1125,6 +1127,10 @@ class _AdminDashboardState extends State<AdminDashboard> {
         return const AdminCustomersPanel();
       case AdminSidebar.menuIndex:
         return AdminMenuPanel(
+          key: ValueKey(
+            SuperAdminScopeService.instance.effectiveRestaurantId,
+          ),
+          restaurantId: SuperAdminScopeService.instance.effectiveRestaurantId,
           onAddItem: () => _showItemDialog(),
           onEditItem: (record) => _showItemDialog(record: record),
           onDeleteItem: _deleteItem,

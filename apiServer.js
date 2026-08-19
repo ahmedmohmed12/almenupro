@@ -322,6 +322,35 @@ async function routeRequest(req, res, url, pathname) {
     return true;
   }
 
+    if (pathname === '/api/public/restaurants' && req.method === 'GET') {
+    const restaurants = await dataStore.readRestaurants();
+    sendJson(
+      res,
+      200,
+      restaurants
+        .filter((entry) => String(entry.status || 'active') === 'active')
+        .map(publicRestaurant),
+    );
+    return true;
+  }
+
+  const publicRestaurantMatch = pathname.match(/^\/api\/public\/restaurants\/([^/]+)$/);
+  if (publicRestaurantMatch && req.method === 'GET') {
+    const key = decodeURIComponent(publicRestaurantMatch[1]).toLowerCase();
+    const restaurants = await dataStore.readRestaurants();
+    const match = restaurants.find(
+      (entry) =>
+        String(entry.slug || '').toLowerCase() === key ||
+        String(entry.id || '').toLowerCase() === key,
+    );
+    if (!match || String(match.status || 'active') !== 'active') {
+      sendJson(res, 404, { error: 'Restaurant not found' });
+      return true;
+    }
+    sendJson(res, 200, publicRestaurant(match));
+    return true;
+  }
+
   if (pathname === '/api/restaurants' && req.method === 'GET') {
     const auth = requireAuth(req, res);
     if (!auth) return true;
@@ -407,10 +436,10 @@ async function routeRequest(req, res, url, pathname) {
   }
 
   if (pathname === '/api/items' && req.method === 'GET') {
+    const restaurants = await dataStore.readRestaurants();
     const restaurantId =
-      url.searchParams.get('restaurant_id') ||
-      url.searchParams.get('restaurantId') ||
-      resolveRestaurantFromQuery(url, await dataStore.readRestaurants());
+      readRestaurantIdParam(req, url) ||
+      resolveRestaurantFromQuery(url, restaurants);
     const lite =
       url.searchParams.get('full') !== '1' &&
       url.searchParams.get('full') !== 'true';
@@ -650,7 +679,9 @@ async function routeRequest(req, res, url, pathname) {
 
   if (pathname === '/api/settings' && req.method === 'GET') {
     const restaurants = await dataStore.readRestaurants();
-    const restaurantId = resolveRestaurantFromQuery(url, restaurants);
+    const restaurantId =
+      readRestaurantIdParam(req, url) ||
+      resolveRestaurantFromQuery(url, restaurants);
     const map = await dataStore.readSettingsMap();
     const payload = map.byRestaurant?.[restaurantId] || defaultSettingsPayload();
     sendJson(res, 200, { ...payload, ...normalizeWhatsappSettings(payload) });

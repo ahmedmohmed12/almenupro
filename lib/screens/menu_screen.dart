@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../models/cart_item.dart';
+import '../models/customer_restaurant_context.dart';
 import '../models/delivery_zone.dart';
 import '../models/menu_item.dart';
+import '../models/restaurant.dart';
 import '../models/restaurant_settings.dart';
 import '../providers/cart_provider.dart';
 import '../providers/customer_session_provider.dart';
@@ -17,7 +19,9 @@ import '../widgets/pos/smart_salesman_widget.dart';
 import '../l10n/app_strings.dart';
 
 class MenuScreen extends StatefulWidget {
-  const MenuScreen({super.key});
+  const MenuScreen({super.key, this.slug});
+
+  final String? slug;
 
   @override
   State<MenuScreen> createState() => _MenuScreenState();
@@ -27,6 +31,7 @@ class _MenuScreenState extends State<MenuScreen> {
   static const _pageSize = 24;
   static const _smartCategory = 'اختيارات على ذوقك';
   List<MenuItem> _items = [];
+  Restaurant? _restaurant;
   RestaurantSettings? _settings;
   List<DeliveryZone> _zones = const [];
   var _loading = true;
@@ -45,6 +50,34 @@ class _MenuScreenState extends State<MenuScreen> {
     });
   }
 
+  String get _restaurantId =>
+      _restaurant?.id ?? ApiService.defaultRestaurantId;
+
+  CustomerRestaurantContext? get _restaurantContext {
+    final restaurant = _restaurant;
+    final settings = _settings;
+    if (restaurant == null || settings == null) return null;
+    return CustomerRestaurantContext(
+      restaurant: restaurant,
+      settings: settings,
+    );
+  }
+
+  Future<Restaurant> _resolveRestaurant() async {
+    final slug = widget.slug?.trim().toLowerCase();
+    if (slug != null && slug.isNotEmpty) {
+      return ApiService.instance.fetchPublicRestaurant(slug: slug);
+    }
+    final restaurants = await ApiService.instance.fetchPublicRestaurants();
+    if (restaurants.isEmpty) {
+      throw Exception('لا توجد مطاعم متاحة حالياً');
+    }
+    return restaurants.firstWhere(
+      (entry) => entry.id == ApiService.defaultRestaurantId,
+      orElse: () => restaurants.first,
+    );
+  }
+
   Future<void> _loadItems({bool autoRetry = false, bool reset = true}) async {
     if (reset) {
       setState(() {
@@ -58,7 +91,14 @@ class _MenuScreenState extends State<MenuScreen> {
     }
 
     try {
+      if (reset || _restaurant == null) {
+        _restaurant = await _resolveRestaurant();
+        if (mounted) {
+          context.read<CartProvider>().bindRestaurant(_restaurantId);
+        }
+      }
       final page = await ApiService.instance.fetchItemsPage(
+        restaurantId: _restaurantId,
         lite: true,
         limit: _pageSize,
         offset: reset ? 0 : _items.length,
@@ -66,10 +106,10 @@ class _MenuScreenState extends State<MenuScreen> {
       if (reset) {
         try {
           final settings = await ApiService.instance.fetchSettings(
-            restaurantId: ApiService.defaultRestaurantId,
+            restaurantId: _restaurantId,
           );
           final zones = await ApiService.instance.fetchDeliveryZones(
-            restaurantId: ApiService.defaultRestaurantId,
+            restaurantId: _restaurantId,
           );
           if (mounted) {
             _settings = settings;
@@ -89,12 +129,15 @@ class _MenuScreenState extends State<MenuScreen> {
     } catch (error) {
       if (autoRetry && _items.isEmpty) {
         try {
+          _restaurant = await _resolveRestaurant();
           final page = await ApiService.instance.fetchItemsPage(
+            restaurantId: _restaurantId,
             lite: true,
             limit: _pageSize,
             offset: 0,
           );
           if (!mounted) return;
+          context.read<CartProvider>().bindRestaurant(_restaurantId);
           setState(() {
             _items = page.items;
             _total = page.total;
@@ -199,10 +242,13 @@ class _MenuScreenState extends State<MenuScreen> {
                 totalPrice: cart.totalPrice,
                 cartItems: cart.items,
                 settings: _settings,
-                restaurantId: ApiService.defaultRestaurantId,
+                restaurantId: _restaurantId,
                 onAddSuggested: (item) =>
                     context.read<CartProvider>().addMenuItem(item),
-                onCheckout: () => MenuCheckoutSheet.show(context),
+                onCheckout: () => MenuCheckoutSheet.show(
+                  context,
+                  restaurantContext: _restaurantContext,
+                ),
               ),
       ),
     );
@@ -286,7 +332,7 @@ class _MenuScreenState extends State<MenuScreen> {
               slivers: [
                 SliverToBoxAdapter(
                   child: StorefrontHero(
-                    restaurantName: 'Molten Cookies',
+                    restaurantName: _restaurant?.name ?? 'AlMenuPro',
                     description: _settings?.restaurantDescription ?? '',
                     logoUrl: _settings?.logoUrl ?? '',
                     deliveryFee: _zones.isEmpty ? 0 : _zones.first.deliveryFee,

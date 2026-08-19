@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../models/menu_item.dart';
 import '../../services/api_service.dart';
 import '../../services/menu_storage_service.dart';
+import '../../services/super_admin_scope_service.dart';
 import '../network_menu_image.dart';
 import 'admin_breakpoints.dart';
 import 'admin_menu_panel_status.dart';
@@ -17,6 +18,7 @@ class AdminMenuPanel extends StatefulWidget {
     this.canImportTalabat = false,
     this.canManageItems = true,
     this.onStatusChanged,
+    this.restaurantId,
   });
 
   final Future<void> Function() onAddItem;
@@ -26,6 +28,7 @@ class AdminMenuPanel extends StatefulWidget {
   final bool canImportTalabat;
   final bool canManageItems;
   final ValueChanged<AdminMenuPanelStatus>? onStatusChanged;
+  final String? restaurantId;
 
   @override
   State<AdminMenuPanel> createState() => _AdminMenuPanelState();
@@ -46,8 +49,24 @@ class _AdminMenuPanelState extends State<AdminMenuPanel> {
   @override
   void initState() {
     super.initState();
+    SuperAdminScopeService.instance.addListener(_onScopeChanged);
     _loadFromApi();
   }
+
+  @override
+  void dispose() {
+    SuperAdminScopeService.instance.removeListener(_onScopeChanged);
+    super.dispose();
+  }
+
+  void _onScopeChanged() {
+    if (!mounted) return;
+    _loadFromApi();
+  }
+
+  String get _restaurantId =>
+      widget.restaurantId ??
+      SuperAdminScopeService.instance.effectiveRestaurantId;
 
   MenuItemRecord _toRecord(MenuItem item) {
     return MenuItemRecord(id: item.id.toString(), data: item.toMap());
@@ -65,6 +84,7 @@ class _AdminMenuPanelState extends State<AdminMenuPanel> {
 
     try {
       final page = await ApiService.instance.fetchItemsPage(
+        restaurantId: _restaurantId,
         lite: true,
         limit: _pageSize,
         offset: reset ? 0 : _apiItems.length,
