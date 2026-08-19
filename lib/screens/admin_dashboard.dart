@@ -953,7 +953,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
               listenable: SuperAdminScopeService.instance,
               builder: (context, _) {
                 try {
-                  return _buildActiveTab();
+                  return SizedBox.expand(child: _buildActiveTab());
                 } catch (error) {
                   return AppErrorBoundary.releaseFallback(
                     FlutterErrorDetails(exception: error),

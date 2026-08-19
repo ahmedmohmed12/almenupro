@@ -176,20 +176,24 @@ class _AdminMenuPanelState extends State<AdminMenuPanel> {
 
   @override
   Widget build(BuildContext context) {
-    return ColoredBox(
-      color: const Color(0xFFF4F6F8),
-      child: Column(
+    return SizedBox.expand(
+      child: ColoredBox(
+        color: const Color(0xFFF4F6F8),
+        child: Column(
+        mainAxisAlignment: MainAxisAlignment.start,
+        mainAxisSize: MainAxisSize.max,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           _buildToolbar(),
           if (_errorMessage != null) _retryBanner(),
           Expanded(
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+              padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
               child: _buildContent(),
             ),
           ),
         ],
+        ),
       ),
     );
   }
@@ -198,7 +202,7 @@ class _AdminMenuPanelState extends State<AdminMenuPanel> {
     return Material(
       color: Colors.white,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
         child: LayoutBuilder(
           builder: (context, constraints) {
             final compact = constraints.maxWidth < 820;
@@ -299,32 +303,7 @@ class _AdminMenuPanelState extends State<AdminMenuPanel> {
     }
 
     if (_apiItems.isNotEmpty) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Expanded(child: _buildItemList(_apiItems)),
-          if (_apiItems.length < _totalItems)
-            Align(
-              alignment: Alignment.center,
-              child: Padding(
-                padding: const EdgeInsets.only(top: 8),
-                child: OutlinedButton(
-                  onPressed:
-                      _loadingMore ? null : () => _loadFromApi(reset: false),
-                  child: _loadingMore
-                      ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : Text(
-                          'تحميل المزيد (${_apiItems.length}/$_totalItems)',
-                        ),
-                ),
-              ),
-            ),
-        ],
-      );
+      return _buildItemList(_apiItems);
     }
 
     if (_errorMessage != null) {
@@ -357,27 +336,49 @@ class _AdminMenuPanelState extends State<AdminMenuPanel> {
     return LayoutBuilder(
       builder: (context, constraints) {
         final wide = constraints.maxWidth >= 900;
+        final showMore = items.length < _totalItems;
+        final headerCount = wide ? 1 : 0;
+        final moreCount = showMore ? 1 : 0;
+
         return Material(
           color: Colors.white,
           borderRadius: BorderRadius.circular(12),
           clipBehavior: Clip.antiAlias,
-          child: Column(
-            children: [
-              if (wide) _buildWideHeader(),
-              Expanded(
-                child: ListView.separated(
-                  padding: EdgeInsets.zero,
-                  itemCount: items.length,
-                  separatorBuilder: (_, __) => const Divider(height: 1),
-                  itemBuilder: (context, index) {
-                    final item = items[index];
-                    return wide
-                        ? _buildWideRow(item)
-                        : _buildCompactRow(item);
-                  },
+          child: ListView.separated(
+            padding: EdgeInsets.zero,
+            primary: true,
+            shrinkWrap: false,
+            itemCount: headerCount + items.length + moreCount,
+            separatorBuilder: (context, index) {
+              if (wide && index == 0) return const SizedBox.shrink();
+              return const Divider(height: 1);
+            },
+            itemBuilder: (context, index) {
+              if (wide && index == 0) return _buildWideHeader();
+              final itemIndex = index - headerCount;
+              if (itemIndex >= 0 && itemIndex < items.length) {
+                final item = items[itemIndex];
+                return wide ? _buildWideRow(item) : _buildCompactRow(item);
+              }
+              return Padding(
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                child: Center(
+                  child: OutlinedButton(
+                    onPressed:
+                        _loadingMore ? null : () => _loadFromApi(reset: false),
+                    child: _loadingMore
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : Text(
+                            'تحميل المزيد (${items.length}/$_totalItems)',
+                          ),
+                  ),
                 ),
-              ),
-            ],
+              );
+            },
           ),
         );
       },
