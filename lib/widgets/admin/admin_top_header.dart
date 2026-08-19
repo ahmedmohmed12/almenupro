@@ -13,6 +13,7 @@ class AdminTopHeader extends StatelessWidget {
     this.restaurantLabel,
     this.onMenuTap,
     this.onLogout,
+    this.actions = const [],
   });
 
   final int pendingOrdersCount;
@@ -22,6 +23,7 @@ class AdminTopHeader extends StatelessWidget {
   final String? restaurantLabel;
   final VoidCallback? onMenuTap;
   final VoidCallback? onLogout;
+  final List<Widget> actions;
 
   static const Color burgundy = Color(0xFF6B1124);
   static const Color gold = Color(0xFFD49A00);
@@ -65,6 +67,8 @@ class AdminTopHeader extends StatelessWidget {
           const AdminRestaurantSelector(),
           const SizedBox(width: 16),
         ],
+        ...actions,
+        if (actions.isNotEmpty) const SizedBox(width: 12),
         ..._trailingActions(compact: false),
       ],
     );
@@ -90,6 +94,15 @@ class AdminTopHeader extends StatelessWidget {
             ..._trailingActions(compact: true),
           ],
         ),
+        if (actions.isNotEmpty) ...[
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            alignment: WrapAlignment.end,
+            children: actions,
+          ),
+        ],
         if (isSuperAdmin) ...[
           const SizedBox(height: 10),
           const AdminRestaurantSelector(),

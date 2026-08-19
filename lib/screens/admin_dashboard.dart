@@ -1008,6 +1008,32 @@ class _AdminDashboardState extends State<AdminDashboard> {
     );
   }
 
+  List<Widget> get _menuHeaderActions {
+    if (!_isMenuTabSelected) return const [];
+    return [
+      Tooltip(
+        message: 'تحديث من طلبات',
+        child: IconButton(
+          onPressed: () {
+            print('Updating from Talabat...');
+          },
+          icon: const Icon(Icons.sync, color: Color(0xFF6B1124)),
+        ),
+      ),
+      const SizedBox(width: 4),
+      ElevatedButton.icon(
+        style: ElevatedButton.styleFrom(
+          backgroundColor: const Color(0xFF6B1124),
+          foregroundColor: Colors.white,
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        ),
+        onPressed: () => _showItemDialog(),
+        icon: const Icon(Icons.add, color: Colors.white, size: 18),
+        label: const Text('إضافة صنف جديد'),
+      ),
+    ];
+  }
+
   Widget _buildTopHeader({VoidCallback? onMenuTap}) {
     if (_isSuperAdmin) {
       return AdminTopHeader(
@@ -1016,6 +1042,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
         restaurantLabel: _restaurantLabel,
         onMenuTap: onMenuTap,
         onLogout: _logout,
+        actions: _menuHeaderActions,
       );
     }
 
@@ -1029,6 +1056,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
           pendingOrdersCount: pendingCount,
           onMenuTap: onMenuTap,
           onLogout: _logout,
+          actions: _menuHeaderActions,
           onNotificationsTap: () {
             setState(() => _selectedIndex = AdminSidebar.ordersIndex);
             _ordersPanelKey.currentState?.selectNewOrdersTab();

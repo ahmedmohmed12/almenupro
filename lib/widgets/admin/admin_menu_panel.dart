@@ -176,97 +176,83 @@ class _AdminMenuPanelState extends State<AdminMenuPanel> {
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox.expand(
-      child: ColoredBox(
-        color: const Color(0xFFF4F6F8),
-        child: Column(
-        mainAxisAlignment: MainAxisAlignment.start,
-        mainAxisSize: MainAxisSize.max,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          _buildToolbar(),
-          if (_errorMessage != null) _retryBanner(),
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-              child: _buildContent(),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final maxH = constraints.maxHeight.isFinite
+            ? constraints.maxHeight
+            : MediaQuery.sizeOf(context).height;
+        return SizedBox(
+          width: constraints.maxWidth,
+          height: maxH,
+          child: ColoredBox(
+            color: const Color(0xFFF4F6F8),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.start,
+              mainAxisSize: MainAxisSize.max,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _buildToolbar(),
+                if (_errorMessage != null) _retryBanner(),
+                Expanded(child: _buildContent()),
+              ],
             ),
           ),
-        ],
-        ),
-      ),
+        );
+      },
     );
+  }
+
+  void _onUpdateFromTalabat() {
+    print('Updating from Talabat...');
+    widget.onAutofillTalabat?.call();
   }
 
   Widget _buildToolbar() {
     return Material(
       color: Colors.white,
+      elevation: 0,
       child: Padding(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final compact = constraints.maxWidth < 820;
-            final title = Text(
-              _apiOnline
-                  ? 'قائمة الأصناف (${_apiItems.length}${_totalItems > _apiItems.length ? '/$_totalItems' : ''})'
-                  : 'قائمة الأصناف الحالية',
-              style: const TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
+        child: Row(
+          children: [
+            const Expanded(
+              child: Text(
+                'إدارة المنيو والأصناف',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
-            );
-
-            final actions = Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              alignment: WrapAlignment.end,
-              children: [
-                OutlinedButton.icon(
-                  onPressed: _loading ? null : () => _loadFromApi(),
-                  icon: const Icon(Icons.refresh, size: 18),
-                  label: const Text('تحديث'),
-                ),
-                if (widget.canImportTalabat)
-                  OutlinedButton.icon(
-                    onPressed: widget.onAutofillTalabat,
-                    icon: const Icon(Icons.cloud_download, size: 18),
-                    label: const Text('تعبئة Talabat'),
-                  ),
-                ElevatedButton.icon(
-                  style: ElevatedButton.styleFrom(backgroundColor: burgundy),
-                  onPressed: widget.canManageItems
-                      ? () async {
-                          await widget.onAddItem();
-                          if (mounted) await _loadFromApi();
-                        }
-                      : null,
-                  icon: const Icon(Icons.add, color: Colors.white, size: 18),
-                  label: const Text(
-                    'إضافة صنف',
-                    style: TextStyle(color: Colors.white),
-                  ),
-                ),
-              ],
-            );
-
-            if (compact) {
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  title,
-                  const SizedBox(height: 10),
-                  actions,
-                ],
-              );
-            }
-
-            return Row(
-              children: [
-                Expanded(child: title),
-                actions,
-              ],
-            );
-          },
+            ),
+            Tooltip(
+              message: 'تحديث من طلبات',
+              child: IconButton(
+                onPressed: _onUpdateFromTalabat,
+                icon: const Icon(Icons.sync, color: burgundy),
+              ),
+            ),
+            const SizedBox(width: 8),
+            ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: burgundy,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              ),
+              onPressed: widget.canManageItems
+                  ? () async {
+                      await widget.onAddItem();
+                      if (mounted) await _loadFromApi();
+                    }
+                  : null,
+              icon: const Icon(Icons.add, color: Colors.white, size: 18),
+              label: const Text(
+                'إضافة صنف جديد',
+                style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+              ),
+            ),
+          ],
         ),
       ),
     );
