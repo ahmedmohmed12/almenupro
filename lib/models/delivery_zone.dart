@@ -17,6 +17,12 @@ class DeliveryZone {
   final String? defaultKitchenId;
   final bool isActive;
 
+  String get displayName =>
+      areaName.trim().isEmpty ? 'بدون اسم المنطقة' : areaName;
+
+  String get displayGovernorate =>
+      governorate.trim().isEmpty ? 'بدون محافظة' : governorate;
+
   factory DeliveryZone.fromMap(Map<String, dynamic> map) {
     return DeliveryZone(
       id: map['id']?.toString() ?? '',
