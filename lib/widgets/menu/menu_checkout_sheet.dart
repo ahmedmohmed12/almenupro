@@ -15,6 +15,7 @@ import '../../services/orders_service.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/whatsapp_launcher.dart';
 import '../../utils/whatsapp_order_message.dart';
+import '../pos/smart_salesman_widget.dart';
 
 class MenuCheckoutSheet extends StatefulWidget {
   const MenuCheckoutSheet({super.key, this.restaurantContext});
@@ -378,6 +379,13 @@ class _MenuCheckoutSheetState extends State<MenuCheckoutSheet> {
                           ),
                         ),
                       ),
+                      if (!cart.isEmpty)
+                        SmartSalesmanWidget(
+                          cartItems: cart.items,
+                          cartTotal: cart.totalPrice,
+                          restaurantId: _restaurantId,
+                          onAddItem: (item) => cart.addMenuItem(item),
+                        ),
                       const Divider(height: 32),
                       TextFormField(
                         controller: _nameController,

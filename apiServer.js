@@ -174,6 +174,7 @@ function posDeps() {
     writeShiftSessions: (value) => extraStore.shiftSessions.write(value),
     readOrders: () => dataStore.readOrders(),
     writeOrders: (value) => dataStore.writeOrders(value),
+    readItemsPage: (options) => dataStore.readItemsPage(options),
     appendAuditEvents: async (events) => {
       const current = await extraStore.auditEvents.read();
       current.unshift(...events);

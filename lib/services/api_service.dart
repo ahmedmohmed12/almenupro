@@ -12,6 +12,7 @@ import '../models/menu_item.dart';
 import '../models/order.dart';
 import '../models/restaurant.dart';
 import '../models/restaurant_settings.dart';
+import '../models/upsell_recommendation.dart';
 import 'admin_auth_service.dart';
 import 'super_admin_scope_service.dart';
 
@@ -1075,6 +1076,48 @@ class ApiService {
       },
     );
     return LoyaltyCashbackPreview.fromMap(map);
+  }
+
+  Future<List<UpsellRecommendation>> fetchSmartUpsell({
+    required List<Map<String, dynamic>> cartItems,
+    double? cartTotal,
+    String? restaurantId,
+  }) async {
+    if (cartItems.isEmpty) return const [];
+
+    final response = await http
+        .post(
+          _uri('/pos/smart-upsell'),
+          headers: {
+            ..._jsonHeaders,
+            'X-Restaurant-Id': _scopedRestaurantId(restaurantId: restaurantId),
+          },
+          body: jsonEncode({
+            'cartItems': cartItems,
+            'cartTotal': ?cartTotal,
+            'restaurantId': _scopedRestaurantId(restaurantId: restaurantId),
+          }),
+        )
+        .timeout(_fetchTimeout);
+
+    if (response.statusCode != 200) {
+      throw Exception('تعذر تحميل توصيات البياع الشاطر (${response.statusCode})');
+    }
+
+    final decoded = jsonDecode(response.body);
+    if (decoded is! Map) return const [];
+
+    final suggested = decoded['suggestedItems'] ?? decoded['suggested_items'];
+    if (suggested is! List) return const [];
+
+    return suggested.whereType<Map>().map((entry) {
+      final map = Map<String, dynamic>.from(entry);
+      final id = map['id']?.toString() ?? map['menuItemId']?.toString() ?? '';
+      return UpsellRecommendation.fromJson(
+        map,
+        MenuItem.fromMap(id, map),
+      );
+    }).toList();
   }
 
   Future<Map<String, dynamic>> _getJsonMap(
