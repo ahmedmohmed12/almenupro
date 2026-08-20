@@ -205,7 +205,7 @@ class _MenuScreenState extends State<MenuScreen> {
 
   List<MenuItem> _filteredItems(List<MenuItem> items) {
     if (_selectedCategory == _offersCategory) {
-      return itemsForOffersTab(items, _offers);
+      return itemsForOffersTab(items, _offers, originalItems: _items);
     }
     if (_selectedCategory == _smartCategory) {
       if (_settings?.smartUpsellEnabled == false) {
@@ -251,6 +251,51 @@ class _MenuScreenState extends State<MenuScreen> {
       default:
         return 0.60;
     }
+  }
+
+  SliverToBoxAdapter _offersSectionHeader(String title, double pad) {
+    return SliverToBoxAdapter(
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(pad, 10, pad, 6),
+        child: Text(
+          title,
+          style: const TextStyle(
+            fontWeight: FontWeight.w800,
+            fontSize: 15,
+            color: AppTheme.brandMaroon,
+          ),
+        ),
+      ),
+    );
+  }
+
+  SliverPadding _offersItemGrid(
+    List<MenuItem> items, {
+    required int columns,
+    required double pad,
+    required double gap,
+  }) {
+    return SliverPadding(
+      padding: EdgeInsets.fromLTRB(pad, 4, pad, 16),
+      sliver: SliverGrid(
+        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: columns,
+          crossAxisSpacing: gap,
+          mainAxisSpacing: gap,
+          childAspectRatio: _gridChildAspect(columns),
+        ),
+        delegate: SliverChildBuilderDelegate(
+          (context, index) {
+            return StorefrontItemCard(
+              item: items[index],
+              onAdd: () => _addToCart(items[index]),
+              dense: columns <= 2,
+            );
+          },
+          childCount: items.length,
+        ),
+      ),
+    );
   }
 
   @override
@@ -322,6 +367,13 @@ class _MenuScreenState extends State<MenuScreen> {
     final pricedItems = applyOfferDiscountsToItems(_items, _offers);
     final categories = _categories(pricedItems);
     final filtered = _filteredItems(pricedItems);
+    final offerGroups = _selectedCategory == _offersCategory
+        ? groupItemsForOffersTab(
+            pricedItems,
+            _offers,
+            originalItems: _items,
+          )
+        : null;
 
     return Column(
       children: [
@@ -421,28 +473,38 @@ class _MenuScreenState extends State<MenuScreen> {
                       final columns = _gridColumns(width);
                       final pad = width >= 900 ? 20.0 : width >= 600 ? 12.0 : 10.0;
                       final gap = width >= 900 ? 14.0 : 8.0;
+                      final groups = offerGroups;
+                      if (groups != null) {
+                        return SliverMainAxisGroup(
+                          slivers: [
+                            if (groups.featured.isNotEmpty) ...[
+                              _offersSectionHeader('عروض مميزة', pad),
+                              _offersItemGrid(
+                                groups.featured,
+                                columns: columns,
+                                pad: pad,
+                                gap: gap,
+                              ),
+                            ],
+                            if (groups.rest.isNotEmpty) ...[
+                              if (groups.featured.isNotEmpty)
+                                _offersSectionHeader('باقي المنيو', pad),
+                              _offersItemGrid(
+                                groups.rest,
+                                columns: columns,
+                                pad: pad,
+                                gap: gap,
+                              ),
+                            ],
+                          ],
+                        );
+                      }
 
-                      return SliverPadding(
-                        padding: EdgeInsets.fromLTRB(pad, 4, pad, 16),
-                        sliver: SliverGrid(
-                          gridDelegate:
-                              SliverGridDelegateWithFixedCrossAxisCount(
-                            crossAxisCount: columns,
-                            crossAxisSpacing: gap,
-                            mainAxisSpacing: gap,
-                            childAspectRatio: _gridChildAspect(columns),
-                          ),
-                          delegate: SliverChildBuilderDelegate(
-                            (context, index) {
-                              return StorefrontItemCard(
-                                item: filtered[index],
-                                onAdd: () => _addToCart(filtered[index]),
-                                dense: columns <= 2,
-                              );
-                            },
-                            childCount: filtered.length,
-                          ),
-                        ),
+                      return _offersItemGrid(
+                        filtered,
+                        columns: columns,
+                        pad: pad,
+                        gap: gap,
                       );
                     },
                   ),

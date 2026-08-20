@@ -48,24 +48,101 @@ List<MenuItem> applyOfferDiscountsToItems(
   }).toList();
 }
 
+/// Item-scoped live offers (not store-wide / combo).
+Set<int> itemSpecificOfferIds(List<Offer> offers) {
+  return {
+    for (final offer in offers)
+      if (offer.isLive && !offer.isCombo && !offer.isCartLevel)
+        ...offer.itemIds,
+  };
+}
+
+bool itemHasSpecificDiscount(
+  MenuItem pricedItem, {
+  required List<Offer> offers,
+  MenuItem? originalItem,
+}) {
+  if (itemSpecificOfferIds(offers).contains(pricedItem.id)) return true;
+  return originalItem?.hasDiscount == true;
+}
+
 /// Products to show in the Offers tab: discounted items, or the full menu
 /// when a live store-wide percentage/fixed offer is active.
+/// Item-specific discounts are listed first.
 List<MenuItem> itemsForOffersTab(
   List<MenuItem> pricedItems,
-  List<Offer> offers,
-) {
+  List<Offer> offers, {
+  List<MenuItem> originalItems = const [],
+}) {
   final live = offers.where((offer) => offer.isLive && !offer.isCombo).toList();
   final storeWide = live.any((offer) => offer.isCartLevel);
-  if (storeWide) return pricedItems;
+  final targetedIds = itemSpecificOfferIds(offers);
+  final originalById = {for (final item in originalItems) item.id: item};
 
-  final targetedIds = <int>{
-    for (final offer in live) ...offer.itemIds,
-  };
-  return pricedItems
+  final source = storeWide
+      ? pricedItems
+      : pricedItems
+          .where(
+            (item) =>
+                item.hasDiscount ||
+                targetedIds.contains(item.id) ||
+                (originalById[item.id]?.hasDiscount == true),
+          )
+          .toList();
+
+  bool isSpecific(MenuItem item) => itemHasSpecificDiscount(
+        item,
+        offers: offers,
+        originalItem: originalById[item.id],
+      );
+
+  final featured = source.where(isSpecific).toList();
+  final rest = source.where((item) => !isSpecific(item)).toList();
+  return [...featured, ...rest];
+}
+
+class OffersTabGroups {
+  const OffersTabGroups({
+    required this.featured,
+    required this.rest,
+  });
+
+  final List<MenuItem> featured;
+  final List<MenuItem> rest;
+
+  bool get isEmpty => featured.isEmpty && rest.isEmpty;
+}
+
+OffersTabGroups groupItemsForOffersTab(
+  List<MenuItem> pricedItems,
+  List<Offer> offers, {
+  List<MenuItem> originalItems = const [],
+}) {
+  final ordered = itemsForOffersTab(
+    pricedItems,
+    offers,
+    originalItems: originalItems,
+  );
+  final originalById = {for (final item in originalItems) item.id: item};
+  final featured = ordered
       .where(
-        (item) => item.hasDiscount || targetedIds.contains(item.id),
+        (item) => itemHasSpecificDiscount(
+          item,
+          offers: offers,
+          originalItem: originalById[item.id],
+        ),
       )
       .toList();
+  final rest = ordered
+      .where(
+        (item) => !itemHasSpecificDiscount(
+          item,
+          offers: offers,
+          originalItem: originalById[item.id],
+        ),
+      )
+      .toList();
+  return OffersTabGroups(featured: featured, rest: rest);
 }
 
 String? matchingOfferIdForItem(MenuItem item, List<Offer> offers) {
