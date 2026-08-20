@@ -5,6 +5,7 @@ import '../../../l10n/app_strings.dart';
 import '../../../models/menu_item.dart';
 import '../../../theme/app_theme.dart';
 import '../../network_menu_image.dart';
+import '../product_sale_price.dart';
 
 class MenuGridItemCard extends StatelessWidget {
   const MenuGridItemCard({
@@ -51,9 +52,18 @@ class MenuGridItemCard extends StatelessWidget {
                     Positioned.fill(
                       child: _ItemImage(imageUrl: item.imageUrl),
                     ),
+                    if (item.hasDiscount && item.discountPercent != null)
+                      Positioned(
+                        top: 8,
+                        left: 8,
+                        child: ProductDiscountBadge(
+                          percent: item.discountPercent!,
+                          compact: true,
+                        ),
+                      ),
                     Positioned(
                       top: 8,
-                      left: 8,
+                      right: 8,
                       child: _AddButton(onPressed: onAdd),
                     ),
                   ],
@@ -76,14 +86,20 @@ class MenuGridItemCard extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 4),
-                    Text(
-                      '${item.price.toStringAsFixed(3)} ${strings.currency}',
-                      style: GoogleFonts.cairo(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w800,
-                        color: AppTheme.brandMaroon,
+                    if (item.hasDiscount)
+                      ProductSalePrice(
+                        item: item,
+                        currency: strings.currency,
+                      )
+                    else
+                      Text(
+                        '${item.price.toStringAsFixed(3)} ${strings.currency}',
+                        style: GoogleFonts.cairo(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w800,
+                          color: AppTheme.brandMaroon,
+                        ),
                       ),
-                    ),
                   ],
                 ),
               ),

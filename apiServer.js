@@ -136,9 +136,25 @@ async function resolveScopedRestaurantId(req, url, auth, { allowPublicDefault = 
   return resolveRestaurantId(auth, requested, { allowPublicDefault });
 }
 
+function parseOriginalPrice(body, existing, price) {
+  const clearing =
+    Object.prototype.hasOwnProperty.call(body, 'originalPrice') ||
+    Object.prototype.hasOwnProperty.call(body, 'original_price');
+  const raw = body.originalPrice ?? body.original_price;
+  if (clearing && (raw === null || raw === '' || raw === undefined)) {
+    return undefined;
+  }
+  const source = raw ?? existing.originalPrice ?? existing.original_price;
+  const value = Number(source);
+  if (!Number.isFinite(value) || value <= price + 0.0005) return undefined;
+  return value;
+}
+
 function normalizeIncomingItem(body, restaurantId, existing = {}) {
   const isAvailable = body.isAvailable ?? body.is_available ?? existing.is_available ?? true;
-  return normalizeMenuItemForApi({
+  const price = Number(body.price ?? existing.price ?? 0);
+  const originalPrice = parseOriginalPrice(body, existing, price);
+  const normalized = normalizeMenuItemForApi({
     ...existing,
     ...body,
     restaurant_id: restaurantId,
@@ -149,7 +165,7 @@ function normalizeIncomingItem(body, restaurantId, existing = {}) {
     description_ar:
       body.description_ar ?? body.descriptionAr ?? body.description ?? existing.description_ar ?? '',
     description_en: body.description_en ?? body.descriptionEn ?? existing.description_en ?? '',
-    price: Number(body.price ?? existing.price ?? 0),
+    price,
     category_name: body.categoryName ?? body.category_name ?? existing.category_name ?? 'عام',
     image_url: body.imageUrl ?? body.image_url ?? existing.image_url ?? '',
     is_available: isAvailable === false || isAvailable === 0 ? 0 : 1,
@@ -157,6 +173,14 @@ function normalizeIncomingItem(body, restaurantId, existing = {}) {
     options: body.options ?? existing.options ?? [],
     linkedItemIds: body.linkedItemIds ?? body.linked_item_ids ?? existing.linkedItemIds ?? [],
   });
+  if (originalPrice != null) {
+    normalized.originalPrice = originalPrice;
+    normalized.original_price = originalPrice;
+  } else {
+    delete normalized.originalPrice;
+    delete normalized.original_price;
+  }
+  return normalized;
 }
 
 function itemMatchesId(item, itemId) {

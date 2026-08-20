@@ -1,3 +1,4 @@
+import '../utils/discount.dart';
 import '../utils/image_url.dart';
 
 class MenuOption {
@@ -110,6 +111,7 @@ class MenuItem {
   final String descriptionAr;
   final String descriptionEn;
   final double price;
+  final double? originalPrice;
   final String imageUrl;
   final int? talabatId;
   final bool isAvailable;
@@ -129,6 +131,7 @@ class MenuItem {
     this.descriptionAr = '',
     this.descriptionEn = '',
     required this.price,
+    this.originalPrice,
     required this.imageUrl,
     this.talabatId,
     required this.isAvailable,
@@ -139,6 +142,16 @@ class MenuItem {
 
   bool get hasCustomizations =>
       options.any((option) => option.isAvailable);
+
+  double get finalPrice => price;
+
+  bool get hasDiscount {
+    final original = originalPrice;
+    return original != null && original > price + 0.0005;
+  }
+
+  int? get discountPercent =>
+      calculateDiscountPercentage(originalPrice, price);
 
   List<MenuOption> get availableOptions =>
       options.where((option) => option.isAvailable).toList();
@@ -189,6 +202,7 @@ class MenuItem {
         '';
     final descriptionEn =
         json['description_en']?.toString() ?? json['descriptionEn']?.toString() ?? '';
+    final price = double.tryParse(json['price']?.toString() ?? '') ?? 0;
 
     return MenuItem(
       id: _readInt(json['id']),
@@ -203,7 +217,8 @@ class MenuItem {
       nameEn: nameEn,
       descriptionAr: descriptionAr,
       descriptionEn: descriptionEn,
-      price: double.tryParse(json['price']?.toString() ?? '') ?? 0,
+      price: price,
+      originalPrice: _readOriginalPrice(json, price),
       imageUrl: normalizeMenuImageUrl(firstNonEmptyImageField(json)),
       talabatId: json['talabat_id'] is int
           ? json['talabat_id'] as int
@@ -219,6 +234,18 @@ class MenuItem {
           .toList(),
       linkedItemIds: _parseLinkedItemIds(json),
     );
+  }
+
+  static double? _readOriginalPrice(Map<String, dynamic> json, double price) {
+    final raw = json['originalPrice'] ??
+        json['original_price'] ??
+        json['oldPrice'] ??
+        json['old_price'] ??
+        json['compare_at_price'];
+    if (raw == null || raw == '') return null;
+    final value = raw is num ? raw.toDouble() : double.tryParse(raw.toString());
+    if (value == null || value <= price + 0.0005) return null;
+    return value;
   }
 
   static int _readInt(dynamic value) {
@@ -251,6 +278,9 @@ class MenuItem {
         '';
     final descriptionEn =
         map['description_en']?.toString() ?? map['descriptionEn']?.toString() ?? '';
+    final price = (map['price'] as num?)?.toDouble() ??
+        double.tryParse(map['price']?.toString() ?? '') ??
+        0;
 
     return MenuItem(
       id: int.tryParse(documentId) ?? documentId.hashCode,
@@ -271,9 +301,8 @@ class MenuItem {
       nameEn: nameEn,
       descriptionAr: descriptionAr,
       descriptionEn: descriptionEn,
-      price: (map['price'] as num?)?.toDouble() ??
-          double.tryParse(map['price']?.toString() ?? '') ??
-          0,
+      price: price,
+      originalPrice: _readOriginalPrice(map, price),
       imageUrl: normalizeMenuImageUrl(firstNonEmptyImageField(map)),
       talabatId: map['talabat_id'] is int
           ? map['talabat_id'] as int
@@ -306,6 +335,8 @@ class MenuItem {
       'description_ar': descriptionAr.isNotEmpty ? descriptionAr : description,
       'description_en': descriptionEn,
       'price': price,
+      if (hasDiscount) 'originalPrice': originalPrice,
+      if (hasDiscount) 'original_price': originalPrice,
       'image_url': imageUrl,
       if (talabatId != null) 'talabat_id': talabatId,
       'is_available': isAvailable ? 1 : 0,
@@ -326,6 +357,7 @@ class MenuItem {
       'descriptionAr': descriptionAr.isNotEmpty ? descriptionAr : description,
       'descriptionEn': descriptionEn,
       'price': price,
+      if (hasDiscount) 'originalPrice': originalPrice,
       'imageUrl': imageUrl,
       'categoryName': categoryName,
       if (categoryNameEn.isNotEmpty) 'categoryNameEn': categoryNameEn,
@@ -342,6 +374,7 @@ class MenuItem {
     String? imageUrl,
     String? name,
     double? price,
+    double? originalPrice,
   }) {
     return MenuItem(
       id: id,
@@ -355,6 +388,7 @@ class MenuItem {
       descriptionAr: descriptionAr,
       descriptionEn: descriptionEn,
       price: price ?? this.price,
+      originalPrice: originalPrice ?? this.originalPrice,
       imageUrl: imageUrl ?? this.imageUrl,
       talabatId: talabatId,
       isAvailable: isAvailable ?? this.isAvailable,

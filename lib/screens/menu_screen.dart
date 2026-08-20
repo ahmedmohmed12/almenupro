@@ -11,6 +11,7 @@ import '../providers/cart_provider.dart';
 import '../providers/customer_session_provider.dart';
 import '../services/api_service.dart';
 import '../theme/app_theme.dart';
+import '../utils/discount.dart';
 import '../widgets/menu/customer_phone_gate.dart';
 import '../widgets/menu/customization_dialog.dart';
 import '../widgets/menu/free_delivery_progress_bar.dart';
@@ -253,7 +254,7 @@ class _MenuScreenState extends State<MenuScreen> {
       case 3:
         return 0.72;
       default:
-        return 0.66;
+        return 0.60;
     }
   }
 
@@ -323,8 +324,9 @@ class _MenuScreenState extends State<MenuScreen> {
       );
     }
 
+    final pricedItems = applyOfferDiscountsToItems(_items, _offers);
     final categories = _categories(_items);
-    final filtered = _filteredItems(_items);
+    final filtered = _filteredItems(pricedItems);
 
     return Column(
       children: [

@@ -362,6 +362,9 @@ class _AdminDashboardState extends State<AdminDashboard> {
     final priceController = TextEditingController(
       text: data != null ? data['price'].toString() : '',
     );
+    final originalPriceController = TextEditingController(
+      text: (data?['originalPrice'] ?? data?['original_price'] ?? '').toString(),
+    );
     final categoryController = TextEditingController(
       text: data?['categoryName'] ?? 'أشهر الأصناف',
     );
@@ -446,7 +449,20 @@ class _AdminDashboardState extends State<AdminDashboard> {
                       keyboardType:
                           const TextInputType.numberWithOptions(decimal: true),
                       decoration: const InputDecoration(
-                        labelText: 'السعر (د.ك)',
+                        labelText: 'السعر النهائي (د.ك)',
+                        helperText: 'السعر بعد الخصم إن وُجد',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: originalPriceController,
+                      keyboardType:
+                          const TextInputType.numberWithOptions(decimal: true),
+                      decoration: const InputDecoration(
+                        labelText: 'السعر قبل الخصم (اختياري)',
+                        helperText:
+                            'يظهر مشطوباً مع شارة الخصم إذا كان أكبر من السعر النهائي',
                         border: OutlineInputBorder(),
                       ),
                     ),
@@ -532,6 +548,8 @@ class _AdminDashboardState extends State<AdminDashboard> {
                       'descriptionAr': descriptionAr,
                       'descriptionEn': descriptionEn,
                       'price': double.tryParse(priceController.text) ?? 0.0,
+                      'originalPrice':
+                          double.tryParse(originalPriceController.text.trim()),
                       'categoryName': categoryController.text.trim(),
                       'categoryId': data?['categoryId'] ?? '',
                       'imageUrl': normalizeMenuImageUrl(imageUrlController.text.trim()),

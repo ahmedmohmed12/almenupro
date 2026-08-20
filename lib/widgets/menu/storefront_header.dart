@@ -4,6 +4,7 @@ import '../../models/menu_item.dart';
 import '../../providers/customer_session_provider.dart';
 import '../../theme/app_theme.dart';
 import '../network_menu_image.dart';
+import 'product_sale_price.dart';
 
 class StorefrontHero extends StatelessWidget {
   const StorefrontHero({
@@ -339,15 +340,29 @@ class StorefrontItemCard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Expanded(
-                child: item.imageUrl.trim().isEmpty
-                    ? const ColoredBox(
-                        color: Color(0xFFFFF4E5),
-                        child: Icon(Icons.cookie_outlined, size: 36),
-                      )
-                    : NetworkMenuImage(
-                        imageUrl: item.imageUrl,
-                        fit: BoxFit.cover,
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    item.imageUrl.trim().isEmpty
+                        ? const ColoredBox(
+                            color: Color(0xFFFFF4E5),
+                            child: Icon(Icons.cookie_outlined, size: 36),
+                          )
+                        : NetworkMenuImage(
+                            imageUrl: item.imageUrl,
+                            fit: BoxFit.cover,
+                          ),
+                    if (item.hasDiscount && item.discountPercent != null)
+                      Positioned(
+                        top: 8,
+                        left: 8,
+                        child: ProductDiscountBadge(
+                          percent: item.discountPercent!,
+                          compact: compact,
+                        ),
                       ),
+                  ],
+                ),
               ),
               Padding(
                 padding: EdgeInsets.fromLTRB(
@@ -382,6 +397,10 @@ class StorefrontItemCard extends StatelessWidget {
                         ),
                       ),
                     ],
+                    if (item.hasDiscount) ...[
+                      const SizedBox(height: 6),
+                      ProductSalePrice(item: item, compact: compact),
+                    ],
                   ],
                 ),
               ),
@@ -402,7 +421,7 @@ class StorefrontItemCard extends StatelessWidget {
                           ),
                           Expanded(
                             child: Text(
-                              '${item.price.toStringAsFixed(3)} د.ك',
+                              '${item.finalPrice.toStringAsFixed(3)} د.ك',
                               textAlign: TextAlign.center,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,

@@ -82,7 +82,9 @@ class CartProvider extends ChangeNotifier {
           selectedOptions: const [],
           quantity: quantity,
           offerId: offerId,
-          originalUnitPrice: originalUnitPrice,
+          originalUnitPrice:
+              originalUnitPrice ??
+              (menuItem.hasDiscount ? menuItem.originalPrice : null),
           bundleItemIds: bundleItemIds,
         ),
       );
@@ -103,6 +105,8 @@ class CartProvider extends ChangeNotifier {
         selectedOptions: selectedOptions,
         quantity: quantity,
         specialNotes: specialNotes,
+        originalUnitPrice:
+            menuItem.hasDiscount ? menuItem.originalPrice : null,
       ),
     );
     notifyListeners();

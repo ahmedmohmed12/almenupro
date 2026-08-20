@@ -5,6 +5,7 @@ import '../../../models/cart_item.dart';
 import '../../../models/menu_item.dart';
 import '../../../theme/app_theme.dart';
 import '../../network_menu_image.dart';
+import '../../menu/product_sale_price.dart';
 import 'pos_theme.dart';
 
 class PosMenuItemCard extends StatefulWidget {
@@ -50,10 +51,19 @@ class _PosMenuItemCardState extends State<PosMenuItemCard> {
                   fit: StackFit.expand,
                   children: [
                     NetworkMenuImage(imageUrl: item.imageUrl, fit: BoxFit.cover),
-                    if (item.hasCustomizations)
+                    if (item.hasDiscount && item.discountPercent != null)
                       Positioned(
                         top: 6,
                         left: 6,
+                        child: ProductDiscountBadge(
+                          percent: item.discountPercent!,
+                          compact: true,
+                        ),
+                      ),
+                    if (item.hasCustomizations)
+                      Positioned(
+                        top: 6,
+                        right: 6,
                         child: Container(
                           padding: const EdgeInsets.symmetric(
                             horizontal: 6,
@@ -90,14 +100,17 @@ class _PosMenuItemCardState extends State<PosMenuItemCard> {
                       ),
                     ),
                     const SizedBox(height: 4),
-                    Text(
-                      '${item.price.toStringAsFixed(3)} د.ك',
-                      style: const TextStyle(
-                        color: PosTheme.accent,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 12,
+                    if (item.hasDiscount)
+                      ProductSalePrice(item: item, compact: widget.compact)
+                    else
+                      Text(
+                        '${item.price.toStringAsFixed(3)} د.ك',
+                        style: const TextStyle(
+                          color: PosTheme.accent,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 12,
+                        ),
                       ),
-                    ),
                   ],
                 ),
               ),
