@@ -12,6 +12,7 @@ import '../providers/customer_session_provider.dart';
 import '../services/api_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/menu/customer_phone_gate.dart';
+import '../widgets/menu/customization_dialog.dart';
 import '../widgets/menu/free_delivery_progress_bar.dart';
 import '../widgets/menu/menu_checkout_sheet.dart';
 import '../widgets/menu/storefront_header.dart';
@@ -180,6 +181,10 @@ class _MenuScreenState extends State<MenuScreen> {
   }
 
   void _addToCart(MenuItem item) {
+    if (item.hasCustomizations) {
+      showCustomizationDialog(context, item);
+      return;
+    }
     context.read<CartProvider>().addMenuItem(item);
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -242,13 +247,13 @@ class _MenuScreenState extends State<MenuScreen> {
   double _gridChildAspect(int columns) {
     switch (columns) {
       case 5:
-        return 0.86;
+        return 0.80;
       case 4:
-        return 0.82;
+        return 0.76;
       case 3:
-        return 0.78;
-      default:
         return 0.72;
+      default:
+        return 0.66;
     }
   }
 

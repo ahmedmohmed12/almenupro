@@ -327,60 +327,34 @@ class StorefrontItemCard extends StatelessWidget {
       builder: (context, constraints) {
         final compact = dense || constraints.maxWidth < 200;
         final showDescription = !compact && item.description.trim().isNotEmpty;
+        final radius = BorderRadius.circular(14);
 
         return Material(
           color: Colors.white,
           elevation: 1,
           shadowColor: Colors.black12,
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: radius,
           clipBehavior: Clip.antiAlias,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Expanded(
-                flex: compact ? 13 : 12,
-                child: Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    item.imageUrl.trim().isEmpty
-                        ? const ColoredBox(
-                            color: Color(0xFFFFF4E5),
-                            child: Icon(Icons.cookie_outlined, size: 36),
-                          )
-                        : NetworkMenuImage(
-                            imageUrl: item.imageUrl,
-                            fit: BoxFit.cover,
-                          ),
-                    Positioned(
-                      bottom: 6,
-                      left: 6,
-                      child: Material(
-                        color: AppTheme.brandMaroon,
-                        shape: const CircleBorder(),
-                        elevation: 2,
-                        child: InkWell(
-                          customBorder: const CircleBorder(),
-                          onTap: onAdd,
-                          child: Padding(
-                            padding: EdgeInsets.all(compact ? 5 : 7),
-                            child: Icon(
-                              Icons.add,
-                              color: Colors.white,
-                              size: compact ? 16 : 20,
-                            ),
-                          ),
-                        ),
+                child: item.imageUrl.trim().isEmpty
+                    ? const ColoredBox(
+                        color: Color(0xFFFFF4E5),
+                        child: Icon(Icons.cookie_outlined, size: 36),
+                      )
+                    : NetworkMenuImage(
+                        imageUrl: item.imageUrl,
+                        fit: BoxFit.cover,
                       ),
-                    ),
-                  ],
-                ),
               ),
               Padding(
                 padding: EdgeInsets.fromLTRB(
                   compact ? 8 : 10,
                   compact ? 6 : 8,
                   compact ? 8 : 10,
-                  compact ? 7 : 9,
+                  compact ? 6 : 8,
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -408,21 +382,41 @@ class StorefrontItemCard extends StatelessWidget {
                         ),
                       ),
                     ],
-                    const SizedBox(height: 4),
-                    FittedBox(
-                      fit: BoxFit.scaleDown,
-                      alignment: AlignmentDirectional.centerStart,
-                      child: Text(
-                        '${item.price.toStringAsFixed(3)} د.ك',
-                        maxLines: 1,
-                        style: TextStyle(
-                          color: AppTheme.brandMaroon,
-                          fontWeight: FontWeight.w800,
-                          fontSize: compact ? 12.5 : 14,
-                        ),
+                  ],
+                ),
+              ),
+              Material(
+                color: AppTheme.brandOrange,
+                child: InkWell(
+                  onTap: onAdd,
+                  child: SizedBox(
+                    height: compact ? 38 : 42,
+                    child: Padding(
+                      padding: EdgeInsets.symmetric(horizontal: compact ? 10 : 12),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.shopping_cart,
+                            color: Colors.white,
+                            size: compact ? 16 : 18,
+                          ),
+                          Expanded(
+                            child: Text(
+                              '${item.price.toStringAsFixed(3)} د.ك',
+                              textAlign: TextAlign.center,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w800,
+                                fontSize: compact ? 12.5 : 14,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                  ],
+                  ),
                 ),
               ),
             ],
