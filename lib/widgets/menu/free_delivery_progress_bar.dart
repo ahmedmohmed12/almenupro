@@ -10,12 +10,14 @@ class FreeDeliveryProgressBar extends StatelessWidget {
     required this.threshold,
     required this.baseDeliveryFee,
     required this.strings,
+    this.compact = false,
   });
 
   final double subtotal;
   final double threshold;
   final double baseDeliveryFee;
   final AppStrings strings;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
@@ -30,8 +32,8 @@ class FreeDeliveryProgressBar extends StatelessWidget {
     return AnimatedContainer(
       duration: const Duration(milliseconds: 350),
       curve: Curves.easeOutCubic,
-      margin: const EdgeInsets.only(bottom: 16),
-      padding: const EdgeInsets.all(14),
+      margin: EdgeInsets.only(bottom: compact ? 0 : 16),
+      padding: EdgeInsets.all(compact ? 8 : 14),
       decoration: BoxDecoration(
         gradient: LinearGradient(
           colors: reached
@@ -59,24 +61,27 @@ class FreeDeliveryProgressBar extends StatelessWidget {
               Icon(
                 reached ? Icons.check_circle : Icons.local_shipping_outlined,
                 color: reached ? Colors.green.shade700 : AppTheme.brandMaroon,
-                size: 22,
+                size: compact ? 18 : 22,
               ),
-              const SizedBox(width: 10),
+              SizedBox(width: compact ? 6 : 10),
               Expanded(
                 child: Text(
                   reached
                       ? strings.freeDeliveryUnlocked
                       : strings.freeDeliveryRemaining(remaining.toStringAsFixed(3)),
+                  maxLines: compact ? 1 : 2,
+                  overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     color: reached ? Colors.green.shade900 : AppTheme.brandMaroon,
                     fontWeight: FontWeight.w700,
-                    height: 1.35,
+                    height: 1.3,
+                    fontSize: compact ? 12 : 14,
                   ),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 10),
+          SizedBox(height: compact ? 6 : 10),
           ClipRRect(
             borderRadius: BorderRadius.circular(999),
             child: TweenAnimationBuilder<double>(
@@ -86,24 +91,26 @@ class FreeDeliveryProgressBar extends StatelessWidget {
               builder: (context, value, _) {
                 return LinearProgressIndicator(
                   value: value,
-                  minHeight: 8,
+                  minHeight: compact ? 5 : 8,
                   backgroundColor: Colors.white.withValues(alpha: 0.8),
                   color: reached ? Colors.green.shade600 : AppTheme.brandOrange,
                 );
               },
             ),
           ),
-          const SizedBox(height: 6),
-          Text(
-            strings.freeDeliveryProgressHint(
-              subtotal.toStringAsFixed(3),
-              threshold.toStringAsFixed(3),
+          if (!compact) ...[
+            const SizedBox(height: 6),
+            Text(
+              strings.freeDeliveryProgressHint(
+                subtotal.toStringAsFixed(3),
+                threshold.toStringAsFixed(3),
+              ),
+              style: TextStyle(
+                fontSize: 12,
+                color: Colors.grey.shade700,
+              ),
             ),
-            style: TextStyle(
-              fontSize: 12,
-              color: Colors.grey.shade700,
-            ),
-          ),
+          ],
         ],
       ),
     );

@@ -26,13 +26,19 @@ import 'checkout_impulse_bumps.dart';
 import 'free_delivery_progress_bar.dart';
 
 class MenuCheckoutSheet extends StatefulWidget {
-  const MenuCheckoutSheet({super.key, this.restaurantContext});
+  const MenuCheckoutSheet({
+    super.key,
+    this.restaurantContext,
+    this.initialStep = 1,
+  });
 
   final CustomerRestaurantContext? restaurantContext;
+  final int initialStep;
 
   static Future<void> show(
     BuildContext context, {
     CustomerRestaurantContext? restaurantContext,
+    int initialStep = 1,
   }) {
     final cart = context.read<CartProvider>();
     final locale = context.read<LocaleProvider>();
@@ -44,7 +50,10 @@ class MenuCheckoutSheet extends StatefulWidget {
         ChangeNotifierProvider<LocaleProvider>.value(value: locale),
         ChangeNotifierProvider<CustomerSessionProvider>.value(value: session),
       ],
-      child: MenuCheckoutSheet(restaurantContext: restaurantContext),
+      child: MenuCheckoutSheet(
+        restaurantContext: restaurantContext,
+        initialStep: initialStep,
+      ),
     );
 
     if (wide) {
@@ -190,6 +199,7 @@ class _MenuCheckoutSheetState extends State<MenuCheckoutSheet> {
   @override
   void initState() {
     super.initState();
+    _checkoutStep = widget.initialStep == 2 ? 2 : 1;
     unawaited(_loadDeliveryZones());
     unawaited(_loadRestaurantData());
     WidgetsBinding.instance.addPostFrameCallback((_) => _prefillFromSession());

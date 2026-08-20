@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../models/cart_item.dart';
 import '../models/customer_restaurant_context.dart';
 import '../models/delivery_zone.dart';
 import '../models/menu_item.dart';
@@ -17,7 +16,6 @@ import '../widgets/menu/free_delivery_progress_bar.dart';
 import '../widgets/menu/menu_checkout_sheet.dart';
 import '../widgets/menu/storefront_header.dart';
 import '../widgets/menu/storefront_offers_banner.dart';
-import '../widgets/pos/smart_salesman_widget.dart';
 import '../l10n/app_strings.dart';
 
 class MenuScreen extends StatefulWidget {
@@ -267,31 +265,36 @@ class _MenuScreenState extends State<MenuScreen> {
           bottom: false,
           child: Stack(
             children: [
-              _buildBody(),
+              _buildBody(cartReserve: cart.items.isEmpty ? 0 : 132),
+              if (cart.items.isNotEmpty)
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  child: _StorefrontCartBar(
+                    itemCount: cart.itemCount,
+                    totalPrice: cart.totalPrice,
+                    settings: _settings,
+                    onCheckout: _openCartAndSmartSalesman,
+                  ),
+                ),
               if (!session.identified) const CustomerPhoneGate(),
             ],
           ),
         ),
-        bottomNavigationBar: cart.isEmpty
-            ? null
-            : _FloatingCartBar(
-                itemCount: cart.itemCount,
-                totalPrice: cart.totalPrice,
-                cartItems: cart.items,
-                settings: _settings,
-                restaurantId: _restaurantId,
-                onAddSuggested: (item) =>
-                    context.read<CartProvider>().addMenuItem(item),
-                onCheckout: () => MenuCheckoutSheet.show(
-                  context,
-                  restaurantContext: _restaurantContext,
-                ),
-              ),
       ),
     );
   }
 
-  Widget _buildBody() {
+  void _openCartAndSmartSalesman() {
+    MenuCheckoutSheet.show(
+      context,
+      restaurantContext: _restaurantContext,
+      initialStep: 1,
+    );
+  }
+
+  Widget _buildBody({double cartReserve = 0}) {
     if (_loading && _items.isEmpty) {
       return const Center(
         child: Column(
@@ -477,6 +480,12 @@ class _MenuScreenState extends State<MenuScreen> {
                       ),
                     ),
                   ),
+                if (cartReserve > 0)
+                  SliverToBoxAdapter(
+                    child: SizedBox(
+                      height: cartReserve + MediaQuery.paddingOf(context).bottom,
+                    ),
+                  ),
               ],
             ),
                   ),
@@ -491,131 +500,118 @@ class _MenuScreenState extends State<MenuScreen> {
   }
 }
 
-class _FloatingCartBar extends StatelessWidget {
-  const _FloatingCartBar({
+class _StorefrontCartBar extends StatelessWidget {
+  const _StorefrontCartBar({
     required this.itemCount,
     required this.totalPrice,
-    required this.cartItems,
     required this.onCheckout,
-    required this.onAddSuggested,
-    required this.restaurantId,
     this.settings,
   });
 
   final int itemCount;
   final double totalPrice;
-  final List<CartItem> cartItems;
   final VoidCallback onCheckout;
-  final ValueChanged<MenuItem> onAddSuggested;
-  final String restaurantId;
   final RestaurantSettings? settings;
 
   @override
   Widget build(BuildContext context) {
     final strings = AppStrings.of(context);
+    final showFreeDelivery =
+        settings != null && settings!.hasFreeDeliveryGoal;
 
-    return Container(
-      padding: const EdgeInsets.fromLTRB(10, 6, 10, 8),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.08),
-            blurRadius: 12,
-            offset: const Offset(0, -2),
-          ),
-        ],
-      ),
+    return Material(
+      color: Colors.white,
+      elevation: 16,
+      shadowColor: Colors.black26,
       child: SafeArea(
         top: false,
         child: Align(
           alignment: Alignment.center,
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 720),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (settings != null && settings!.hasFreeDeliveryGoal)
-                  FreeDeliveryProgressBar(
-                    subtotal: totalPrice,
-                    threshold: settings!.freeDeliveryThreshold,
-                    baseDeliveryFee: 1,
-                    strings: strings,
-                  ),
-                SmartSalesmanWidget(
-                  compact: true,
-                  cartItems: cartItems,
-                  cartTotal: totalPrice,
-                  restaurantId: restaurantId,
-                  onAddItem: onAddSuggested,
-                ),
-                const SizedBox(height: 8),
-                LayoutBuilder(
-                  builder: (context, constraints) {
-                    final narrow = constraints.maxWidth < 360;
-                    return FilledButton(
-                      style: FilledButton.styleFrom(
-                        backgroundColor: AppTheme.brandMaroon,
-                        padding: EdgeInsets.symmetric(
-                          vertical: narrow ? 12 : 14,
-                          horizontal: narrow ? 12 : 20,
-                        ),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(30),
-                        ),
-                      ),
-                      onPressed: onCheckout,
-                      child: Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 10,
-                              vertical: 4,
-                            ),
-                            decoration: BoxDecoration(
-                              color: AppTheme.brandOrange,
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Text(
-                              '$itemCount',
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (showFreeDelivery) ...[
+                    FreeDeliveryProgressBar(
+                      compact: true,
+                      subtotal: totalPrice,
+                      threshold: settings!.freeDeliveryThreshold,
+                      baseDeliveryFee: 1,
+                      strings: strings,
+                    ),
+                    const SizedBox(height: 8),
+                  ],
+                  LayoutBuilder(
+                    builder: (context, constraints) {
+                      final narrow = constraints.maxWidth < 360;
+                      return FilledButton(
+                        style: FilledButton.styleFrom(
+                          backgroundColor: AppTheme.brandMaroon,
+                          minimumSize: const Size.fromHeight(48),
+                          padding: EdgeInsets.symmetric(
+                            vertical: narrow ? 10 : 12,
+                            horizontal: narrow ? 10 : 16,
                           ),
-                          Expanded(
-                            child: Text(
-                              'متابعة الطلب',
-                              textAlign: TextAlign.center,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontSize: narrow ? 14 : 16,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(28),
                           ),
-                          Flexible(
-                            child: FittedBox(
-                              fit: BoxFit.scaleDown,
-                              alignment: AlignmentDirectional.centerEnd,
+                        ),
+                        onPressed: onCheckout,
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 4,
+                              ),
+                              decoration: BoxDecoration(
+                                color: AppTheme.brandOrange,
+                                borderRadius: BorderRadius.circular(12),
+                              ),
                               child: Text(
-                                '${totalPrice.toStringAsFixed(3)} د.ك',
-                                maxLines: 1,
-                                style: TextStyle(
-                                  fontSize: narrow ? 13 : 16,
+                                '$itemCount',
+                                style: const TextStyle(
+                                  color: Colors.white,
                                   fontWeight: FontWeight.bold,
                                 ),
                               ),
                             ),
-                          ),
-                        ],
-                      ),
-                    );
-                  },
-                ),
-              ],
+                            Expanded(
+                              child: Text(
+                                'متابعة الطلب',
+                                textAlign: TextAlign.center,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: narrow ? 14 : 16,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                            Flexible(
+                              child: FittedBox(
+                                fit: BoxFit.scaleDown,
+                                alignment: AlignmentDirectional.centerEnd,
+                                child: Text(
+                                  '${totalPrice.toStringAsFixed(3)} د.ك',
+                                  maxLines: 1,
+                                  style: TextStyle(
+                                    fontSize: narrow ? 13 : 16,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+                ],
+              ),
             ),
           ),
         ),
