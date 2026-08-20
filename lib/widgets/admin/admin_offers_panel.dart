@@ -154,6 +154,7 @@ class _AdminOffersPanelState extends State<AdminOffersPanel> {
               title: Text(existing == null ? 'إضافة عرض' : 'تعديل العرض'),
               content: SizedBox(
                 width: 460,
+                height: MediaQuery.sizeOf(context).height * 0.68,
                 child: Form(
                   child: SingleChildScrollView(
                     child: Column(
@@ -224,6 +225,20 @@ class _AdminOffersPanelState extends State<AdminOffersPanel> {
                           ),
                         ],
                         const SizedBox(height: 12),
+                        TextFormField(
+                          controller: usageLimitController,
+                          keyboardType: TextInputType.number,
+                          inputFormatters: [
+                            FilteringTextInputFormatter.digitsOnly,
+                          ],
+                          decoration: const InputDecoration(
+                            labelText: 'كم مرة يقدر العميل يستخدم العرض',
+                            helperText:
+                                'مثال: 1 = مرة واحدة فقط. فارغ أو 0 = بدون حد',
+                            border: OutlineInputBorder(),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
                         Row(
                           children: [
                             Expanded(
@@ -253,20 +268,6 @@ class _AdminOffersPanelState extends State<AdminOffersPanel> {
                           title: const Text('العرض مفعّل'),
                           value: isActive,
                           onChanged: (value) => setDialogState(() => isActive = value),
-                        ),
-                        const SizedBox(height: 8),
-                        TextFormField(
-                          controller: usageLimitController,
-                          keyboardType: TextInputType.number,
-                          inputFormatters: [
-                            FilteringTextInputFormatter.digitsOnly,
-                          ],
-                          decoration: const InputDecoration(
-                            labelText: 'عدد مرات الاستخدام لكل عميل',
-                            helperText:
-                                'اتركه فارغاً أو 0 للاستخدام غير المحدود',
-                            border: OutlineInputBorder(),
-                          ),
                         ),
                         if (_menuItems.isNotEmpty) ...[
                           const Align(
