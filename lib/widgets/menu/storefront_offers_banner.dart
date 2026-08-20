@@ -8,11 +8,11 @@ class StorefrontOffersBanner extends StatelessWidget {
   const StorefrontOffersBanner({
     super.key,
     required this.offers,
-    required this.onAdd,
+    this.onOpenOffers,
   });
 
   final List<Offer> offers;
-  final ValueChanged<Offer> onAdd;
+  final VoidCallback? onOpenOffers;
 
   @override
   Widget build(BuildContext context) {
@@ -34,7 +34,7 @@ class StorefrontOffersBanner extends StatelessWidget {
           ),
           const SizedBox(height: 6),
           SizedBox(
-            height: wide ? 156 : 132,
+            height: wide ? 148 : 124,
             child: PageView.builder(
               controller: PageController(viewportFraction: wide ? 0.68 : 0.94),
               itemCount: offers.length,
@@ -44,7 +44,7 @@ class StorefrontOffersBanner extends StatelessWidget {
                   child: StorefrontOfferCard(
                     offer: offers[index],
                     compact: !wide,
-                    onAdd: () => onAdd(offers[index]),
+                    onTap: onOpenOffers,
                   ),
                 );
               },
@@ -60,18 +60,35 @@ class StorefrontOfferCard extends StatelessWidget {
   const StorefrontOfferCard({
     super.key,
     required this.offer,
-    required this.onAdd,
+    this.onTap,
     this.compact = false,
   });
 
   final Offer offer;
-  final VoidCallback onAdd;
+  final VoidCallback? onTap;
   final bool compact;
+
+  String? get _terms {
+    final parts = <String>[];
+    if (offer.minSubtotal > 0) {
+      parts.add('الحد الأدنى ${offer.minSubtotal.toStringAsFixed(3)} د.ك');
+    }
+    if (offer.hasUsageCap) {
+      parts.add('حتى ${offer.usageLimitPerCustomer} مرة لكل عميل');
+    }
+    if (offer.endsAt != null) {
+      final end = offer.endsAt!.toLocal();
+      parts.add(
+        'حتى ${end.year}/${end.month.toString().padLeft(2, '0')}/${end.day.toString().padLeft(2, '0')}',
+      );
+    }
+    if (parts.isEmpty && offer.description.trim().isEmpty) return null;
+    return parts.join(' • ');
+  }
 
   @override
   Widget build(BuildContext context) {
-    final sale = offer.salePrice;
-    final list = offer.listPrice;
+    final terms = _terms;
 
     return Material(
       color: Colors.white,
@@ -82,7 +99,7 @@ class StorefrontOfferCard extends StatelessWidget {
       ),
       child: InkWell(
         borderRadius: BorderRadius.circular(18),
-        onTap: onAdd,
+        onTap: onTap,
         child: Padding(
           padding: EdgeInsets.all(compact ? 8 : 10),
           child: Row(
@@ -150,7 +167,7 @@ class StorefrontOfferCard extends StatelessWidget {
                       const SizedBox(height: 2),
                       Text(
                         offer.description,
-                        maxLines: compact ? 1 : 2,
+                        maxLines: compact ? 2 : 3,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                           color: Colors.grey.shade700,
@@ -160,48 +177,43 @@ class StorefrontOfferCard extends StatelessWidget {
                       ),
                     ],
                     const Spacer(),
-                    Row(
-                      children: [
-                        if (list > 0 && sale > 0 && sale < list) ...[
-                          Text(
-                            '${list.toStringAsFixed(3)} د.ك',
-                            style: TextStyle(
-                              color: Colors.grey.shade500,
-                              decoration: TextDecoration.lineThrough,
-                              fontSize: 12,
-                            ),
-                          ),
-                          const SizedBox(width: 6),
-                        ],
-                        if (sale > 0)
-                          Text(
-                            '${sale.toStringAsFixed(3)} د.ك',
-                            style: const TextStyle(
-                              color: AppTheme.brandMaroon,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          )
-                        else if (offer.type == OfferType.percentage)
-                          Text(
-                            'خصم ${offer.discountValue.toStringAsFixed(0)}%',
-                            style: const TextStyle(
-                              color: AppTheme.brandMaroon,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                        const Spacer(),
-                        FilledButton(
-                          style: FilledButton.styleFrom(
-                            backgroundColor: AppTheme.brandMaroon,
-                            visualDensity: VisualDensity.compact,
-                            padding: const EdgeInsets.symmetric(horizontal: 12),
-                            minimumSize: const Size(0, 36),
-                          ),
-                          onPressed: onAdd,
-                          child: const Text('أضف للسلة'),
+                    if (offer.type == OfferType.percentage)
+                      Text(
+                        'خصم ${offer.discountValue.toStringAsFixed(0)}%',
+                        style: const TextStyle(
+                          color: AppTheme.brandMaroon,
+                          fontWeight: FontWeight.w800,
                         ),
-                      ],
-                    ),
+                      )
+                    else if (offer.type == OfferType.fixed)
+                      Text(
+                        'خصم ${offer.discountValue.toStringAsFixed(3)} د.ك',
+                        style: const TextStyle(
+                          color: AppTheme.brandMaroon,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      )
+                    else if (offer.hasPricePair)
+                      Text(
+                        '${offer.salePrice.toStringAsFixed(3)} د.ك بدل ${offer.listPrice.toStringAsFixed(3)}',
+                        style: const TextStyle(
+                          color: AppTheme.brandMaroon,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 12,
+                        ),
+                      ),
+                    if (terms != null) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        terms,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: Colors.grey.shade600,
+                          fontSize: 11,
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),

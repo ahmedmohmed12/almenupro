@@ -18,7 +18,6 @@ import '../widgets/menu/free_delivery_progress_bar.dart';
 import '../widgets/menu/menu_checkout_sheet.dart';
 import '../widgets/menu/storefront_header.dart';
 import '../widgets/menu/storefront_offers_banner.dart';
-import '../widgets/menu/offer_usage_limit_alert.dart';
 import '../l10n/app_strings.dart';
 
 class MenuScreen extends StatefulWidget {
@@ -171,37 +170,15 @@ class _MenuScreenState extends State<MenuScreen> {
     }
   }
 
-  Future<void> _addOfferToCart(Offer offer) async {
-    final phone = context.read<CustomerSessionProvider>().phone;
-    if (offer.hasUsageCap && phone.trim().isNotEmpty) {
-      final allowed = await ApiService.instance.isOfferUsableForCustomer(
-        offerId: offer.id,
-        phone: phone,
-        restaurantId: _restaurantId,
-      );
-      if (!allowed) {
-        if (!mounted) return;
-        await showOfferUsageLimitAlert(context);
-        return;
-      }
-    }
-    if (!mounted) return;
-    context.read<CartProvider>().applyOfferToCart(offer, _items);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('تمت إضافة "${offer.title}" إلى السلة'),
-        duration: const Duration(seconds: 2),
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
-  }
-
   void _addToCart(MenuItem item) {
     if (item.hasCustomizations) {
       showCustomizationDialog(context, item);
       return;
     }
-    context.read<CartProvider>().addMenuItem(item);
+    context.read<CartProvider>().addMenuItem(
+          item,
+          offerId: matchingOfferIdForItem(item, _offers),
+        );
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text('تمت إضافة "${item.name}" إلى السلة'),
@@ -213,7 +190,8 @@ class _MenuScreenState extends State<MenuScreen> {
 
   List<String> _categories(List<MenuItem> items) {
     final categories = <String>{
-      if (_offers.isNotEmpty) _offersCategory,
+      if (_offers.isNotEmpty || items.any((item) => item.hasDiscount))
+        _offersCategory,
       if (_settings?.smartUpsellEnabled != false) _smartCategory,
       'الكل',
     };
@@ -226,7 +204,9 @@ class _MenuScreenState extends State<MenuScreen> {
   }
 
   List<MenuItem> _filteredItems(List<MenuItem> items) {
-    if (_selectedCategory == _offersCategory) return const [];
+    if (_selectedCategory == _offersCategory) {
+      return itemsForOffersTab(items, _offers);
+    }
     if (_selectedCategory == _smartCategory) {
       if (_settings?.smartUpsellEnabled == false) {
         return items;
@@ -340,7 +320,7 @@ class _MenuScreenState extends State<MenuScreen> {
     }
 
     final pricedItems = applyOfferDiscountsToItems(_items, _offers);
-    final categories = _categories(_items);
+    final categories = _categories(pricedItems);
     final filtered = _filteredItems(pricedItems);
 
     return Column(
@@ -405,7 +385,9 @@ class _MenuScreenState extends State<MenuScreen> {
                   SliverToBoxAdapter(
                     child: StorefrontOffersBanner(
                       offers: _offers,
-                      onAdd: _addOfferToCart,
+                      onOpenOffers: () {
+                        setState(() => _selectedCategory = _offersCategory);
+                      },
                     ),
                   ),
                 SliverToBoxAdapter(
@@ -417,35 +399,15 @@ class _MenuScreenState extends State<MenuScreen> {
                     },
                   ),
                 ),
-                if (_selectedCategory == _offersCategory)
-                  SliverPadding(
-                    padding: const EdgeInsets.fromLTRB(10, 4, 10, 16),
-                    sliver: SliverList(
-                      delegate: SliverChildBuilderDelegate(
-                        (context, index) {
-                          return Padding(
-                            padding: const EdgeInsets.only(bottom: 8),
-                            child: SizedBox(
-                              height: 132,
-                              child: StorefrontOfferCard(
-                                offer: _offers[index],
-                                compact: true,
-                                onAdd: () => _addOfferToCart(_offers[index]),
-                              ),
-                            ),
-                          );
-                        },
-                        childCount: _offers.length,
-                      ),
-                    ),
-                  )
-                else if (filtered.isEmpty)
-                  const SliverFillRemaining(
+                if (filtered.isEmpty)
+                  SliverFillRemaining(
                     hasScrollBody: false,
                     child: Center(
                       child: Text(
-                        'لا توجد أصناف في هذا التصنيف',
-                        style: TextStyle(
+                        _selectedCategory == _offersCategory
+                            ? 'لا توجد أصناف مخفضة حالياً'
+                            : 'لا توجد أصناف في هذا التصنيف',
+                        style: const TextStyle(
                           color: AppTheme.brandBlack,
                           fontSize: 16,
                         ),
