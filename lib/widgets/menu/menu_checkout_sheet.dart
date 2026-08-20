@@ -345,6 +345,16 @@ class _MenuCheckoutSheetState extends State<MenuCheckoutSheet> {
         addressDetails: _addressDetails,
         orderSource: 'customer_web',
         walletRedeemAmount: walletRedeem > 0 ? walletRedeem : null,
+        subtotal: cart.totalPrice,
+        discountAmount:
+            cart.offerDiscountTotal > 0 ? cart.offerDiscountTotal : null,
+        offerId: cart.appliedOffer?.id ??
+            cart.items
+                .map((item) => item.offerId)
+                .whereType<String>()
+                .where((id) => id.isNotEmpty)
+                .fold<String?>(null, (prev, id) => prev ?? id),
+        offerTitle: cart.appliedOffer?.title,
       );
     } catch (error) {
       if (!mounted) return;
@@ -387,6 +397,8 @@ class _MenuCheckoutSheetState extends State<MenuCheckoutSheet> {
   }
 
   Widget _buildTotals(CartProvider cart, AppStrings strings) {
+    final listSubtotal = cart.listSubtotal;
+    final discount = cart.offerDiscountTotal;
     final subtotal = cart.totalPrice;
     final wallet = _walletRedeemable(subtotal);
     final grandTotal = _grandTotal(subtotal);
@@ -404,9 +416,20 @@ class _MenuCheckoutSheetState extends State<MenuCheckoutSheet> {
         children: [
           _TotalRow(
             label: strings.subtotal,
-            value: subtotal,
+            value: listSubtotal > 0 ? listSubtotal : subtotal,
             currency: strings.currency,
           ),
+          if (discount > 0) ...[
+            const SizedBox(height: 6),
+            _TotalRow(
+              label: cart.appliedOffer?.title.isNotEmpty == true
+                  ? 'خصم العرض (${cart.appliedOffer!.title})'
+                  : 'خصم العرض',
+              value: -discount,
+              currency: strings.currency,
+              highlight: true,
+            ),
+          ],
           const SizedBox(height: 6),
           _TotalRow(
             label: freeDelivery
@@ -619,6 +642,9 @@ class _MenuCheckoutSheetState extends State<MenuCheckoutSheet> {
                                   .localizedName(locale.localeCode),
                               priceLabel:
                                   '${item.unitPrice.toStringAsFixed(3)} ${strings.currency}',
+                              compareAtLabel: item.hasOfferPrice
+                                  ? '${item.listedUnitPrice.toStringAsFixed(3)} ${strings.currency}'
+                                  : null,
                               quantity: item.quantity,
                               onDecrease: () => cart.updateQuantity(
                                 item.id,
@@ -1009,10 +1035,12 @@ class _CartLine extends StatelessWidget {
     required this.quantity,
     required this.onDecrease,
     required this.onIncrease,
+    this.compareAtLabel,
   });
 
   final String name;
   final String priceLabel;
+  final String? compareAtLabel;
   final int quantity;
   final VoidCallback onDecrease;
   final VoidCallback onIncrease;
@@ -1047,6 +1075,15 @@ class _CartLine extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(fontWeight: FontWeight.w700),
             ),
+            if (compareAtLabel != null)
+              Text(
+                compareAtLabel!,
+                style: const TextStyle(
+                  color: Color(0xFF94A3B8),
+                  fontSize: 12,
+                  decoration: TextDecoration.lineThrough,
+                ),
+              ),
             Text(
               priceLabel,
               style: const TextStyle(color: Color(0xFF64748B), fontSize: 12),

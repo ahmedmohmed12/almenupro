@@ -37,17 +37,19 @@ class AdminSidebar extends StatefulWidget {
   static const int customersIndex = 2;
   static const int menuIndex = 3;
   static const int deliveryZonesIndex = 4;
-  static const int analyticsIndex = 5;
-  static const int smartUpsellIndex = 6;
-  static const int settingsIndex = 7;
+  static const int offersIndex = 5;
+  static const int analyticsIndex = 6;
+  static const int smartUpsellIndex = 7;
+  static const int settingsIndex = 8;
 
   /// Super Admin sidebar — no orders tab (restaurant admins only).
   static const int superMenuIndex = 0;
   static const int superRestaurantsIndex = 1;
   static const int superDeliveryZonesIndex = 2;
-  static const int superAnalyticsIndex = 3;
-  static const int superSmartUpsellIndex = 4;
-  static const int superSettingsIndex = 5;
+  static const int superOffersIndex = 3;
+  static const int superAnalyticsIndex = 4;
+  static const int superSmartUpsellIndex = 5;
+  static const int superSettingsIndex = 6;
 
   static const List<AdminSidebarItem> defaultItems = [
     AdminSidebarItem(
@@ -69,6 +71,10 @@ class AdminSidebar extends StatefulWidget {
     AdminSidebarItem(
       icon: Icons.local_shipping_outlined,
       label: 'مناطق التوصيل ورسومها',
+    ),
+    AdminSidebarItem(
+      icon: Icons.local_offer_outlined,
+      label: 'العروض والخصومات',
     ),
     AdminSidebarItem(
       icon: Icons.bar_chart,
@@ -96,6 +102,10 @@ class AdminSidebar extends StatefulWidget {
     AdminSidebarItem(
       icon: Icons.local_shipping_outlined,
       label: 'مناطق التوصيل ورسومها',
+    ),
+    AdminSidebarItem(
+      icon: Icons.local_offer_outlined,
+      label: 'العروض والخصومات',
     ),
     AdminSidebarItem(
       icon: Icons.bar_chart,

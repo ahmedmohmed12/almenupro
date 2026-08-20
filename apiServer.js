@@ -38,6 +38,7 @@ const { computeDailySalesAnalytics } = require('./lib/platformSalesAnalytics');
 const { computeFoodCostReport } = require('./lib/foodCostReportAnalytics');
 const { computeUpsellAnalytics, normalizeIncomingEvent, trimEvents } = require('./lib/upsellAnalytics');
 const { previewEarnedCashback, applyLoyaltyCashbackToOrder, redeemCustomerWallet, normalizeLoyaltySettings, isDeliveredStatus } = require('./lib/loyaltyCashback');
+const { normalizeOffer, isOfferLive } = require('./lib/offers');
 const {
   enrichCustomersForRestaurant,
   upsertCustomerFromSource,
@@ -937,6 +938,110 @@ async function routeRequest(req, res, url, pathname) {
     };
     await extraStore.deliveryZones.write(zones);
     sendJson(res, 200, zones[index]);
+    return true;
+  }
+
+  if (pathname === '/api/offers' && req.method === 'GET') {
+    const restaurants = await dataStore.readRestaurants();
+    const restaurantId =
+      readRestaurantIdParam(req, url) ||
+      resolveRestaurantFromQuery(url, restaurants);
+    const includeInactive = url.searchParams.get('includeInactive') === '1';
+    const offers = filterByRestaurant(await extraStore.offers.read(), restaurantId)
+      .map((offer) => normalizeOffer(offer, restaurantId))
+      .filter((offer) => includeInactive || isOfferLive(offer));
+    sendJson(res, 200, offers);
+    return true;
+  }
+
+  if (pathname === '/api/admin/offers' && req.method === 'GET') {
+    const auth = requireAuth(req, res);
+    if (!auth) return true;
+    const restaurantId = await resolveScopedRestaurantId(req, url, auth);
+    if (!restaurantId || !assertRestaurantAccess(auth, restaurantId, authError, res)) return true;
+    const offers = filterByRestaurant(await extraStore.offers.read(), restaurantId)
+      .map((offer) => normalizeOffer(offer, restaurantId));
+    sendJson(res, 200, offers);
+    return true;
+  }
+
+  if (pathname === '/api/admin/offers' && req.method === 'POST') {
+    const auth = requireAuth(req, res);
+    if (!auth) return true;
+    const body = parseJson(await readBody(req));
+    const action = String(body.action || (body.id ? 'update' : 'create')).toLowerCase();
+    const restaurantId =
+      body.restaurantId ||
+      body.restaurant_id ||
+      (await resolveScopedRestaurantId(req, url, auth));
+    if (!restaurantId || !assertRestaurantAccess(auth, restaurantId, authError, res)) return true;
+    const offers = await extraStore.offers.read();
+
+    if (action === 'delete') {
+      const offerId = String(body.id || '');
+      const index = offers.findIndex((offer) => String(offer.id) === offerId);
+      if (index === -1) {
+        sendJson(res, 404, { error: 'Offer not found' });
+        return true;
+      }
+      const existingRestaurant = offers[index].restaurant_id || offers[index].restaurantId;
+      if (!assertRestaurantAccess(auth, existingRestaurant, authError, res)) return true;
+      const removed = offers.splice(index, 1)[0];
+      await extraStore.offers.write(offers);
+      sendJson(res, 200, { ok: true, id: removed.id });
+      return true;
+    }
+
+    if (action === 'update') {
+      const offerId = String(body.id || '');
+      const index = offers.findIndex((offer) => String(offer.id) === offerId);
+      if (index === -1) {
+        sendJson(res, 404, { error: 'Offer not found' });
+        return true;
+      }
+      const existingRestaurant = offers[index].restaurant_id || offers[index].restaurantId;
+      if (!assertRestaurantAccess(auth, existingRestaurant, authError, res)) return true;
+      const next = normalizeOffer({ ...offers[index], ...body, id: offerId }, existingRestaurant);
+      offers[index] = next;
+      await extraStore.offers.write(offers);
+      sendJson(res, 200, next);
+      return true;
+    }
+
+    const created = normalizeOffer({ ...body, id: body.id || undefined }, restaurantId);
+    if (!created.title) {
+      sendJson(res, 400, { error: 'Offer title is required' });
+      return true;
+    }
+    offers.push(created);
+    await extraStore.offers.write(offers);
+    sendJson(res, 201, created);
+    return true;
+  }
+
+  const adminOfferMatch = pathname.match(/^\/api\/admin\/offers\/([^/]+)$/);
+  if (adminOfferMatch && (req.method === 'PUT' || req.method === 'DELETE')) {
+    const auth = requireAuth(req, res);
+    if (!auth) return true;
+    const offerId = decodeURIComponent(adminOfferMatch[1]);
+    const offers = await extraStore.offers.read();
+    const index = offers.findIndex((offer) => String(offer.id) === offerId);
+    if (index === -1) {
+      sendJson(res, 404, { error: 'Offer not found' });
+      return true;
+    }
+    const restaurantId = offers[index].restaurant_id || offers[index].restaurantId;
+    if (!assertRestaurantAccess(auth, restaurantId, authError, res)) return true;
+    if (req.method === 'DELETE') {
+      offers.splice(index, 1);
+      await extraStore.offers.write(offers);
+      sendJson(res, 200, { ok: true });
+      return true;
+    }
+    const body = parseJson(await readBody(req));
+    offers[index] = normalizeOffer({ ...offers[index], ...body, id: offerId }, restaurantId);
+    await extraStore.offers.write(offers);
+    sendJson(res, 200, offers[index]);
     return true;
   }
 

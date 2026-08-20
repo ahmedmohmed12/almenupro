@@ -258,11 +258,20 @@ class OrdersDemoService {
     String? orderSource,
     OrderType? orderType,
     double? walletRedeemAmount,
+    double? subtotal,
+    double? discountAmount,
+    String? offerId,
+    String? offerTitle,
   }) {
     final items = cartItems.map(OrderLineItem.fromCartItem).toList();
-    final subtotal =
+    final charged =
         cartItems.fold<double>(0, (sum, item) => sum + item.totalPrice);
+    final listed =
+        cartItems.fold<double>(0, (sum, item) => sum + item.listedTotalPrice);
     final fee = deliveryFee ?? 0;
+    final discount = discountAmount ??
+        ((listed > charged) ? listed - charged : 0);
+    final netSubtotal = (subtotal ?? charged);
 
     return Order(
       id: 'pending',
@@ -270,9 +279,12 @@ class OrdersDemoService {
       phone: phone,
       address: address,
       items: items,
-      subtotal: subtotal,
+      subtotal: listed > 0 ? listed : netSubtotal,
       deliveryFee: deliveryFee,
-      totalPrice: subtotal + fee,
+      discountAmount: discount > 0 ? discount : null,
+      offerId: offerId,
+      offerTitle: offerTitle,
+      totalPrice: netSubtotal + fee,
       orderType: orderType ?? OrderType.delivery,
       status: OrderStatus.pending,
       createdAt: DateTime.now(),

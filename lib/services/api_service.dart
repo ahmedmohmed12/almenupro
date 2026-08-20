@@ -8,6 +8,7 @@ import '../models/customer.dart';
 import '../models/customer_checkout_profile.dart';
 import '../models/delivery_zone.dart';
 import '../models/loyalty_cashback.dart';
+import '../models/offer.dart';
 import '../models/menu_item.dart';
 import '../models/order.dart';
 import '../models/restaurant.dart';
@@ -963,6 +964,84 @@ class ApiService {
 
     if (response.statusCode != 200) {
       throw Exception('فشل في حذف منطقة التوصيل (${response.statusCode})');
+    }
+  }
+
+  Future<List<Offer>> fetchOffers({
+    String? restaurantId,
+    bool activeOnly = true,
+  }) async {
+    final query = {
+      ..._restaurantQuery(restaurantId: restaurantId),
+      if (!activeOnly) 'includeInactive': '1',
+    };
+    final response = await http
+        .get(_uri('/offers', query), headers: _publicHeaders)
+        .timeout(_fetchTimeout);
+    if (response.statusCode != 200) {
+      throw Exception('فشل في تحميل العروض (${response.statusCode})');
+    }
+    final decoded = jsonDecode(response.body);
+    if (decoded is! List) return const [];
+    final offers = decoded
+        .whereType<Map>()
+        .map((raw) => Offer.fromMap(Map<String, dynamic>.from(raw)))
+        .toList();
+    if (!activeOnly) return offers;
+    return offers.where((offer) => offer.isLive).toList();
+  }
+
+  Future<List<Offer>> fetchAdminOffers({String? restaurantId}) async {
+    final query = _restaurantQuery(restaurantId: restaurantId);
+    final response = await http
+        .get(_uri('/admin/offers', query), headers: _jsonHeaders)
+        .timeout(_fetchTimeout);
+    if (response.statusCode != 200) {
+      return fetchOffers(restaurantId: restaurantId, activeOnly: false);
+    }
+    final decoded = jsonDecode(response.body);
+    if (decoded is! List) return const [];
+    return decoded
+        .whereType<Map>()
+        .map((raw) => Offer.fromMap(Map<String, dynamic>.from(raw)))
+        .toList();
+  }
+
+  Future<Offer> saveOffer(Offer offer, {required bool isUpdate}) async {
+    final scoped = _scopedRestaurantId(restaurantId: offer.restaurantId);
+    final payload = offer.toMap()
+      ..['action'] = isUpdate ? 'update' : 'create'
+      ..['restaurantId'] = scoped
+      ..['restaurant_id'] = scoped;
+
+    final response = await http
+        .post(
+          _uri('/admin/offers'),
+          headers: _jsonHeaders,
+          body: jsonEncode(payload),
+        )
+        .timeout(_writeTimeout);
+
+    if (response.statusCode != 200 && response.statusCode != 201) {
+      throw Exception('فشل في حفظ العرض (${response.statusCode})');
+    }
+    final decoded = jsonDecode(response.body);
+    if (decoded is! Map) {
+      throw Exception('استجابة غير متوقعة من السيرفر');
+    }
+    return Offer.fromMap(Map<String, dynamic>.from(decoded));
+  }
+
+  Future<void> deleteOffer(String offerId) async {
+    final response = await http
+        .post(
+          _uri('/admin/offers'),
+          headers: _jsonHeaders,
+          body: jsonEncode({'action': 'delete', 'id': offerId}),
+        )
+        .timeout(_writeTimeout);
+    if (response.statusCode != 200) {
+      throw Exception('فشل في حذف العرض (${response.statusCode})');
     }
   }
 

@@ -35,6 +35,9 @@ class CartItem {
     required this.selectedOptions,
     required this.quantity,
     this.specialNotes,
+    this.offerId,
+    this.originalUnitPrice,
+    this.bundleItemIds = const [],
   });
 
   final String id;
@@ -42,6 +45,9 @@ class CartItem {
   final List<SelectedOption> selectedOptions;
   final int quantity;
   final String? specialNotes;
+  final String? offerId;
+  final double? originalUnitPrice;
+  final List<int> bundleItemIds;
 
   double get unitPrice {
     final modifiers =
@@ -49,7 +55,14 @@ class CartItem {
     return menuItem.price + modifiers;
   }
 
+  double get listedUnitPrice => originalUnitPrice ?? unitPrice;
+
   double get totalPrice => unitPrice * quantity;
+
+  double get listedTotalPrice => listedUnitPrice * quantity;
+
+  bool get hasOfferPrice =>
+      originalUnitPrice != null && originalUnitPrice! > unitPrice + 0.0005;
 
   CartItem copyWith({
     String? id,
@@ -57,6 +70,9 @@ class CartItem {
     List<SelectedOption>? selectedOptions,
     int? quantity,
     String? specialNotes,
+    String? offerId,
+    double? originalUnitPrice,
+    List<int>? bundleItemIds,
   }) {
     return CartItem(
       id: id ?? this.id,
@@ -64,6 +80,9 @@ class CartItem {
       selectedOptions: selectedOptions ?? this.selectedOptions,
       quantity: quantity ?? this.quantity,
       specialNotes: specialNotes ?? this.specialNotes,
+      offerId: offerId ?? this.offerId,
+      originalUnitPrice: originalUnitPrice ?? this.originalUnitPrice,
+      bundleItemIds: bundleItemIds ?? this.bundleItemIds,
     );
   }
 }

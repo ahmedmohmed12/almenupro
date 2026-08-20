@@ -70,6 +70,10 @@ class OrdersService {
     String? orderSource,
     OrderType? orderType,
     double? walletRedeemAmount,
+    double? subtotal,
+    double? discountAmount,
+    String? offerId,
+    String? offerTitle,
   }) async {
     final order = OrdersDemoService.orderFromCart(
       cartItems: cartItems,
@@ -86,6 +90,10 @@ class OrdersService {
       orderSource: orderSource,
       orderType: orderType,
       walletRedeemAmount: walletRedeemAmount,
+      subtotal: subtotal,
+      discountAmount: discountAmount,
+      offerId: offerId,
+      offerTitle: offerTitle,
     );
 
     final created = await ApiService.instance.createOrder(

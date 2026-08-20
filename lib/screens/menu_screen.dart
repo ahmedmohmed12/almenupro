@@ -5,6 +5,7 @@ import '../models/cart_item.dart';
 import '../models/customer_restaurant_context.dart';
 import '../models/delivery_zone.dart';
 import '../models/menu_item.dart';
+import '../models/offer.dart';
 import '../models/restaurant.dart';
 import '../models/restaurant_settings.dart';
 import '../providers/cart_provider.dart';
@@ -15,6 +16,7 @@ import '../widgets/menu/customer_phone_gate.dart';
 import '../widgets/menu/free_delivery_progress_bar.dart';
 import '../widgets/menu/menu_checkout_sheet.dart';
 import '../widgets/menu/storefront_header.dart';
+import '../widgets/menu/storefront_offers_banner.dart';
 import '../widgets/pos/smart_salesman_widget.dart';
 import '../l10n/app_strings.dart';
 
@@ -30,7 +32,9 @@ class MenuScreen extends StatefulWidget {
 class _MenuScreenState extends State<MenuScreen> {
   static const _pageSize = 24;
   static const _smartCategory = 'اختيارات على ذوقك';
+  static const _offersCategory = 'العروض والخصومات';
   List<MenuItem> _items = [];
+  List<Offer> _offers = const [];
   Restaurant? _restaurant;
   RestaurantSettings? _settings;
   List<DeliveryZone> _zones = const [];
@@ -116,6 +120,14 @@ class _MenuScreenState extends State<MenuScreen> {
             _zones = zones;
           }
         } catch (_) {}
+        try {
+          final offers = await ApiService.instance.fetchOffers(
+            restaurantId: _restaurantId,
+          );
+          if (mounted) _offers = offers;
+        } catch (_) {
+          if (mounted) _offers = const [];
+        }
       }
       if (!mounted) return;
       setState(() {
@@ -158,6 +170,17 @@ class _MenuScreenState extends State<MenuScreen> {
     }
   }
 
+  void _addOfferToCart(Offer offer) {
+    context.read<CartProvider>().applyOfferToCart(offer, _items);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('تمت إضافة "${offer.title}" إلى السلة'),
+        duration: const Duration(seconds: 2),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
   void _addToCart(MenuItem item) {
     context.read<CartProvider>().addMenuItem(item);
     ScaffoldMessenger.of(context).showSnackBar(
@@ -171,6 +194,7 @@ class _MenuScreenState extends State<MenuScreen> {
 
   List<String> _categories(List<MenuItem> items) {
     final categories = <String>{
+      if (_offers.isNotEmpty) _offersCategory,
       if (_settings?.smartUpsellEnabled != false) _smartCategory,
       'الكل',
     };
@@ -183,6 +207,7 @@ class _MenuScreenState extends State<MenuScreen> {
   }
 
   List<MenuItem> _filteredItems(List<MenuItem> items) {
+    if (_selectedCategory == _offersCategory) return const [];
     if (_selectedCategory == _smartCategory) {
       if (_settings?.smartUpsellEnabled == false) {
         return items;
@@ -339,6 +364,13 @@ class _MenuScreenState extends State<MenuScreen> {
                     session: context.watch<CustomerSessionProvider>(),
                   ),
                 ),
+                if (_offers.isNotEmpty)
+                  SliverToBoxAdapter(
+                    child: StorefrontOffersBanner(
+                      offers: _offers,
+                      onAdd: _addOfferToCart,
+                    ),
+                  ),
                 SliverToBoxAdapter(
                   child: _CategoryBar(
                     categories: categories,
@@ -348,7 +380,28 @@ class _MenuScreenState extends State<MenuScreen> {
                     },
                   ),
                 ),
-                if (filtered.isEmpty)
+                if (_selectedCategory == _offersCategory)
+                  SliverPadding(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+                    sliver: SliverList(
+                      delegate: SliverChildBuilderDelegate(
+                        (context, index) {
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 12),
+                            child: SizedBox(
+                              height: 176,
+                              child: StorefrontOfferCard(
+                                offer: _offers[index],
+                                onAdd: () => _addOfferToCart(_offers[index]),
+                              ),
+                            ),
+                          );
+                        },
+                        childCount: _offers.length,
+                      ),
+                    ),
+                  )
+                else if (filtered.isEmpty)
                   const SliverFillRemaining(
                     hasScrollBody: false,
                     child: Center(
@@ -584,12 +637,13 @@ class _CategoryBar extends StatelessWidget {
         itemBuilder: (context, index) {
           final category = categories[index];
           final isSmart = category == 'اختيارات على ذوقك';
+          final isOffers = category == 'العروض والخصومات';
           final isSelected = category == selected;
 
           return FilterChip(
-            avatar: isSmart
+            avatar: isSmart || isOffers
                 ? Icon(
-                    Icons.auto_awesome,
+                    isOffers ? Icons.local_offer_outlined : Icons.auto_awesome,
                     size: 16,
                     color: isSelected ? Colors.white : AppTheme.brandMaroon,
                   )
@@ -606,9 +660,12 @@ class _CategoryBar extends StatelessWidget {
               fontWeight: FontWeight.w700,
               fontSize: 13,
             ),
-            backgroundColor: isSmart ? const Color(0xFFFFF4E5) : Colors.white,
-            selectedColor:
-                isSmart ? AppTheme.brandMaroon : AppTheme.brandOrange,
+            backgroundColor: isSmart || isOffers
+                ? const Color(0xFFFFF4E5)
+                : Colors.white,
+            selectedColor: isSmart || isOffers
+                ? AppTheme.brandMaroon
+                : AppTheme.brandOrange,
             side: BorderSide(
               color: isSelected
                   ? AppTheme.brandOrange

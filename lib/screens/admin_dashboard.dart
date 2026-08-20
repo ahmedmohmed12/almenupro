@@ -25,6 +25,7 @@ import '../services/talabat_menu_service.dart';
 import '../widgets/admin/admin_corner_toast.dart';
 import '../widgets/admin/admin_pos_panel.dart';
 import '../widgets/admin/admin_delivery_zones_panel.dart';
+import '../widgets/admin/admin_offers_panel.dart';
 import '../widgets/admin/admin_item_addons_editor.dart';
 import '../widgets/admin/admin_item_linked_sides_editor.dart';
 import '../widgets/admin/admin_menu_panel.dart';
@@ -1087,6 +1088,18 @@ class _AdminDashboardState extends State<AdminDashboard> {
     );
   }
 
+  Widget _buildOffersPanel() {
+    final scope = SuperAdminScopeService.instance;
+    final restaurantId = scope.effectiveRestaurantId;
+    final canManage = !_isSuperAdmin || scope.hasSelection;
+
+    return AdminOffersPanel(
+      key: ValueKey('offers-$restaurantId'),
+      restaurantId: restaurantId,
+      canManage: canManage,
+    );
+  }
+
   Widget _buildActiveTab() {
     if (_isSuperAdmin) {
       switch (_selectedIndex) {
@@ -1109,6 +1122,8 @@ class _AdminDashboardState extends State<AdminDashboard> {
           return const AdminSuperRestaurantsPanel();
         case AdminSidebar.superDeliveryZonesIndex:
           return _buildDeliveryZonesPanel();
+        case AdminSidebar.superOffersIndex:
+          return _buildOffersPanel();
         case AdminSidebar.superAnalyticsIndex:
           return _buildAnalyticsTab();
         case AdminSidebar.superSmartUpsellIndex:
@@ -1140,6 +1155,8 @@ class _AdminDashboardState extends State<AdminDashboard> {
         );
       case AdminSidebar.deliveryZonesIndex:
         return _buildDeliveryZonesPanel();
+      case AdminSidebar.offersIndex:
+        return _buildOffersPanel();
       case AdminSidebar.analyticsIndex:
         return _buildAnalyticsTab();
       case AdminSidebar.smartUpsellIndex:

@@ -156,6 +156,9 @@ class Order {
     this.externalOrderId,
     this.platformCommission,
     this.walletRedeemAmount,
+    this.discountAmount,
+    this.offerId,
+    this.offerTitle,
   });
 
   final String id;
@@ -181,6 +184,9 @@ class Order {
   final String? externalOrderId;
   final double? platformCommission;
   final double? walletRedeemAmount;
+  final double? discountAmount;
+  final String? offerId;
+  final String? offerTitle;
 
   double get netRevenue =>
       totalPrice - (platformCommission == null ? 0 : platformCommission!);
@@ -225,6 +231,10 @@ class Order {
       walletRedeemAmount: (map['walletRedeemAmount'] as num?)?.toDouble() ??
           (map['wallet_redeem_amount'] as num?)?.toDouble() ??
           (map['walletRedeemed'] as num?)?.toDouble(),
+      discountAmount: (map['discountAmount'] as num?)?.toDouble() ??
+          (map['discount_amount'] as num?)?.toDouble(),
+      offerId: map['offerId']?.toString() ?? map['offer_id']?.toString(),
+      offerTitle: map['offerTitle']?.toString() ?? map['offer_title']?.toString(),
     );
   }
 
@@ -241,6 +251,9 @@ class Order {
     double? platformCommission,
     String? orderSource,
     double? walletRedeemAmount,
+    double? discountAmount,
+    String? offerId,
+    String? offerTitle,
   }) {
     return Order(
       id: id,
@@ -266,6 +279,9 @@ class Order {
       externalOrderId: externalOrderId ?? this.externalOrderId,
       platformCommission: platformCommission ?? this.platformCommission,
       walletRedeemAmount: walletRedeemAmount ?? this.walletRedeemAmount,
+      discountAmount: discountAmount ?? this.discountAmount,
+      offerId: offerId ?? this.offerId,
+      offerTitle: offerTitle ?? this.offerTitle,
     );
   }
 
@@ -298,6 +314,9 @@ class Order {
       if (platformCommission != null) 'platformCommission': platformCommission,
       if (walletRedeemAmount != null && walletRedeemAmount! > 0)
         'walletRedeemAmount': walletRedeemAmount,
+      if (discountAmount != null && discountAmount! > 0) 'discountAmount': discountAmount,
+      if (offerId != null && offerId!.isNotEmpty) 'offerId': offerId,
+      if (offerTitle != null && offerTitle!.isNotEmpty) 'offerTitle': offerTitle,
     };
   }
 
