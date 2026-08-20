@@ -21,6 +21,7 @@ import '../../services/pos_print_service.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/pos_receipt_html.dart';
 import '../../utils/whatsapp_phone.dart';
+import '../menu/offer_usage_limit_alert.dart';
 
 import 'pos/pos_fast_modifiers_dialog.dart';
 import 'pos/pos_theme.dart';
@@ -526,8 +527,20 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
       (widget.onOrderSubmitted ?? widget.onOrdersSubmitted)?.call();
       _showMessage('تم حفظ الطلب بنجاح');
       return order;
+    } on ApiRequestException catch (error) {
+      if (error.isOfferUsageLimit) {
+        if (mounted) await showOfferUsageLimitAlert(context, error.message);
+        return null;
+      }
+      _showMessage(error.message);
+      return null;
     } catch (error) {
-      _showMessage('تعذر حفظ الطلب: $error');
+      final text = error.toString().replaceFirst('Exception: ', '');
+      if (text.contains(kOfferUsageLimitMessage)) {
+        if (mounted) await showOfferUsageLimitAlert(context);
+        return null;
+      }
+      _showMessage('تعذر حفظ الطلب: $text');
       return null;
     } finally {
       if (mounted) setState(() => _submitting = false);

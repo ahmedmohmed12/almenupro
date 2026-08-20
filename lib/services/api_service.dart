@@ -17,6 +17,19 @@ import '../models/upsell_recommendation.dart';
 import 'admin_auth_service.dart';
 import 'super_admin_scope_service.dart';
 
+class ApiRequestException implements Exception {
+  const ApiRequestException(this.message, {this.code, this.statusCode});
+
+  final String message;
+  final String? code;
+  final int? statusCode;
+
+  bool get isOfferUsageLimit => code == 'OFFER_USAGE_LIMIT';
+
+  @override
+  String toString() => message;
+}
+
 class ApiService {
   ApiService._();
 
@@ -53,6 +66,53 @@ class ApiService {
 
   Uri _uri(String path, [Map<String, String>? query]) {
     return Uri.parse('$baseUrl$path').replace(queryParameters: query);
+  }
+
+  ApiRequestException _exceptionFromResponse(
+    http.Response response,
+    String fallback,
+  ) {
+    try {
+      final decoded = jsonDecode(response.body);
+      if (decoded is Map) {
+        final message = decoded['error']?.toString().trim() ?? '';
+        final code = decoded['code']?.toString();
+        if (message.isNotEmpty) {
+          return ApiRequestException(
+            message,
+            code: code,
+            statusCode: response.statusCode,
+          );
+        }
+      }
+    } catch (_) {}
+    return ApiRequestException(fallback, statusCode: response.statusCode);
+  }
+
+  Future<bool> isOfferUsableForCustomer({
+    required String offerId,
+    required String phone,
+    String? restaurantId,
+  }) async {
+    final digits = phone.replaceAll(RegExp(r'\D'), '');
+    if (offerId.isEmpty || digits.length < 8) return true;
+    try {
+      final query = {
+        ..._restaurantQuery(restaurantId: restaurantId),
+        'offer_id': offerId,
+        'phone': digits,
+      };
+      final response = await http
+          .get(_uri('/offers/check-usage', query), headers: _publicHeaders)
+          .timeout(_fetchTimeout);
+      if (response.statusCode == 409) return false;
+      if (response.statusCode != 200) return true;
+      final decoded = jsonDecode(response.body);
+      if (decoded is Map && decoded['allowed'] == false) return false;
+      return true;
+    } catch (_) {
+      return true;
+    }
   }
 
   Future<http.Response> _get(
@@ -424,7 +484,10 @@ class ApiService {
           .timeout(_fetchTimeout);
 
       if (response.statusCode != 200 && response.statusCode != 201) {
-        throw Exception('فشل في حفظ الطلب (${response.statusCode})');
+        throw _exceptionFromResponse(
+          response,
+          'فشل في حفظ الطلب (${response.statusCode})',
+        );
       }
 
       final decoded = jsonDecode(response.body);
@@ -434,6 +497,8 @@ class ApiService {
 
       final map = Map<String, dynamic>.from(decoded);
       return Order.fromMap(map['id']?.toString() ?? '', map);
+    } on ApiRequestException {
+      rethrow;
     } on TimeoutException {
       throw Exception('انتهت مهلة الاتصال بالسيرفر');
     } catch (error) {

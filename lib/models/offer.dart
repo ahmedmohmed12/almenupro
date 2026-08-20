@@ -42,6 +42,7 @@ class Offer {
     this.endsAt,
     this.isActive = true,
     this.minSubtotal = 0,
+    this.usageLimitPerCustomer = 0,
     this.restaurantId,
   });
 
@@ -59,11 +60,14 @@ class Offer {
   final DateTime? endsAt;
   final bool isActive;
   final double minSubtotal;
+  final int usageLimitPerCustomer;
   final String? restaurantId;
 
   bool get isCombo => type == OfferType.combo;
 
   bool get isCartLevel => itemIds.isEmpty && !isCombo;
+
+  bool get hasUsageCap => usageLimitPerCustomer > 0;
 
   String get displayBadge {
     if (badgeText.trim().isNotEmpty) return badgeText.trim();
@@ -143,6 +147,9 @@ class Offer {
       endsAt: _date(map['endsAt'] ?? map['ends_at'] ?? map['endDate']),
       isActive: map['isActive'] != false && map['is_active'] != false,
       minSubtotal: _num(map['minSubtotal'] ?? map['min_subtotal']),
+      usageLimitPerCustomer: _int(
+        map['usageLimitPerCustomer'] ?? map['usage_limit_per_customer'],
+      ),
       restaurantId:
           map['restaurantId']?.toString() ?? map['restaurant_id']?.toString(),
     );
@@ -164,6 +171,7 @@ class Offer {
       if (endsAt != null) 'endsAt': endsAt!.toUtc().toIso8601String(),
       'isActive': isActive,
       'minSubtotal': minSubtotal,
+      'usageLimitPerCustomer': usageLimitPerCustomer,
       if (restaurantId != null) 'restaurantId': restaurantId,
       if (restaurantId != null) 'restaurant_id': restaurantId,
     };
@@ -183,6 +191,7 @@ class Offer {
     DateTime? endsAt,
     bool? isActive,
     double? minSubtotal,
+    int? usageLimitPerCustomer,
     String? restaurantId,
   }) {
     return Offer(
@@ -200,8 +209,19 @@ class Offer {
       endsAt: endsAt ?? this.endsAt,
       isActive: isActive ?? this.isActive,
       minSubtotal: minSubtotal ?? this.minSubtotal,
+      usageLimitPerCustomer:
+          usageLimitPerCustomer ?? this.usageLimitPerCustomer,
       restaurantId: restaurantId ?? this.restaurantId,
     );
+  }
+
+  static int _int(Object? value) {
+    if (value is int) return value > 0 ? value : 0;
+    if (value is num) {
+      final parsed = value.toInt();
+      return parsed > 0 ? parsed : 0;
+    }
+    return int.tryParse(value?.toString() ?? '') ?? 0;
   }
 
   static double _num(Object? value) {

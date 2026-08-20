@@ -136,6 +136,11 @@ class _AdminOffersPanelState extends State<AdminOffersPanel> {
     final endController = TextEditingController(
       text: existing?.endsAt?.toIso8601String().split('T').first ?? '',
     );
+    final usageLimitController = TextEditingController(
+      text: existing == null || existing.usageLimitPerCustomer <= 0
+          ? ''
+          : existing.usageLimitPerCustomer.toString(),
+    );
     var type = existing?.type ?? OfferType.percentage;
     var isActive = existing?.isActive ?? true;
     var selectedIds = {...?existing?.itemIds};
@@ -249,6 +254,20 @@ class _AdminOffersPanelState extends State<AdminOffersPanel> {
                           value: isActive,
                           onChanged: (value) => setDialogState(() => isActive = value),
                         ),
+                        const SizedBox(height: 8),
+                        TextFormField(
+                          controller: usageLimitController,
+                          keyboardType: TextInputType.number,
+                          inputFormatters: [
+                            FilteringTextInputFormatter.digitsOnly,
+                          ],
+                          decoration: const InputDecoration(
+                            labelText: 'عدد مرات الاستخدام لكل عميل',
+                            helperText:
+                                'اتركه فارغاً أو 0 للاستخدام غير المحدود',
+                            border: OutlineInputBorder(),
+                          ),
+                        ),
                         if (_menuItems.isNotEmpty) ...[
                           const Align(
                             alignment: AlignmentDirectional.centerStart,
@@ -311,6 +330,8 @@ class _AdminOffersPanelState extends State<AdminOffersPanel> {
     final offerPrice = double.tryParse(offerPriceController.text.trim()) ?? 0;
     final startsAt = DateTime.tryParse(startController.text.trim());
     final endsAt = DateTime.tryParse(endController.text.trim());
+    final usageLimit =
+        int.tryParse(usageLimitController.text.trim()) ?? 0;
     titleController.dispose();
     descController.dispose();
     valueController.dispose();
@@ -318,6 +339,7 @@ class _AdminOffersPanelState extends State<AdminOffersPanel> {
     offerPriceController.dispose();
     startController.dispose();
     endController.dispose();
+    usageLimitController.dispose();
 
     if (saved != true || !mounted) return;
 
@@ -335,6 +357,7 @@ class _AdminOffersPanelState extends State<AdminOffersPanel> {
         startsAt: startsAt,
         endsAt: endsAt,
         isActive: isActive,
+        usageLimitPerCustomer: usageLimit,
         restaurantId: _restaurantId,
         badgeText: existing?.badgeText ?? '',
         imageUrl: existing?.imageUrl ?? '',
@@ -523,7 +546,13 @@ class _OfferAdminCard extends StatelessWidget {
                         style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
                       ),
                       Text(
-                        '${offer.type.arabicLabel} • ${offer.isLive ? 'ساري' : 'غير ساري'}',
+                        [
+                          '${offer.type.arabicLabel} • ${offer.isLive ? 'ساري' : 'غير ساري'}',
+                          if (offer.hasUsageCap)
+                            'حد الاستخدام: ${offer.usageLimitPerCustomer} لكل عميل'
+                          else
+                            'استخدام غير محدود',
+                        ].join(' • '),
                         style: TextStyle(color: Colors.grey.shade700),
                       ),
                     ],

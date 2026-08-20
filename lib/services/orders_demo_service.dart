@@ -271,6 +271,12 @@ class OrdersDemoService {
     final fee = deliveryFee ?? 0;
     final discount = discountAmount ??
         ((listed > charged) ? listed - charged : 0);
+    final resolvedOfferId = offerId ??
+        cartItems
+            .map((item) => item.offerId)
+            .whereType<String>()
+            .where((id) => id.isNotEmpty)
+            .fold<String?>(null, (prev, id) => prev ?? id);
     final netSubtotal = (subtotal ?? charged);
 
     return Order(
@@ -282,7 +288,7 @@ class OrdersDemoService {
       subtotal: listed > 0 ? listed : netSubtotal,
       deliveryFee: deliveryFee,
       discountAmount: discount > 0 ? discount : null,
-      offerId: offerId,
+      offerId: resolvedOfferId,
       offerTitle: offerTitle,
       totalPrice: netSubtotal + fee,
       orderType: orderType ?? OrderType.delivery,

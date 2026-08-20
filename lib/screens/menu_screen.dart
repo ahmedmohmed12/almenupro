@@ -18,6 +18,7 @@ import '../widgets/menu/free_delivery_progress_bar.dart';
 import '../widgets/menu/menu_checkout_sheet.dart';
 import '../widgets/menu/storefront_header.dart';
 import '../widgets/menu/storefront_offers_banner.dart';
+import '../widgets/menu/offer_usage_limit_alert.dart';
 import '../l10n/app_strings.dart';
 
 class MenuScreen extends StatefulWidget {
@@ -170,7 +171,21 @@ class _MenuScreenState extends State<MenuScreen> {
     }
   }
 
-  void _addOfferToCart(Offer offer) {
+  Future<void> _addOfferToCart(Offer offer) async {
+    final phone = context.read<CustomerSessionProvider>().phone;
+    if (offer.hasUsageCap && phone.trim().isNotEmpty) {
+      final allowed = await ApiService.instance.isOfferUsableForCustomer(
+        offerId: offer.id,
+        phone: phone,
+        restaurantId: _restaurantId,
+      );
+      if (!allowed) {
+        if (!mounted) return;
+        await showOfferUsageLimitAlert(context);
+        return;
+      }
+    }
+    if (!mounted) return;
     context.read<CartProvider>().applyOfferToCart(offer, _items);
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(

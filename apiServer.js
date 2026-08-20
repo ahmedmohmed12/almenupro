@@ -38,7 +38,7 @@ const { computeDailySalesAnalytics } = require('./lib/platformSalesAnalytics');
 const { computeFoodCostReport } = require('./lib/foodCostReportAnalytics');
 const { computeUpsellAnalytics, normalizeIncomingEvent, trimEvents } = require('./lib/upsellAnalytics');
 const { previewEarnedCashback, applyLoyaltyCashbackToOrder, redeemCustomerWallet, normalizeLoyaltySettings, isDeliveredStatus } = require('./lib/loyaltyCashback');
-const { normalizeOffer, isOfferLive } = require('./lib/offers');
+const { normalizeOffer, isOfferLive, collectOfferIdsFromOrder, evaluateOfferUsage, assertOffersUsageAllowed, OFFER_USAGE_LIMIT_MESSAGE } = require('./lib/offers');
 const {
   enrichCustomersForRestaurant,
   upsertCustomerFromSource,
@@ -608,6 +608,31 @@ async function routeRequest(req, res, url, pathname) {
       body.restaurantId ||
       body.restaurant_id ||
       resolveRestaurantFromQuery(url, restaurants);
+    const offerIds = collectOfferIdsFromOrder(body);
+    if (offerIds.length > 0) {
+      try {
+        const offers = filterByRestaurant(await extraStore.offers.read(), restaurantId)
+          .map((offer) => normalizeOffer(offer, restaurantId));
+        const existingOrders = await dataStore.readOrders();
+        assertOffersUsageAllowed({
+          offers,
+          orders: existingOrders,
+          offerIds,
+          phone: body.phone,
+          restaurantId,
+        });
+      } catch (error) {
+        if (error && (error.code === 'OFFER_USAGE_LIMIT' || error.code === 'OFFER_PHONE_REQUIRED')) {
+          sendJson(res, error.statusCode || 409, {
+            error: error.message || OFFER_USAGE_LIMIT_MESSAGE,
+            code: error.code,
+            offerId: error.offerId,
+          });
+          return true;
+        }
+        throw error;
+      }
+    }
     const orders = await dataStore.readOrders();
     const created = {
       ...body,
@@ -962,6 +987,42 @@ async function routeRequest(req, res, url, pathname) {
     };
     await extraStore.deliveryZones.write(zones);
     sendJson(res, 200, zones[index]);
+    return true;
+  }
+
+  if (pathname === '/api/offers/check-usage' && req.method === 'GET') {
+    const restaurants = await dataStore.readRestaurants();
+    const restaurantId =
+      readRestaurantIdParam(req, url) ||
+      resolveRestaurantFromQuery(url, restaurants);
+    const offerId = String(url.searchParams.get('offer_id') || url.searchParams.get('offerId') || '').trim();
+    const phone = url.searchParams.get('phone') || '';
+    if (!offerId) {
+      sendJson(res, 400, { error: 'offer_id is required' });
+      return true;
+    }
+    const offers = filterByRestaurant(await extraStore.offers.read(), restaurantId)
+      .map((offer) => normalizeOffer(offer, restaurantId));
+    const offer = offers.find((entry) => String(entry.id) === offerId);
+    if (!offer) {
+      sendJson(res, 404, { error: 'Offer not found', allowed: false });
+      return true;
+    }
+    const orders = await dataStore.readOrders();
+    const result = evaluateOfferUsage({
+      offer,
+      orders,
+      phone,
+      restaurantId,
+    });
+    sendJson(res, result.allowed ? 200 : 409, {
+      allowed: result.allowed,
+      used: result.used,
+      limit: result.limit,
+      offerId,
+      error: result.error,
+      code: result.code,
+    });
     return true;
   }
 

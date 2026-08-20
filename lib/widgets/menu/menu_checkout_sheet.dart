@@ -24,6 +24,7 @@ import '../../utils/whatsapp_order_message.dart';
 import '../pos/smart_salesman_widget.dart';
 import 'checkout_impulse_bumps.dart';
 import 'free_delivery_progress_bar.dart';
+import 'offer_usage_limit_alert.dart';
 
 class MenuCheckoutSheet extends StatefulWidget {
   const MenuCheckoutSheet({
@@ -340,6 +341,25 @@ class _MenuCheckoutSheetState extends State<MenuCheckoutSheet> {
     final addressEnglish = _formattedAddressEnglish();
 
     try {
+      final offerId = cart.appliedOffer?.id ??
+          cart.items
+              .map((item) => item.offerId)
+              .whereType<String>()
+              .where((id) => id.isNotEmpty)
+              .fold<String?>(null, (prev, id) => prev ?? id);
+      if (offerId != null && offerId.isNotEmpty) {
+        final allowed = await ApiService.instance.isOfferUsableForCustomer(
+          offerId: offerId,
+          phone: _phoneController.text.trim(),
+          restaurantId: _restaurantId,
+        );
+        if (!allowed) {
+          if (!mounted) return;
+          setState(() => _submitting = false);
+          await showOfferUsageLimitAlert(context);
+          return;
+        }
+      }
       await OrdersService.instance.submitOrderFromCart(
         cartItems: List.from(cart.items),
         customerName: _nameController.text.trim(),
@@ -358,19 +378,30 @@ class _MenuCheckoutSheetState extends State<MenuCheckoutSheet> {
         subtotal: cart.totalPrice,
         discountAmount:
             cart.offerDiscountTotal > 0 ? cart.offerDiscountTotal : null,
-        offerId: cart.appliedOffer?.id ??
-            cart.items
-                .map((item) => item.offerId)
-                .whereType<String>()
-                .where((id) => id.isNotEmpty)
-                .fold<String?>(null, (prev, id) => prev ?? id),
+        offerId: offerId,
         offerTitle: cart.appliedOffer?.title,
       );
+    } on ApiRequestException catch (error) {
+      if (!mounted) return;
+      setState(() => _submitting = false);
+      if (error.isOfferUsageLimit) {
+        await showOfferUsageLimitAlert(context, error.message);
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(error.message)),
+      );
+      return;
     } catch (error) {
       if (!mounted) return;
       setState(() => _submitting = false);
+      final text = error.toString().replaceFirst('Exception: ', '');
+      if (text.contains(kOfferUsageLimitMessage)) {
+        await showOfferUsageLimitAlert(context, kOfferUsageLimitMessage);
+        return;
+      }
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('تعذر حفظ الطلب: $error')),
+        SnackBar(content: Text('تعذر حفظ الطلب: $text')),
       );
       return;
     }

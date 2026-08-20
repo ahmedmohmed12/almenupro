@@ -78,6 +78,7 @@ class OrderLineItem {
     required this.quantity,
     required this.selectedOptions,
     this.specialNotes,
+    this.offerId,
   });
 
   final String menuItemId;
@@ -86,6 +87,7 @@ class OrderLineItem {
   final int quantity;
   final List<SelectedOption> selectedOptions;
   final String? specialNotes;
+  final String? offerId;
 
   double get lineTotal => unitPrice * quantity;
 
@@ -103,6 +105,7 @@ class OrderLineItem {
           .map((option) => SelectedOption.fromMap(option as Map<String, dynamic>))
           .toList(),
       specialNotes: map['specialNotes'] as String?,
+      offerId: map['offerId']?.toString() ?? map['offer_id']?.toString(),
     );
   }
 
@@ -115,6 +118,7 @@ class OrderLineItem {
       'selectedOptions': selectedOptions.map((option) => option.toMap()).toList(),
       if (specialNotes != null && specialNotes!.isNotEmpty)
         'specialNotes': specialNotes,
+      if (offerId != null && offerId!.isNotEmpty) 'offerId': offerId,
       'lineTotal': lineTotal,
     };
   }
@@ -127,6 +131,7 @@ class OrderLineItem {
       quantity: cartItem.quantity,
       selectedOptions: cartItem.selectedOptions,
       specialNotes: cartItem.specialNotes,
+      offerId: cartItem.offerId,
     );
   }
 }
