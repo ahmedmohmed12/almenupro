@@ -261,14 +261,32 @@ class _AdminMenuPanelState extends State<AdminMenuPanel> {
                 color: burgundy,
               ),
             );
-            final sync = Tooltip(
-              message: 'تحديث من طلبات',
-              child: IconButton(
-                onPressed: _onUpdateFromTalabat,
-                visualDensity: VisualDensity.compact,
-                icon: const Icon(Icons.sync, color: burgundy),
-              ),
-            );
+            final importTalabat = widget.canImportTalabat
+                ? OutlinedButton.icon(
+                    onPressed: widget.onAutofillTalabat,
+                    icon: const Icon(Icons.cloud_download_outlined, size: 18),
+                    label: const Text('جلب المنيو من طلبات'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: burgundy,
+                      side: const BorderSide(color: burgundy),
+                      visualDensity: VisualDensity.compact,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 10,
+                      ),
+                    ),
+                  )
+                : null;
+            final sync = widget.canImportTalabat
+                ? Tooltip(
+                    message: 'جلب المنيو من طلبات',
+                    child: IconButton(
+                      onPressed: _onUpdateFromTalabat,
+                      visualDensity: VisualDensity.compact,
+                      icon: const Icon(Icons.cloud_download_outlined, color: burgundy),
+                    ),
+                  )
+                : const SizedBox.shrink();
 
             if (stacked) {
               return Column(
@@ -277,9 +295,13 @@ class _AdminMenuPanelState extends State<AdminMenuPanel> {
                   Row(
                     children: [
                       Expanded(child: title),
-                      sync,
+                      if (widget.canImportTalabat) sync,
                     ],
                   ),
+                  if (importTalabat != null) ...[
+                    const SizedBox(height: 8),
+                    importTalabat,
+                  ],
                   const SizedBox(height: 8),
                   _addItemButton(expanded: true),
                 ],
@@ -289,8 +311,10 @@ class _AdminMenuPanelState extends State<AdminMenuPanel> {
             return Row(
               children: [
                 Expanded(child: title),
-                sync,
-                const SizedBox(width: 8),
+                if (importTalabat != null) ...[
+                  importTalabat,
+                  const SizedBox(width: 8),
+                ],
                 _addItemButton(expanded: false),
               ],
             );

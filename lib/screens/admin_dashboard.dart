@@ -62,6 +62,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
   String? _restaurantLabel;
   int _selectedIndex = AdminSidebar.ordersIndex;
   AdminMenuPanelStatus? _menuPanelStatus;
+  var _menuRevision = 0;
 
   final _whatsappController = TextEditingController();
   String _whatsappCountryCode = WhatsAppPhone.defaultCountryCode;
@@ -672,6 +673,12 @@ class _AdminDashboardState extends State<AdminDashboard> {
     }
   }
 
+  String get _activeRestaurantId {
+    final scoped = SuperAdminScopeService.instance.effectiveRestaurantId;
+    if (scoped.isNotEmpty) return scoped;
+    return AdminAuthService.instance.restaurantId ?? ApiService.defaultRestaurantId;
+  }
+
   Future<void> _processAndSaveTalabatMenu({
     required String url,
     required void Function(String message) onProgress,
@@ -679,6 +686,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
   }) {
     return processAndSaveTalabatMenu(
       url: url,
+      restaurantId: _activeRestaurantId,
       onProgress: onProgress,
       onComplete: onComplete,
     );
@@ -793,16 +801,16 @@ class _AdminDashboardState extends State<AdminDashboard> {
                               setDialogState(() {
                                 isLoading = false;
                                 if (added > 0 || skipped > 0 || updated > 0) {
-                                  final total = MenuStorageService
-                                      .instance.currentItems.length;
                                   statusMessage =
-                                      'تمت التعبئة! أُضيف $added، وتم تحديث $updated، وتجاهل $skipped. '
-                                      'إجمالي المنيو الآن: $total صنف.';
+                                      'تمت التعبئة! أُضيف $added، وتم تحديث $updated، وتجاهل $skipped.';
                                 } else {
                                   statusMessage =
                                       'لم تُضف أصناف جديدة. جرّب إعادة التعبئة لتحديث الأصناف الحالية.';
                                 }
                               });
+                              if (mounted) {
+                                setState(() => _menuRevision++);
+                              }
                             },
                           );
                         },
@@ -1066,15 +1074,17 @@ class _AdminDashboardState extends State<AdminDashboard> {
 
   List<Widget> get _menuHeaderActions {
     if (!_isMenuTabSelected) return const [];
+    final canImport = !_isSuperAdmin || SuperAdminScopeService.instance.hasSelection;
     return [
-      Tooltip(
-        message: 'تحديث من طلبات',
-        child: IconButton(
-          onPressed: () {
-            print('Updating from Talabat...');
-          },
+      OutlinedButton.icon(
+        onPressed: canImport ? _showAutofillDialog : null,
+        icon: const Icon(Icons.cloud_download_outlined, size: 18),
+        label: const Text('جلب المنيو من طلبات'),
+        style: OutlinedButton.styleFrom(
+          foregroundColor: const Color(0xFF6B1124),
+          side: const BorderSide(color: Color(0xFF6B1124)),
           visualDensity: VisualDensity.compact,
-          icon: const Icon(Icons.sync, color: Color(0xFF6B1124)),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         ),
       ),
       FilledButton.icon(
@@ -1154,15 +1164,17 @@ class _AdminDashboardState extends State<AdminDashboard> {
         case AdminSidebar.superMenuIndex:
           return AdminMenuPanel(
             key: ValueKey(
-              SuperAdminScopeService.instance.selectedRestaurantId ??
-                  'super-menu-none',
+              '${SuperAdminScopeService.instance.selectedRestaurantId ?? 'super-menu-none'}-$_menuRevision',
             ),
             restaurantId:
                 SuperAdminScopeService.instance.effectiveRestaurantId,
             onAddItem: () => _showItemDialog(),
             onEditItem: (record) => _showItemDialog(record: record),
             onDeleteItem: _deleteItem,
-            canImportTalabat: false,
+            canImportTalabat: SuperAdminScopeService.instance.hasSelection,
+            onAutofillTalabat: SuperAdminScopeService.instance.hasSelection
+                ? _showAutofillDialog
+                : null,
             canManageItems: SuperAdminScopeService.instance.hasSelection,
             onStatusChanged: _onMenuPanelStatusChanged,
           );
@@ -1191,13 +1203,14 @@ class _AdminDashboardState extends State<AdminDashboard> {
       case AdminSidebar.menuIndex:
         return AdminMenuPanel(
           key: ValueKey(
-            SuperAdminScopeService.instance.effectiveRestaurantId,
+            '${SuperAdminScopeService.instance.effectiveRestaurantId}-$_menuRevision',
           ),
           restaurantId: SuperAdminScopeService.instance.effectiveRestaurantId,
           onAddItem: () => _showItemDialog(),
           onEditItem: (record) => _showItemDialog(record: record),
           onDeleteItem: _deleteItem,
-          canImportTalabat: false,
+          canImportTalabat: true,
+          onAutofillTalabat: _showAutofillDialog,
           canManageItems: true,
           onStatusChanged: _onMenuPanelStatusChanged,
         );

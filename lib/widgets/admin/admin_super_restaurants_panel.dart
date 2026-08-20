@@ -619,7 +619,7 @@ class _AdminSuperRestaurantsPanelState extends State<AdminSuperRestaurantsPanel>
                   OutlinedButton.icon(
                     onPressed: () => _importTalabatForRestaurant(restaurant),
                     icon: const Icon(Icons.cloud_download, size: 16),
-                    label: const Text('Talabat'),
+                    label: const Text('جلب منيو طلبات'),
                   ),
                 ],
               ),
