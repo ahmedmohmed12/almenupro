@@ -238,8 +238,20 @@ class _MenuScreenState extends State<MenuScreen> {
     if (width >= 1400) return 5;
     if (width >= 1100) return 4;
     if (width >= 800) return 3;
-    if (width >= 520) return 2;
-    return 1;
+    return 2;
+  }
+
+  double _gridChildAspect(int columns) {
+    switch (columns) {
+      case 5:
+        return 0.86;
+      case 4:
+        return 0.82;
+      case 3:
+        return 0.78;
+      default:
+        return 0.72;
+    }
   }
 
   @override
@@ -382,16 +394,17 @@ class _MenuScreenState extends State<MenuScreen> {
                 ),
                 if (_selectedCategory == _offersCategory)
                   SliverPadding(
-                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+                    padding: const EdgeInsets.fromLTRB(10, 4, 10, 16),
                     sliver: SliverList(
                       delegate: SliverChildBuilderDelegate(
                         (context, index) {
                           return Padding(
-                            padding: const EdgeInsets.only(bottom: 12),
+                            padding: const EdgeInsets.only(bottom: 8),
                             child: SizedBox(
-                              height: 176,
+                              height: 132,
                               child: StorefrontOfferCard(
                                 offer: _offers[index],
+                                compact: true,
                                 onAdd: () => _addOfferToCart(_offers[index]),
                               ),
                             ),
@@ -419,28 +432,25 @@ class _MenuScreenState extends State<MenuScreen> {
                     builder: (context, constraints) {
                       final width = constraints.crossAxisExtent;
                       final columns = _gridColumns(width);
-                      final pad = width >= 900 ? 28.0 : 16.0;
-                      final gap = width >= 900 ? 20.0 : 12.0;
-                      final cardWidth =
-                          (width - pad * 2 - (columns - 1) * gap) / columns;
-                      final imageHeight = (cardWidth * 0.68).clamp(110.0, 230.0);
-                      final textHeight = columns == 1 ? 132.0 : 124.0;
+                      final pad = width >= 900 ? 20.0 : width >= 600 ? 12.0 : 10.0;
+                      final gap = width >= 900 ? 14.0 : 8.0;
 
                       return SliverPadding(
-                        padding: EdgeInsets.fromLTRB(pad, 8, pad, 24),
+                        padding: EdgeInsets.fromLTRB(pad, 4, pad, 16),
                         sliver: SliverGrid(
                           gridDelegate:
-                              SliverGridDelegateWithMaxCrossAxisExtent(
-                            maxCrossAxisExtent: cardWidth + 0.5,
+                              SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: columns,
                             crossAxisSpacing: gap,
                             mainAxisSpacing: gap,
-                            mainAxisExtent: imageHeight + textHeight,
+                            childAspectRatio: _gridChildAspect(columns),
                           ),
                           delegate: SliverChildBuilderDelegate(
                             (context, index) {
                               return StorefrontItemCard(
                                 item: filtered[index],
                                 onAdd: () => _addToCart(filtered[index]),
+                                dense: columns <= 2,
                               );
                             },
                             childCount: filtered.length,
@@ -452,7 +462,7 @@ class _MenuScreenState extends State<MenuScreen> {
                 if (_items.length < _total || _loadingMore)
                   SliverToBoxAdapter(
                     child: Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+                      padding: const EdgeInsets.fromLTRB(10, 0, 10, 16),
                       child: Center(
                         child: _loadingMore
                             ? const CircularProgressIndicator(
@@ -505,7 +515,7 @@ class _FloatingCartBar extends StatelessWidget {
     final strings = AppStrings.of(context);
 
     return Container(
-      padding: const EdgeInsets.fromLTRB(12, 8, 12, 10),
+      padding: const EdgeInsets.fromLTRB(10, 6, 10, 8),
       decoration: BoxDecoration(
         color: Colors.white,
         boxShadow: [
@@ -628,12 +638,12 @@ class _CategoryBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: 60,
+      height: 48,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
         itemCount: categories.length,
-        separatorBuilder: (context, index) => const SizedBox(width: 8),
+        separatorBuilder: (context, index) => const SizedBox(width: 6),
         itemBuilder: (context, index) {
           final category = categories[index];
           final isSmart = category == 'اختيارات على ذوقك';
@@ -653,12 +663,14 @@ class _CategoryBar extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
             ),
             visualDensity: VisualDensity.compact,
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
             selected: isSelected,
             showCheckmark: false,
             labelStyle: TextStyle(
               color: isSelected ? Colors.white : AppTheme.brandBlack,
               fontWeight: FontWeight.w700,
-              fontSize: 13,
+              fontSize: 12,
             ),
             backgroundColor: isSmart || isOffers
                 ? const Color(0xFFFFF4E5)

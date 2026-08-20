@@ -20,7 +20,7 @@ class StorefrontOffersBanner extends StatelessWidget {
     final wide = MediaQuery.sizeOf(context).width >= 720;
 
     return Padding(
-      padding: EdgeInsets.fromLTRB(wide ? 28 : 16, 8, wide ? 28 : 16, 4),
+      padding: EdgeInsets.fromLTRB(wide ? 20 : 10, 6, wide ? 20 : 10, 2),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -28,21 +28,22 @@ class StorefrontOffersBanner extends StatelessWidget {
             'العروض والخصومات',
             style: TextStyle(
               fontWeight: FontWeight.w800,
-              fontSize: 18,
+              fontSize: 15,
               color: AppTheme.brandMaroon,
             ),
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 6),
           SizedBox(
-            height: 196,
+            height: wide ? 156 : 132,
             child: PageView.builder(
-              controller: PageController(viewportFraction: wide ? 0.62 : 0.92),
+              controller: PageController(viewportFraction: wide ? 0.68 : 0.94),
               itemCount: offers.length,
               itemBuilder: (context, index) {
                 return Padding(
-                  padding: const EdgeInsetsDirectional.only(end: 10),
+                  padding: const EdgeInsetsDirectional.only(end: 8),
                   child: StorefrontOfferCard(
                     offer: offers[index],
+                    compact: !wide,
                     onAdd: () => onAdd(offers[index]),
                   ),
                 );
@@ -83,14 +84,14 @@ class StorefrontOfferCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(18),
         onTap: onAdd,
         child: Padding(
-          padding: const EdgeInsets.all(12),
+          padding: EdgeInsets.all(compact ? 8 : 10),
           child: Row(
             children: [
               ClipRRect(
-                borderRadius: BorderRadius.circular(14),
+                borderRadius: BorderRadius.circular(12),
                 child: SizedBox(
-                  width: compact ? 72 : 92,
-                  height: compact ? 72 : 120,
+                  width: compact ? 64 : 84,
+                  height: compact ? 88 : 108,
                   child: Stack(
                     fit: StackFit.expand,
                     children: [
@@ -139,17 +140,17 @@ class StorefrontOfferCard extends StatelessWidget {
                       offer.title,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontWeight: FontWeight.w800,
-                        fontSize: 15,
-                        height: 1.3,
+                        fontSize: compact ? 13 : 15,
+                        height: 1.25,
                       ),
                     ),
                     if (offer.description.isNotEmpty) ...[
-                      const SizedBox(height: 4),
+                      const SizedBox(height: 2),
                       Text(
                         offer.description,
-                        maxLines: compact ? 2 : 3,
+                        maxLines: compact ? 1 : 2,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                           color: Colors.grey.shade700,

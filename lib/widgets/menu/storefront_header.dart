@@ -28,10 +28,10 @@ class StorefrontHero extends StatelessWidget {
         final width = constraints.maxWidth;
         final compact = width < 520;
         final desktop = width >= 900;
-        final bannerHeight = desktop ? 176.0 : compact ? 108.0 : 136.0;
-        final logoSize = desktop ? 72.0 : compact ? 52.0 : 58.0;
-        final titleSize = desktop ? 24.0 : compact ? 16.0 : 18.0;
-        final horizontal = desktop ? 28.0 : 16.0;
+        final bannerHeight = desktop ? 148.0 : compact ? 84.0 : 112.0;
+        final logoSize = desktop ? 64.0 : compact ? 44.0 : 52.0;
+        final titleSize = desktop ? 22.0 : compact ? 15.0 : 17.0;
+        final horizontal = desktop ? 20.0 : 10.0;
 
         return Column(
           children: [
@@ -51,11 +51,11 @@ class StorefrontHero extends StatelessWidget {
                   child: Align(
                     alignment: Alignment.topLeft,
                     child: Padding(
-                      padding: EdgeInsets.fromLTRB(horizontal, 16, 16, 0),
+                      padding: EdgeInsets.fromLTRB(horizontal, 10, 12, 0),
                       child: Icon(
                         Icons.cookie,
                         color: Colors.white24,
-                        size: desktop ? 96 : 64,
+                        size: desktop ? 80 : 52,
                       ),
                     ),
                   ),
@@ -63,7 +63,7 @@ class StorefrontHero extends StatelessWidget {
                 Padding(
                   padding: EdgeInsets.fromLTRB(
                     horizontal,
-                    bannerHeight - (compact ? 36 : 48),
+                    bannerHeight - (compact ? 28 : 38),
                     horizontal,
                     0,
                   ),
@@ -71,13 +71,13 @@ class StorefrontHero extends StatelessWidget {
                     color: Colors.white,
                     elevation: 6,
                     shadowColor: Colors.black26,
-                    borderRadius: BorderRadius.circular(18),
+                    borderRadius: BorderRadius.circular(14),
                     child: Padding(
                       padding: EdgeInsets.fromLTRB(
-                        compact ? 12 : 14,
-                        compact ? 12 : 14,
-                        compact ? 12 : 14,
                         compact ? 10 : 12,
+                        compact ? 8 : 10,
+                        compact ? 10 : 12,
+                        compact ? 8 : 10,
                       ),
                       child: compact
                           ? Column(
@@ -97,7 +97,7 @@ class StorefrontHero extends StatelessWidget {
                                     ),
                                   ],
                                 ),
-                                const SizedBox(height: 10),
+                                const SizedBox(height: 6),
                                 _MetaRow(deliveryFee: deliveryFee),
                               ],
                             )
@@ -116,7 +116,7 @@ class StorefrontHero extends StatelessWidget {
                                         titleSize: titleSize,
                                         maxDescriptionLines: desktop ? 2 : 1,
                                       ),
-                                      const SizedBox(height: 8),
+                                      const SizedBox(height: 6),
                                       _MetaRow(deliveryFee: deliveryFee),
                                     ],
                                   ),
@@ -129,7 +129,7 @@ class StorefrontHero extends StatelessWidget {
               ],
             ),
             Padding(
-              padding: EdgeInsets.fromLTRB(horizontal, 12, horizontal, 0),
+              padding: EdgeInsets.fromLTRB(horizontal, 8, horizontal, 0),
               child: _PromoBanner(session: session, compact: compact),
             ),
           ],
@@ -190,7 +190,7 @@ class _Identity extends StatelessWidget {
             fontWeight: FontWeight.w800,
           ),
         ),
-        const SizedBox(height: 4),
+        const SizedBox(height: 2),
         Text(
           description.isEmpty ? 'كوكيز طازج وتوصيل سريع' : description,
           maxLines: maxDescriptionLines,
@@ -236,7 +236,10 @@ class _PromoBanner extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      padding: EdgeInsets.all(compact ? 12 : 14),
+      padding: EdgeInsets.symmetric(
+        horizontal: compact ? 10 : 12,
+        vertical: compact ? 8 : 10,
+      ),
       decoration: BoxDecoration(
         color: const Color(0xFFFFF7ED),
         borderRadius: BorderRadius.circular(16),
@@ -311,57 +314,59 @@ class StorefrontItemCard extends StatelessWidget {
     super.key,
     required this.item,
     required this.onAdd,
+    this.dense = false,
   });
 
   final MenuItem item;
   final VoidCallback onAdd;
+  final bool dense;
 
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final compact = constraints.maxWidth < 180;
-        final imageHeight = (constraints.maxHeight * 0.56).clamp(96.0, 240.0);
+        final compact = dense || constraints.maxWidth < 200;
+        final showDescription = !compact && item.description.trim().isNotEmpty;
 
         return Material(
           color: Colors.white,
-          elevation: 2,
+          elevation: 1,
           shadowColor: Colors.black12,
-          borderRadius: BorderRadius.circular(18),
+          borderRadius: BorderRadius.circular(14),
           clipBehavior: Clip.antiAlias,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              SizedBox(
-                height: imageHeight,
+              Expanded(
+                flex: compact ? 13 : 12,
                 child: Stack(
                   fit: StackFit.expand,
                   children: [
                     item.imageUrl.trim().isEmpty
                         ? const ColoredBox(
                             color: Color(0xFFFFF4E5),
-                            child: Icon(Icons.cookie_outlined, size: 42),
+                            child: Icon(Icons.cookie_outlined, size: 36),
                           )
                         : NetworkMenuImage(
                             imageUrl: item.imageUrl,
                             fit: BoxFit.cover,
                           ),
                     Positioned(
-                      bottom: 8,
-                      left: 8,
+                      bottom: 6,
+                      left: 6,
                       child: Material(
                         color: AppTheme.brandMaroon,
                         shape: const CircleBorder(),
-                        elevation: 3,
+                        elevation: 2,
                         child: InkWell(
                           customBorder: const CircleBorder(),
                           onTap: onAdd,
                           child: Padding(
-                            padding: EdgeInsets.all(compact ? 6 : 8),
+                            padding: EdgeInsets.all(compact ? 5 : 7),
                             child: Icon(
                               Icons.add,
                               color: Colors.white,
-                              size: compact ? 18 : 22,
+                              size: compact ? 16 : 20,
                             ),
                           ),
                         ),
@@ -370,55 +375,54 @@ class StorefrontItemCard extends StatelessWidget {
                   ],
                 ),
               ),
-              Expanded(
-                child: Padding(
-                  padding: EdgeInsets.fromLTRB(
-                    compact ? 8 : 12,
-                    8,
-                    compact ? 8 : 12,
-                    compact ? 8 : 12,
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
+              Padding(
+                padding: EdgeInsets.fromLTRB(
+                  compact ? 8 : 10,
+                  compact ? 6 : 8,
+                  compact ? 8 : 10,
+                  compact ? 7 : 9,
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      item.name,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontWeight: FontWeight.w800,
+                        height: 1.2,
+                        fontSize: compact ? 12 : 13.5,
+                      ),
+                    ),
+                    if (showDescription) ...[
+                      const SizedBox(height: 3),
                       Text(
-                        item.name,
+                        item.description,
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontWeight: FontWeight.w800,
-                          height: 1.2,
-                          fontSize: compact ? 13 : 14,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Expanded(
-                        child: Text(
-                          item.description.isEmpty
-                              ? 'اختيار شهي من المنيو'
-                              : item.description,
-                          maxLines: compact ? 2 : 3,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontSize: 12,
-                            color: Color(0xFF64748B),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      FittedBox(
-                        fit: BoxFit.scaleDown,
-                        alignment: AlignmentDirectional.centerStart,
-                        child: Text(
-                          '${item.price.toStringAsFixed(3)} د.ك',
-                          style: const TextStyle(
-                            color: AppTheme.brandMaroon,
-                            fontWeight: FontWeight.w800,
-                          ),
+                        style: const TextStyle(
+                          fontSize: 11,
+                          color: Color(0xFF64748B),
+                          height: 1.25,
                         ),
                       ),
                     ],
-                  ),
+                    const SizedBox(height: 4),
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: AlignmentDirectional.centerStart,
+                      child: Text(
+                        '${item.price.toStringAsFixed(3)} د.ك',
+                        maxLines: 1,
+                        style: TextStyle(
+                          color: AppTheme.brandMaroon,
+                          fontWeight: FontWeight.w800,
+                          fontSize: compact ? 12.5 : 14,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],
