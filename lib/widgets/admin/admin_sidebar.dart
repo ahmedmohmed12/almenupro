@@ -27,6 +27,7 @@ class AdminSidebar extends StatefulWidget {
     this.selectedSettingsTab,
     this.onSettingsSubItemSelected,
     this.isSuperAdmin = false,
+    this.onLogout,
   });
 
   static const double expandedWidth = 260;
@@ -137,6 +138,7 @@ class AdminSidebar extends StatefulWidget {
   final AdminSettingsTab? selectedSettingsTab;
   final ValueChanged<AdminSettingsTab>? onSettingsSubItemSelected;
   final bool isSuperAdmin;
+  final VoidCallback? onLogout;
 
   @override
   State<AdminSidebar> createState() => _AdminSidebarState();
@@ -256,6 +258,7 @@ class _AdminSidebarState extends State<AdminSidebar> {
             Expanded(child: _buildNavList()),
             if (widget.footerBuilder != null)
               widget.footerBuilder!(_isCollapsed),
+            if (widget.onLogout != null) _buildLogoutButton(),
             if (widget.enableCollapse) _buildCollapseToggle(),
           ],
         ),
@@ -587,6 +590,51 @@ class _AdminSidebarState extends State<AdminSidebar> {
                       borderRadius: BorderRadius.circular(3),
                     ),
                   ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLogoutButton() {
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+        _isCollapsed ? 8 : 12,
+        8,
+        _isCollapsed ? 8 : 12,
+        8,
+      ),
+      child: Material(
+        color: const Color(0xFF6B1124),
+        borderRadius: BorderRadius.circular(10),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(10),
+          onTap: widget.onLogout,
+          child: Padding(
+            padding: EdgeInsets.symmetric(
+              vertical: 12,
+              horizontal: _isCollapsed ? 8 : 12,
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.logout, color: Colors.white, size: 20),
+                if (!_isCollapsed) ...[
+                  const SizedBox(width: 8),
+                  const Flexible(
+                    child: Text(
+                      'تسجيل الخروج',
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 14,
+                      ),
+                    ),
+                  ),
+                ],
               ],
             ),
           ),

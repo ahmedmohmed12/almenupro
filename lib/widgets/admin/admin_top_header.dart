@@ -173,6 +173,30 @@ class AdminTopHeader extends StatelessWidget {
         ),
         if (!compact) const SizedBox(width: 8),
       ],
+      if (onLogout != null) ...[
+        compact
+            ? IconButton(
+                tooltip: 'تسجيل الخروج',
+                onPressed: onLogout,
+                visualDensity: VisualDensity.compact,
+                icon: const Icon(Icons.logout, color: burgundy),
+              )
+            : OutlinedButton.icon(
+                onPressed: onLogout,
+                icon: const Icon(Icons.logout, size: 18),
+                label: const Text('تسجيل الخروج'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: burgundy,
+                  side: const BorderSide(color: burgundy),
+                  visualDensity: VisualDensity.compact,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 10,
+                  ),
+                ),
+              ),
+        if (!compact) const SizedBox(width: 8),
+      ],
       CircleAvatar(
         radius: compact ? 18 : 22,
         backgroundColor: burgundy.withValues(alpha: 0.12),

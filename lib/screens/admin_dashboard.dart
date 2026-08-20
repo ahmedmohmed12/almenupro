@@ -235,6 +235,34 @@ class _AdminDashboardState extends State<AdminDashboard> {
     }
   }
 
+  Future<void> _confirmLogout() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('تسجيل الخروج'),
+          content: const Text('هل تريد تسجيل الخروج من لوحة التحكم؟'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('إلغاء'),
+            ),
+            FilledButton(
+              style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFF6B1124),
+              ),
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('تسجيل الخروج'),
+            ),
+          ],
+        );
+      },
+    );
+    if (confirmed == true) {
+      await _logout();
+    }
+  }
+
   Future<void> _logout() async {
     AdminOrderMonitorService.instance.stop();
     SuperAdminScopeService.instance.removeListener(_onSuperAdminScopeChanged);
@@ -956,6 +984,8 @@ class _AdminDashboardState extends State<AdminDashboard> {
       return AdminSidebar(
         items: sidebarItems,
         selectedIndex: _selectedIndex,
+        isSuperAdmin: _isSuperAdmin,
+        onLogout: _confirmLogout,
         onItemSelected: (index) {
           setState(() => _selectedIndex = index);
           if (inDrawer) {
@@ -1068,7 +1098,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
         showOrderNotifications: false,
         restaurantLabel: _restaurantLabel,
         onMenuTap: onMenuTap,
-        onLogout: _logout,
+        onLogout: _confirmLogout,
         actions: _menuHeaderActions,
       );
     }
@@ -1082,7 +1112,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
           restaurantLabel: _restaurantLabel,
           pendingOrdersCount: pendingCount,
           onMenuTap: onMenuTap,
-          onLogout: _logout,
+          onLogout: _confirmLogout,
           actions: _menuHeaderActions,
           onNotificationsTap: () {
             setState(() => _selectedIndex = AdminSidebar.ordersIndex);
