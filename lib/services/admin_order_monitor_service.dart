@@ -5,7 +5,6 @@ import 'package:flutter/foundation.dart';
 import '../models/order.dart';
 import 'order_alert_sound_service.dart';
 import 'order_browser_notification_service.dart';
-import 'orders_demo_service.dart';
 import 'orders_service.dart';
 
 typedef AdminNewOrderHandler = void Function(Order order);
@@ -16,13 +15,10 @@ class AdminOrderMonitorService {
 
   static final AdminOrderMonitorService instance = AdminOrderMonitorService._();
 
-  static const _pollInterval = Duration(seconds: 5);
-
   final ValueNotifier<int> pendingCount = ValueNotifier(0);
   final ValueNotifier<bool> alertLoopActive = ValueNotifier(false);
 
   StreamSubscription<List<Order>>? _ordersSubscription;
-  Timer? _pollTimer;
   final Set<String> _knownOrderIds = <String>{};
   var _initializedSnapshot = false;
   var _isRunning = false;
@@ -45,10 +41,6 @@ class AdminOrderMonitorService {
       },
     );
 
-    _pollTimer ??= Timer.periodic(_pollInterval, (_) {
-      unawaited(OrdersService.instance.refreshOrders());
-    });
-
     unawaited(OrdersService.instance.refreshOrders());
   }
 
@@ -56,8 +48,6 @@ class AdminOrderMonitorService {
     _isRunning = false;
     await _ordersSubscription?.cancel();
     _ordersSubscription = null;
-    _pollTimer?.cancel();
-    _pollTimer = null;
     _initializedSnapshot = false;
     _knownOrderIds.clear();
     await OrderAlertSoundService.instance.stopAllAlerts();

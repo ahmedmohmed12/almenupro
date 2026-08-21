@@ -143,6 +143,7 @@ class Restaurant {
     this.subscriptionStatus = SubscriptionStatus.active,
     this.subscriptionExpiresAt,
     this.subscriptionNotes = '',
+    this.tableManagementEnabled = false,
     this.createdAt,
     this.updatedAt,
   });
@@ -157,6 +158,7 @@ class Restaurant {
   final SubscriptionStatus subscriptionStatus;
   final DateTime? subscriptionExpiresAt;
   final String subscriptionNotes;
+  final bool tableManagementEnabled;
   final DateTime? createdAt;
   final DateTime? updatedAt;
 
@@ -189,6 +191,11 @@ class Restaurant {
       subscriptionNotes: json['subscriptionNotes']?.toString() ??
           json['subscription_notes']?.toString() ??
           '',
+      tableManagementEnabled: json['tableManagementEnabled'] == true ||
+          json['tableManagement'] == true ||
+          (json['features'] is Map &&
+              (json['features']['tableManagement'] == true ||
+                  json['features']['table_management'] == true)),
       createdAt: DateTime.tryParse(json['createdAt']?.toString() ?? ''),
       updatedAt: DateTime.tryParse(
         json['updatedAt']?.toString() ?? json['updated_at']?.toString() ?? '',
@@ -208,6 +215,8 @@ class Restaurant {
         if (subscriptionExpiresAt != null)
           'subscriptionExpiresAt': subscriptionExpiresAt!.toIso8601String(),
         if (subscriptionNotes.isNotEmpty) 'subscriptionNotes': subscriptionNotes,
+        'tableManagement': tableManagementEnabled,
+        'features': {'tableManagement': tableManagementEnabled},
         if (createdAt != null) 'createdAt': createdAt!.toIso8601String(),
         if (updatedAt != null) 'updatedAt': updatedAt!.toIso8601String(),
       };
@@ -223,6 +232,7 @@ class Restaurant {
     SubscriptionStatus? subscriptionStatus,
     DateTime? subscriptionExpiresAt,
     String? subscriptionNotes,
+    bool? tableManagementEnabled,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) {
@@ -237,6 +247,8 @@ class Restaurant {
       subscriptionStatus: subscriptionStatus ?? this.subscriptionStatus,
       subscriptionExpiresAt: subscriptionExpiresAt ?? this.subscriptionExpiresAt,
       subscriptionNotes: subscriptionNotes ?? this.subscriptionNotes,
+      tableManagementEnabled:
+          tableManagementEnabled ?? this.tableManagementEnabled,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );
@@ -249,15 +261,20 @@ class AdminSession {
     required this.role,
     this.restaurantId,
     this.restaurantName,
+    this.staffId,
+    this.staffName,
   });
 
   final String token;
   final AdminRole role;
   final String? restaurantId;
   final String? restaurantName;
+  final String? staffId;
+  final String? staffName;
 
   bool get isSuperAdmin => role.isSuperAdmin;
   bool get isRestaurantAdmin => role.isRestaurantAdmin;
+  bool get isCashier => role.isCashier;
 
   factory AdminSession.fromJson(Map<String, dynamic> json) {
     return AdminSession(
@@ -266,6 +283,8 @@ class AdminSession {
           AdminRole.restaurantAdmin,
       restaurantId: json['restaurantId']?.toString(),
       restaurantName: json['restaurantName']?.toString(),
+      staffId: json['staffId']?.toString() ?? json['staff_id']?.toString(),
+      staffName: json['staffName']?.toString() ?? json['staff_name']?.toString(),
     );
   }
 }

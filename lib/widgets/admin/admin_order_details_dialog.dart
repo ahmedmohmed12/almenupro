@@ -3,10 +3,8 @@ import 'package:intl/intl.dart';
 
 import '../../models/order.dart';
 import '../../models/sales_platform_config.dart';
-import '../../services/admin_auth_service.dart';
-import '../../services/restaurant_settings_service.dart';
+import '../../services/pos_print_helper.dart';
 import '../../utils/pos_receipt_html.dart';
-import 'pos/pos_print_preview_dialog.dart';
 
 Future<void> showAdminOrderDetailsDialog(
   BuildContext context, {
@@ -47,8 +45,6 @@ class AdminOrderDetailsDialog extends StatelessWidget {
     final orderId = order.invoiceNumber ?? order.id;
     final nextStatus = order.status.nextStatus;
     final nextLabel = order.status.nextActionLabel;
-    final restaurantName =
-        AdminAuthService.instance.restaurantName ?? 'المطعم';
 
     return Dialog(
       insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
@@ -144,9 +140,21 @@ class AdminOrderDetailsDialog extends StatelessWidget {
                       value: order.paymentMethod ?? 'غير محدد',
                     ),
                     _MetaTile(
+                      icon: Icons.badge_outlined,
+                      label: 'الكاشير المستلم',
+                      value: order.receivedByCashierLabel.isNotEmpty
+                          ? order.receivedByCashierLabel
+                          : 'لم يُستلم بعد من كاشير',
+                      highlight: order.receivedByCashierLabel.isNotEmpty,
+                    ),
+                    _MetaTile(
                       icon: Icons.local_shipping_outlined,
                       label: 'النوع',
-                      value: order.orderType == OrderType.pickup ? 'استلام' : 'توصيل',
+                      value: switch (order.orderType) {
+                        OrderType.pickup => 'استلام',
+                        OrderType.dineIn => 'صالة',
+                        OrderType.delivery => 'توصيل',
+                      },
                     ),
                     const SizedBox(height: 12),
                     const Text(
@@ -211,15 +219,9 @@ class AdminOrderDetailsDialog extends StatelessWidget {
                       Expanded(
                         child: OutlinedButton.icon(
                           onPressed: () async {
-                            final settings =
-                                await RestaurantSettingsService.instance.load();
-                            if (!context.mounted) return;
-                            await showPosPrintPreviewDialog(
-                              context,
+                            await PosPrintHelper.printOrder(
                               order: order,
-                              restaurantName: restaurantName,
                               kind: PosReceiptKind.kitchen,
-                              restaurantPhone: settings.fullWhatsappNumber,
                             );
                           },
                           icon: const Icon(Icons.print, size: 18),
@@ -230,15 +232,9 @@ class AdminOrderDetailsDialog extends StatelessWidget {
                       Expanded(
                         child: OutlinedButton.icon(
                           onPressed: () async {
-                            final settings =
-                                await RestaurantSettingsService.instance.load();
-                            if (!context.mounted) return;
-                            await showPosPrintPreviewDialog(
-                              context,
+                            await PosPrintHelper.printOrder(
                               order: order,
-                              restaurantName: restaurantName,
                               kind: PosReceiptKind.customer,
-                              restaurantPhone: settings.fullWhatsappNumber,
                             );
                           },
                           icon: const Icon(Icons.receipt_long, size: 18),

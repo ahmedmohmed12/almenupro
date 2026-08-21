@@ -1,9 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../../../models/order.dart';
 import '../../../models/sales_platform_config.dart';
-import '../../../services/pos_print_service.dart';
+import '../../../services/pos_print_helper.dart';
+import '../../../services/pos_print_settings_service.dart';
 import '../../../utils/pos_receipt_html.dart';
 import 'pos_theme.dart';
 
@@ -54,23 +57,38 @@ class _PosPrintPreviewDialogState extends State<PosPrintPreviewDialog> {
   var _paperWidth = PosReceiptPaperWidth.mm80;
   var _printing = false;
 
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_loadPaper());
+  }
+
+  Future<void> _loadPaper() async {
+    await PosPrintSettingsService.instance.initialize();
+    if (!mounted) return;
+    final mm = PosPrintSettingsService.instance.settings.widthMm;
+    setState(() {
+      _paperWidth =
+          mm <= 62 ? PosReceiptPaperWidth.mm58 : PosReceiptPaperWidth.mm80;
+    });
+  }
+
   bool get _isKitchen => widget.kind == PosReceiptKind.kitchen;
 
   String get _title =>
       _isKitchen ? 'معاينة تذكرة المطبخ' : 'معاينة فاتورة العميل';
 
-  void _print() {
+  Future<void> _print() async {
     setState(() => _printing = true);
     try {
-      final html = PosReceiptHtml.build(
+      final preset = _paperWidth == PosReceiptPaperWidth.mm58
+          ? PosPrintPaperPreset.mm58
+          : PosPrintPaperPreset.mm80;
+      await PosPrintHelper.printOrder(
         order: widget.order,
-        restaurantName: widget.restaurantName,
         kind: widget.kind,
-        restaurantPhone: widget.restaurantPhone,
-        restaurantAddress: widget.restaurantAddress,
-        paperWidth: _paperWidth,
+        overrideSettings: PosPrintHelper.settings.copyWith(paperPreset: preset),
       );
-      printPosReceiptHtml(html);
       if (mounted) Navigator.of(context).pop();
     } catch (error) {
       if (!mounted) return;
@@ -323,7 +341,11 @@ class PosThermalReceiptPreview extends StatelessWidget {
               _MetaRow(label: 'الدفع', value: order.paymentMethod ?? 'كاش'),
             _MetaRow(
               label: 'النوع',
-              value: order.orderType == OrderType.pickup ? 'استلام' : 'توصيل',
+              value: switch (order.orderType) {
+                OrderType.pickup => 'استلام',
+                OrderType.dineIn => 'صالة',
+                OrderType.delivery => 'توصيل',
+              },
             ),
             const _DashedDivider(),
             if (isKitchen)

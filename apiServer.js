@@ -10,7 +10,9 @@ const {
   parseAuthHeader,
   loginSuperAdmin,
   loginRestaurantAdmin,
+  loginCashierSession,
   isSuperAdmin,
+  isCashier,
   canAccessRestaurant,
   resolveRestaurantId,
   authError,
@@ -28,6 +30,7 @@ const {
   resolveReportRestaurantId,
 } = require('./lib/restaurantScopeUtils');
 const { handlePosRoutes } = require('./lib/posRoutes');
+const { handleTableRoutes, normalizeFeatures } = require('./lib/tableRoutes');
 const { ALL_PERMISSION_KEYS } = require('./lib/posPermissions');
 const { serveMenuImage, persistMenuItemsImages, proxyExternalImage } = require('./lib/menuImageStorage');
 const { normalizeMenuItemsForApi, normalizeMenuItemForApi } = require('./lib/bilingualItemMigration');
@@ -57,6 +60,7 @@ const {
 const {
   applyShiftBindingOnAccept,
   applyShiftAdjustmentOnCancel,
+  attachReceivingCashier,
 } = require('./lib/shiftOrderBinding');
 
 const PORT = Number(process.env.PORT || 3000);
@@ -104,6 +108,29 @@ function parseJson(raw) {
   }
 }
 
+const ACTIVE_ORDER_STATUSES = new Set(['pending', 'confirmed', 'preparing', 'ready']);
+
+function selectRecentOrders(orders, limit = 250) {
+  const list = Array.isArray(orders) ? [...orders] : [];
+  list.sort(
+    (a, b) =>
+      Date.parse(b.createdAt || b.created_at || 0) -
+      Date.parse(a.createdAt || a.created_at || 0),
+  );
+  const selected = [];
+  const seen = new Set();
+  for (const order of list) {
+    const id = String(order.id || '');
+    if (!id || seen.has(id)) continue;
+    const status = String(order.status || '').toLowerCase();
+    const keepActive = ACTIVE_ORDER_STATUSES.has(status);
+    if (!keepActive && selected.length >= limit) continue;
+    seen.add(id);
+    selected.push(order);
+  }
+  return selected;
+}
+
 function requestUrl(req) {
   const host = req.headers.host || 'localhost';
   const proto = req.headers['x-forwarded-proto'] || 'http';
@@ -113,7 +140,10 @@ function requestUrl(req) {
 function publicRestaurant(entry) {
   if (!entry || typeof entry !== 'object') return entry;
   const { adminPassword, ...rest } = entry;
-  return rest;
+  return {
+    ...rest,
+    features: normalizeFeatures(entry.features),
+  };
 }
 
 function requireAuth(req, res) {
@@ -298,6 +328,25 @@ async function routeRequest(req, res, url, pathname) {
     return true;
   }
 
+  if (await handleTableRoutes(req, res, url, {
+    readBody,
+    sendJson,
+    authError,
+    requireAuth,
+    isCashier,
+    assertRestaurantAccess,
+    resolveScopedRestaurantId: (req, url, auth) =>
+      resolveScopedRestaurantId(req, url, auth, { allowPublicDefault: false }),
+    filterByRestaurant,
+    readRestaurants: () => dataStore.readRestaurants(),
+    readTables: () => dataStore.readTables(),
+    writeTables: (value) => dataStore.writeTables(value),
+    readOrders: () => dataStore.readOrders(),
+    writeOrders: (value) => dataStore.writeOrders(value),
+  })) {
+    return true;
+  }
+
   if (pathname === '/api/health' && req.method === 'GET') {
     sendJson(res, 200, dataStore.storageHealth());
     return true;
@@ -333,6 +382,69 @@ async function routeRequest(req, res, url, pathname) {
       role: 'restaurant_admin',
       restaurantId: restaurant?.id || null,
       restaurantName: restaurant?.name || null,
+    });
+    return true;
+  }
+
+  if (pathname === '/api/auth/cashier-login' && req.method === 'POST') {
+    const body = parseJson(await readBody(req));
+    const restaurantKey = String(
+      body.restaurantSlug ||
+        body.restaurant_slug ||
+        body.restaurantName ||
+        body.restaurant_name ||
+        '',
+    )
+      .trim()
+      .toLowerCase();
+    const cashierName = String(body.cashierName || body.cashier_name || body.name || '').trim();
+    const pin = String(body.pin || body.password || body.pinCode || '').trim();
+    if (!restaurantKey || !cashierName || !pin) {
+      sendJson(res, 400, { error: 'restaurant, cashier name, and PIN are required' });
+      return true;
+    }
+
+    const restaurants = await dataStore.readRestaurants();
+    const restaurant = restaurants.find(
+      (entry) =>
+        String(entry.slug || '').toLowerCase() === restaurantKey ||
+        String(entry.name || '').toLowerCase() === restaurantKey,
+    );
+    if (!restaurant) {
+      sendJson(res, 401, { error: 'Invalid credentials' });
+      return true;
+    }
+
+    const { findStaffByNameAndPin, resolveStaffPermissions, sanitizeStaffPublic } = require('./lib/staffUsers');
+    const { normalizePosRoles, findRoleById } = require('./lib/posPermissions');
+    const staffUsers = await extraStore.staffUsers.read();
+    const staff = findStaffByNameAndPin(staffUsers, restaurant.id, cashierName, pin);
+    if (!staff) {
+      sendJson(res, 401, { error: 'Invalid credentials' });
+      return true;
+    }
+
+    const settingsMap = await dataStore.readSettingsMap();
+    const posRoles = normalizePosRoles(
+      settingsMap.byRestaurant?.[restaurant.id]?.posRoles ||
+        settingsMap.byRestaurant?.[restaurant.id]?.pos_roles,
+    );
+    const token = loginCashierSession({
+      restaurantId: restaurant.id,
+      restaurantName: restaurant.name,
+      staffId: staff.id,
+      staffName: staff.name,
+    });
+    sendJson(res, 200, {
+      token,
+      role: 'cashier',
+      restaurantId: restaurant.id,
+      restaurantName: restaurant.name,
+      staffId: staff.id,
+      staffName: staff.name,
+      staff: sanitizeStaffPublic(staff),
+      permissions: resolveStaffPermissions(staff, posRoles),
+      posRole: findRoleById(posRoles, staff.roleId || staff.role_id),
     });
     return true;
   }
@@ -407,6 +519,7 @@ async function routeRequest(req, res, url, pathname) {
         subscriptionStatus: body.subscriptionStatus || body.subscription_status || 'active',
         subscriptionExpiresAt: body.subscriptionExpiresAt || body.subscription_expires_at || null,
         subscriptionNotes: body.subscriptionNotes || body.subscription_notes || '',
+        features: normalizeFeatures(body.features || { tableManagement: body.tableManagement }),
         updatedAt: new Date().toISOString(),
       };
       const restaurants = await dataStore.readRestaurants();
@@ -454,6 +567,19 @@ async function routeRequest(req, res, url, pathname) {
       adminPassword: body.adminPassword || current.adminPassword,
       updatedAt: new Date().toISOString(),
     };
+    if (isSuperAdmin(auth)) {
+      const enabled =
+        body.tableManagement ??
+        body.tableManagementEnabled ??
+        body.features?.tableManagement ??
+        body.features?.table_management;
+      if (enabled !== undefined) {
+        next.features = {
+          ...normalizeFeatures(current.features),
+          tableManagement: enabled === true,
+        };
+      }
+    }
     restaurants[index] = next;
     await dataStore.writeRestaurants(restaurants);
     sendJson(res, 200, publicRestaurant(next));
@@ -470,7 +596,7 @@ async function routeRequest(req, res, url, pathname) {
       url.searchParams.get('full') !== 'true';
     const limit = Math.min(
       Math.max(Number(url.searchParams.get('limit')) || 40, 1),
-      100,
+      250,
     );
     const offset = Math.max(Number(url.searchParams.get('offset')) || 0, 0);
     const page = await dataStore.readItemsPage({
@@ -533,7 +659,8 @@ async function routeRequest(req, res, url, pathname) {
     const itemId = decodeURIComponent(availabilityMatch[1]);
     const body = parseJson(await readBody(req));
     const isAvailable = body.isAvailable ?? body.is_available;
-    const existingDoc = await dataStore.findItemDoc(itemId);
+    const restaurantHint = await resolveScopedRestaurantId(req, url, auth);
+    const existingDoc = await dataStore.findItemDoc(itemId, restaurantHint);
     if (existingDoc) {
       if (!assertRestaurantAccess(
         auth,
@@ -543,7 +670,18 @@ async function routeRequest(req, res, url, pathname) {
       )) {
         return true;
       }
-      const fromCollection = await dataStore.patchItemAvailability(itemId, isAvailable);
+      const restaurantId = existingDoc.restaurant_id || existingDoc.restaurantId;
+      const fromCollection = await dataStore.patchItemAvailability(
+        itemId,
+        isAvailable,
+        restaurantId,
+      );
+      const flag = isAvailable === false || isAvailable === 0 ? 0 : 1;
+      await dataStore.patchItemInBlob(itemId, restaurantId, (item) => ({
+        ...item,
+        is_available: flag,
+        isAvailable: flag === 1,
+      }));
       sendJson(res, 200, normalizeMenuItemForApi(fromCollection || existingDoc));
       return true;
     }
@@ -569,25 +707,37 @@ async function routeRequest(req, res, url, pathname) {
     const auth = requireAuth(req, res);
     if (!auth) return true;
     const itemId = decodeURIComponent(itemMatch[1]);
-    const items = await dataStore.readItems();
-    const index = items.findIndex((item) => itemMatchesId(item, itemId));
-    if (index === -1) {
+    const restaurantHint = await resolveScopedRestaurantId(req, url, auth);
+    let existing = await dataStore.findItemDoc(itemId, restaurantHint);
+    if (!existing) {
+      const items = await dataStore.readItems();
+      existing = items.find((item) => {
+        if (
+          restaurantHint &&
+          String(item.restaurant_id || item.restaurantId) !== String(restaurantHint)
+        ) {
+          return false;
+        }
+        return itemMatchesId(item, itemId);
+      }) || items.find((item) => itemMatchesId(item, itemId));
+    }
+    if (!existing) {
       sendJson(res, 404, { error: 'Item not found' });
       return true;
     }
-    const restaurantId = items[index].restaurant_id || items[index].restaurantId;
+    const restaurantId = existing.restaurant_id || existing.restaurantId;
     if (!assertRestaurantAccess(auth, restaurantId, authError, res)) return true;
     if (req.method === 'DELETE') {
-      items.splice(index, 1);
-      await dataStore.writeItems(items);
-      await dataStore.deleteItemDoc(itemId);
+      await dataStore.deleteItemDoc(itemId, restaurantId);
+      await dataStore.patchItemInBlob(itemId, restaurantId, () => null);
       sendJson(res, 200, { ok: true });
       return true;
     }
     const body = parseJson(await readBody(req));
-    items[index] = normalizeIncomingItem(body, restaurantId, items[index]);
-    await dataStore.writeItems(items);
-    sendJson(res, 200, items[index]);
+    const updated = normalizeIncomingItem(body, restaurantId, existing);
+    await dataStore.replaceItemDoc(updated);
+    await dataStore.patchItemInBlob(itemId, restaurantId, () => updated);
+    sendJson(res, 200, updated);
     return true;
   }
 
@@ -597,7 +747,7 @@ async function routeRequest(req, res, url, pathname) {
     const restaurantId = await resolveScopedRestaurantId(req, url, auth);
     if (!restaurantId || !assertRestaurantAccess(auth, restaurantId, authError, res)) return true;
     const orders = filterByRestaurant(await dataStore.readOrders(), restaurantId);
-    sendJson(res, 200, orders);
+    sendJson(res, 200, selectRecentOrders(orders, 250));
     return true;
   }
 
@@ -683,17 +833,18 @@ async function routeRequest(req, res, url, pathname) {
     const restaurantId = orders[index].restaurant_id || orders[index].restaurantId;
     if (!assertRestaurantAccess(auth, restaurantId, authError, res)) return true;
     const body = parseJson(await readBody(req));
-    const previousStatus = orders[index].status;
+    const previous = orders[index];
+    const previousStatus = previous.status;
     let next = {
-      ...orders[index],
-      status: body.status || orders[index].status,
-      shiftId: body.shiftId || body.shift_id || orders[index].shiftId,
-      cashierId: body.cashierId || body.cashier_id || orders[index].cashierId,
+      ...previous,
+      status: body.status || previous.status,
       updatedAt: new Date().toISOString(),
     };
+    next = attachReceivingCashier(next, previous, body);
     const shifts = await extraStore.shiftSessions.read();
     const bound = applyShiftBindingOnAccept({
       order: next,
+      previousOrder: previous,
       previousStatus,
       nextStatus: body.status,
       shifts,
@@ -701,7 +852,9 @@ async function routeRequest(req, res, url, pathname) {
       auth,
       body,
     });
-    next = bound.order || next;
+    if (bound.bound) {
+      next = bound.order;
+    }
     const cancelled = applyShiftAdjustmentOnCancel({
       order: next,
       previousStatus,
@@ -734,7 +887,14 @@ async function routeRequest(req, res, url, pathname) {
       resolveRestaurantFromQuery(url, restaurants);
     const map = await dataStore.readSettingsMap();
     const payload = map.byRestaurant?.[restaurantId] || defaultSettingsPayload();
-    sendJson(res, 200, { ...payload, ...normalizeWhatsappSettings(payload) });
+    const restaurant = restaurants.find((entry) => String(entry.id) === String(restaurantId));
+    const features = normalizeFeatures(restaurant?.features);
+    sendJson(res, 200, {
+      ...payload,
+      ...normalizeWhatsappSettings(payload),
+      tableManagementEnabled: features.tableManagement,
+      features,
+    });
     return true;
   }
 
@@ -757,9 +917,33 @@ async function routeRequest(req, res, url, pathname) {
     };
     delete next.restaurantId;
     delete next.restaurant_id;
+    delete next.tableManagementEnabled;
+    delete next.tableManagement;
+    delete next.features;
     map.byRestaurant = map.byRestaurant || {};
     map.byRestaurant[restaurantId] = next;
     await dataStore.writeSettingsMap(map);
+
+    const restaurants = await dataStore.readRestaurants();
+    const restaurantIndex = restaurants.findIndex(
+      (entry) => String(entry.id) === String(restaurantId),
+    );
+    if (restaurantIndex >= 0) {
+      const logo = String(next.logoUrl || next.logo_url || '').trim();
+      const description = String(
+        next.restaurantDescription || next.restaurant_description || '',
+      ).trim();
+      restaurants[restaurantIndex] = {
+        ...restaurants[restaurantIndex],
+        logoUrl: logo,
+        logo_url: logo,
+        description,
+        description_ar: description,
+        descriptionAr: description,
+      };
+      await dataStore.writeRestaurants(restaurants);
+    }
+
     sendJson(res, 200, next);
     return true;
   }
@@ -769,12 +953,16 @@ async function routeRequest(req, res, url, pathname) {
     const restaurantId = resolveRestaurantFromQuery(url, restaurants);
     const days = Number(url.searchParams.get('days') || 90);
     const limit = Number(url.searchParams.get('limit') || 12);
-    const result = computeTopMenuItems(
-      await dataStore.readOrders(),
-      filterByRestaurant(await dataStore.readItems(), restaurantId),
-      restaurantId,
-      { days, limit },
-    );
+    const orders = await dataStore.readOrders();
+    let result = computeTopMenuItems(orders, [], restaurantId, { days, limit });
+    if (!result.items?.length) {
+      result = computeTopMenuItems(
+        orders,
+        filterByRestaurant(await dataStore.readItems(), restaurantId),
+        restaurantId,
+        { days, limit },
+      );
+    }
     sendJson(
       res,
       200,
@@ -1228,7 +1416,33 @@ async function routeRequest(req, res, url, pathname) {
       );
       if (restaurant) {
         const items = filterByRestaurant(await dataStore.readItems(), restaurant.id);
-        const ogData = buildRestaurantOgData(restaurant, { slug, items });
+        const map = await dataStore.readSettingsMap();
+        const settings = map.byRestaurant?.[restaurant.id] || {};
+        const description = String(
+          settings.restaurantDescription ||
+            settings.restaurant_description ||
+            restaurant.description ||
+            restaurant.description_ar ||
+            '',
+        ).trim();
+        const logoUrl = String(
+          settings.logoUrl ||
+            settings.logo_url ||
+            restaurant.logoUrl ||
+            restaurant.logo_url ||
+            '',
+        ).trim();
+        const ogData = buildRestaurantOgData(
+          {
+            ...restaurant,
+            logoUrl,
+            logo_url: logoUrl,
+            description,
+            description_ar: description,
+            descriptionAr: description,
+          },
+          { slug, items },
+        );
         sendHtml(res, 200, buildOgMenuHtml(ogData));
         return true;
       }

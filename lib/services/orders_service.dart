@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import '../models/cart_item.dart';
 import '../models/delivery_address_details.dart';
 import '../models/order.dart';
+import '../models/order_platform.dart';
 import '../utils/firebase_config.dart';
 import 'firebase_service.dart';
 import 'orders_demo_service.dart';
@@ -28,6 +29,7 @@ class OrdersService {
     OrderStatus status, {
     String? shiftId,
     String? cashierId,
+    String? cashierName,
   }) async {
     if (usesFirebase) {
       await _firebase.updateOrderStatus(
@@ -35,6 +37,7 @@ class OrdersService {
         status,
         shiftId: shiftId,
         cashierId: cashierId,
+        cashierName: cashierName,
       );
       return;
     }
@@ -43,6 +46,7 @@ class OrdersService {
       status,
       shiftId: shiftId,
       cashierId: cashierId,
+      cashierName: cashierName,
     );
   }
 
@@ -69,6 +73,7 @@ class OrdersService {
     DeliveryAddressDetails? addressDetails,
     String? orderSource,
     OrderType? orderType,
+    PlatformOrderMeta? platformMeta,
     double? walletRedeemAmount,
     double? subtotal,
     double? discountAmount,
@@ -89,6 +94,8 @@ class OrdersService {
       addressDetails: addressDetails,
       orderSource: orderSource,
       orderType: orderType,
+      externalOrderId: platformMeta?.externalOrderId,
+      platformCommission: platformMeta?.platformCommission,
       walletRedeemAmount: walletRedeemAmount,
       subtotal: subtotal,
       discountAmount: discountAmount,

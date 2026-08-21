@@ -1,6 +1,7 @@
 enum AdminRole {
   superAdmin('super_admin'),
-  restaurantAdmin('restaurant_admin');
+  restaurantAdmin('restaurant_admin'),
+  cashier('cashier');
 
   const AdminRole(this.storageKey);
 
@@ -16,4 +17,5 @@ enum AdminRole {
 
   bool get isSuperAdmin => this == AdminRole.superAdmin;
   bool get isRestaurantAdmin => this == AdminRole.restaurantAdmin;
+  bool get isCashier => this == AdminRole.cashier;
 }

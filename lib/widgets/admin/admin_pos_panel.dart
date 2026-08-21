@@ -8,22 +8,32 @@ import '../../data/kuwait_governorates.dart';
 import '../../models/cart_item.dart';
 import '../../models/customer.dart';
 import '../../models/customer_checkout_profile.dart';
+import '../../models/dining_table.dart';
 import '../../models/delivery_address_details.dart';
 import '../../models/delivery_zone.dart';
 import '../../models/menu_item.dart';
 import '../../models/order.dart';
+import '../../models/restaurant_settings.dart';
+import '../../models/sales_platform_config.dart';
+import '../../services/dining_tables_service.dart';
 import '../../services/admin_auth_service.dart';
 import '../../services/api_service.dart';
 import '../../services/customer_checkout_cache_service.dart';
 import '../../services/orders_service.dart';
 import '../../services/orders_demo_service.dart';
-import '../../services/pos_print_service.dart';
+import '../../services/restaurant_settings_service.dart';
+import '../../services/pos_print_helper.dart';
+import '../../services/pos_print_settings_service.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/pos_receipt_html.dart';
 import '../../utils/whatsapp_phone.dart';
 import '../menu/offer_usage_limit_alert.dart';
+import 'admin_order_details_dialog.dart';
 
+import 'pos/pos_print_preview_dialog.dart';
+import 'pos/pos_printer_settings_dialog.dart';
 import 'pos/pos_fast_modifiers_dialog.dart';
+import 'pos/pos_platform_selector.dart';
 import 'pos/pos_theme.dart';
 import 'pos/pos_ui_components.dart';
 import '../pos/smart_salesman_widget.dart';
@@ -33,36 +43,33 @@ class AdminPosPanel extends StatefulWidget {
     this.onOrderSubmitted,
     this.onOrdersSubmitted,
     this.onOpenMenu,
+    this.onLogout,
     this.restaurantId,
     this.deliveryFee,
+    this.dineInTable,
+    this.onDineInSessionUpdated,
+    this.onDineInReleased,
   });
 
   final VoidCallback? onOrderSubmitted;
   final VoidCallback? onOrdersSubmitted;
   final VoidCallback? onOpenMenu;
+  final VoidCallback? onLogout;
   final String? restaurantId;
   final double? deliveryFee;
+  final DiningTable? dineInTable;
+  final ValueChanged<DiningTable>? onDineInSessionUpdated;
+  final VoidCallback? onDineInReleased;
 
   @override
   State<AdminPosPanel> createState() => _AdminPosPanelState();
 }
 
-class _PosPageData {
-  const _PosPageData({
-    required this.items,
-    required this.zones,
-    required this.topItemIds,
-  });
-
-  final List<MenuItem> items;
-  final List<DeliveryZone> zones;
-  final List<int> topItemIds;
-}
 class _AdminPosPanelState extends State<AdminPosPanel> {
   static const _allCategory = 'الكل';
   static const _topCategory = 'الأكثر مبيعاً 🔥';
+  static const _menuPageSize = 100;
 
-  late Future<_PosPageData> _pageFuture;
   final _formKey = GlobalKey<FormState>();
   final _searchFocus = FocusNode();
   final _searchController = TextEditingController();
@@ -73,10 +80,17 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
   final _avenueController = TextEditingController();
   final _houseController = TextEditingController();
   final _floorController = TextEditingController();
+  final _externalOrderIdController = TextEditingController();
 
   final List<CartItem> _cart = [];
   List<MenuItem> _allItems = const [];
+  List<SalesPlatformConfig> _salesPlatforms = SalesPlatformConfig.defaults();
+  PosPlatformSelection _platformSelection = PosPlatformSelection(
+    platform: SalesPlatformConfig.defaults().first,
+  );
   Timer? _lookupDebounce;
+  Timer? _sessionSaveTimer;
+  var _dineInHydrated = false;
   String? _lastLookupPhone;
   var _lookupInProgress = false;
   var _submitting = false;
@@ -87,8 +101,11 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
   String? _selectedGovernorate;
   DeliveryZone? _selectedZone;
   List<DeliveryZone> _zones = const [];
+  List<int> _topItemIds = const [];
   List<Order> _recentOrders = const [];
   int _customerOrderCount = 0;
+  var _menuLoading = true;
+  String? _menuError;
 
   String get _restaurantId =>
       widget.restaurantId ??
@@ -97,6 +114,8 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
 
   String get _restaurantName =>
       AdminAuthService.instance.restaurantName ?? 'المطعم';
+
+  bool get _isDineIn => widget.dineInTable != null;
 
   double get _subtotal =>
       _cart.fold(0.0, (sum, item) => sum + item.totalPrice);
@@ -111,13 +130,15 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
   @override
   void initState() {
     super.initState();
-    _pageFuture = _loadPage();
+    unawaited(_loadPage());
     _phoneController.addListener(_onPhoneChanged);
+    unawaited(PosPrintSettingsService.instance.initialize());
   }
 
   @override
   void dispose() {
     _lookupDebounce?.cancel();
+    _sessionSaveTimer?.cancel();
     _phoneController.removeListener(_onPhoneChanged);
     _searchFocus.dispose();
     _searchController.dispose();
@@ -128,39 +149,162 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
     _avenueController.dispose();
     _houseController.dispose();
     _floorController.dispose();
+    _externalOrderIdController.dispose();
     super.dispose();
   }
 
-  Future<_PosPageData> _loadPage() async {
-    final results = await Future.wait([
-      ApiService.instance.fetchPublicItems(restaurantId: _restaurantId),
-      ApiService.instance.fetchDeliveryZones(restaurantId: _restaurantId),
-      ApiService.instance.fetchTopMenuItemIds(restaurantId: _restaurantId),
-    ]);
-
-    final items = (results[0] as List<MenuItem>)
-        .where((item) => item.isAvailable)
-        .toList();
-    final zones = results[1] as List<DeliveryZone>;
-    final topItemIds = results[2] as List<int>;
-
-    _allItems = items;
-    _zones = zones;
-    if (_selectedGovernorate == null && zones.isNotEmpty) {
-      _selectedGovernorate = zones.first.governorate;
+  Future<void> _loadPage() async {
+    if (mounted) {
+      setState(() {
+        _menuLoading = true;
+        _menuError = null;
+      });
     }
-    _syncDefaultArea();
 
-    return _PosPageData(
-      items: items,
-      zones: zones,
-      topItemIds: topItemIds,
-    );
+    try {
+      final cachedSettings = RestaurantSettingsService.instance.cached;
+      if (cachedSettings != null) {
+        _applySettings(cachedSettings);
+      }
+
+      final first = await ApiService.instance.fetchItemsPage(
+        restaurantId: _restaurantId,
+        lite: true,
+        limit: _menuPageSize,
+      );
+      _allItems = first.items.where((item) => item.isAvailable).toList();
+      _hydrateDineInCartIfNeeded();
+      if (!mounted) return;
+      setState(() {
+        _menuLoading = false;
+        _menuError = null;
+      });
+
+      unawaited(_loadRemainingMenu(first.total, first.items.length));
+      unawaited(_loadPosExtras());
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _menuLoading = false;
+        _menuError = error.toString().replaceFirst('Exception: ', '');
+      });
+    }
+  }
+
+  List<MenuItem> _mergeItems(List<MenuItem> current, List<MenuItem> incoming) {
+    final byId = <int, MenuItem>{
+      for (final item in current) item.id: item,
+    };
+    for (final item in incoming) {
+      if (!item.isAvailable) continue;
+      byId[item.id] = item;
+    }
+    return byId.values.toList();
+  }
+
+  void _applySettings(RestaurantSettings settings) {
+    final platforms = settings.resolvedSalesPlatforms;
+    _salesPlatforms = platforms;
+    if (_platformSelection.platform.id.isEmpty ||
+        !platforms.any((p) => p.id == _platformSelection.platform.id)) {
+      _platformSelection = PosPlatformSelection(
+        platform: platforms.firstWhere(
+          (p) => p.isLocal,
+          orElse: () => platforms.first,
+        ),
+      );
+    }
+  }
+
+  Future<void> _loadRemainingMenu(int total, int startOffset) async {
+    var offset = startOffset;
+    while (offset < total) {
+      final page = await ApiService.instance.fetchItemsPage(
+        restaurantId: _restaurantId,
+        lite: true,
+        limit: _menuPageSize,
+        offset: offset,
+      );
+      if (page.items.isEmpty) break;
+      offset += page.items.length;
+      if (!mounted) return;
+      setState(() {
+        _allItems = _mergeItems(_allItems, page.items);
+      });
+    }
+  }
+
+  Future<void> _loadPosExtras() async {
+    try {
+      final results = await Future.wait([
+        ApiService.instance.fetchDeliveryZones(restaurantId: _restaurantId),
+        RestaurantSettingsService.instance.load(restaurantId: _restaurantId),
+        ApiService.instance.fetchTopMenuItemIds(restaurantId: _restaurantId),
+      ]);
+      if (!mounted) return;
+      final zones = results[0] as List<DeliveryZone>;
+      final settings = results[1] as RestaurantSettings;
+      final topItemIds = results[2] as List<int>;
+      setState(() {
+        _zones = zones;
+        _topItemIds = topItemIds;
+        _applySettings(settings);
+        if (_selectedGovernorate == null && zones.isNotEmpty) {
+          _selectedGovernorate = zones.first.governorate;
+        }
+        _syncDefaultArea();
+      });
+    } catch (_) {}
   }
 
   Future<void> _reload() async {
-    setState(() => _pageFuture = _loadPage());
-    await _pageFuture;
+    await _loadPage();
+  }
+
+  void _hydrateDineInCartIfNeeded() {
+    if (!_isDineIn || _dineInHydrated) return;
+    _dineInHydrated = true;
+    final session = widget.dineInTable?.activeSession;
+    if (session == null) return;
+    if (session.customerName.isNotEmpty) {
+      _nameController.text = session.customerName;
+    } else {
+      _nameController.text = widget.dineInTable?.displayName ?? '';
+    }
+    if (session.phone.isNotEmpty) {
+      _phoneController.text = session.phone;
+    }
+    if (session.cartItems.isEmpty) return;
+    _cart
+      ..clear()
+      ..addAll(
+        DiningTablesService.cartItemsFromSession(
+          session.cartItems,
+          catalog: _allItems,
+        ),
+      );
+  }
+
+  void _scheduleDineInSave() {
+    if (!_isDineIn) return;
+    _sessionSaveTimer?.cancel();
+    _sessionSaveTimer = Timer(const Duration(milliseconds: 700), () {
+      unawaited(_persistDineInSession());
+    });
+  }
+
+  Future<void> _persistDineInSession() async {
+    final table = widget.dineInTable;
+    if (table == null) return;
+    try {
+      final updated = await DiningTablesService.instance.updateSession(
+        table.id,
+        cartItems: List.from(_cart),
+        customerName: _nameController.text.trim(),
+        phone: _phoneController.text.trim(),
+      );
+      widget.onDineInSessionUpdated?.call(updated);
+    } catch (_) {}
   }
 
   bool _isStaticPicksCategory(String category) {
@@ -394,6 +538,7 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
       final cartItem = await showPosFastModifiersDialog(context, item);
       if (cartItem != null && mounted) {
         setState(() => _cart.add(cartItem));
+        _scheduleDineInSave();
       }
       return;
     }
@@ -420,6 +565,7 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
         );
       }
     });
+    _scheduleDineInSave();
   }
 
   void _updateCartQuantity(String cartItemId, int quantity) {
@@ -432,10 +578,12 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
       if (index == -1) return;
       _cart[index] = _cart[index].copyWith(quantity: quantity);
     });
+    _scheduleDineInSave();
   }
 
   void _clearCart() {
     setState(_cart.clear);
+    _scheduleDineInSave();
   }
 
   void _clearSearch() {
@@ -456,6 +604,7 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
       _showMessage('أضف أصنافاً إلى الطلب أولاً');
       return false;
     }
+    if (_isDineIn) return true;
     if (!(_formKey.currentState?.validate() ?? false)) {
       _showMessage('يرجى إدخال اسم العميل ورقم الهاتف');
       return false;
@@ -467,13 +616,104 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
     return true;
   }
 
-  Future<Order?> _submitOrder() async {
+  Future<Order?> _sendDineInKitchen() async {
+    final table = widget.dineInTable;
+    if (table == null || !_validateOrder()) return null;
+    setState(() => _submitting = true);
+    try {
+      final result = await DiningTablesService.instance.sendKitchen(
+        table.id,
+        cartItems: List.from(_cart),
+        customerName: _nameController.text.trim().isEmpty
+            ? table.displayName
+            : _nameController.text.trim(),
+        phone: _phoneController.text.trim().isEmpty
+            ? '00000000'
+            : _phoneController.text.trim(),
+      );
+      widget.onDineInSessionUpdated?.call(result.table);
+      (widget.onOrderSubmitted ?? widget.onOrdersSubmitted)?.call();
+      await PosPrintHelper.printIfAuto(
+        order: result.order,
+        kind: PosReceiptKind.kitchen,
+      );
+      if (mounted && !PosPrintHelper.settings.autoPrintKitchen) {
+        await showPosPrintPreviewDialog(
+          context,
+          order: result.order,
+          restaurantName: _restaurantName,
+          kind: PosReceiptKind.kitchen,
+        );
+      }
+      return result.order;
+    } catch (error) {
+      _showMessage(error.toString().replaceFirst('Exception: ', ''));
+      return null;
+    } finally {
+      if (mounted) setState(() => _submitting = false);
+    }
+  }
+
+  Future<Order?> _checkoutDineIn({
+    bool autoPrint = true,
+    bool forcePrintCustomer = false,
+  }) async {
+    final table = widget.dineInTable;
+    if (table == null || !_validateOrder()) return null;
+    setState(() => _submitting = true);
+    try {
+      final invoiceNumber =
+          DateTime.now().millisecondsSinceEpoch.toString().substring(5);
+      final result = await DiningTablesService.instance.checkout(
+        table.id,
+        cartItems: List.from(_cart),
+        paymentMethod: _paymentMethod,
+        customerName: _nameController.text.trim().isEmpty
+            ? table.displayName
+            : _nameController.text.trim(),
+        phone: _phoneController.text.trim().isEmpty
+            ? '00000000'
+            : _phoneController.text.trim(),
+        invoiceNumber: invoiceNumber,
+      );
+      _sessionSaveTimer?.cancel();
+      if (forcePrintCustomer) {
+        await PosPrintHelper.printOrder(
+          order: result.order,
+          kind: PosReceiptKind.customer,
+        );
+      } else if (autoPrint) {
+        await PosPrintHelper.printIfAuto(
+          order: result.order,
+          kind: PosReceiptKind.customer,
+        );
+      }
+      if (mounted) {
+        await _openInvoiceDialog(result.order);
+      }
+      if (!mounted) return result.order;
+      setState(_cart.clear);
+      widget.onDineInReleased?.call();
+      (widget.onOrderSubmitted ?? widget.onOrdersSubmitted)?.call();
+      return result.order;
+    } catch (error) {
+      _showMessage(error.toString().replaceFirst('Exception: ', ''));
+      return null;
+    } finally {
+      if (mounted) setState(() => _submitting = false);
+    }
+  }
+
+  Future<Order?> _submitOrder({bool autoPrint = true}) async {
     if (!_validateOrder()) return null;
+    if (_isDineIn) return _checkoutDineIn(autoPrint: autoPrint);
     setState(() => _submitting = true);
 
     try {
       final invoiceNumber =
           DateTime.now().millisecondsSinceEpoch.toString().substring(5);
+      final orderSource = _platformSelection.platform.id;
+      final platformMeta = _platformSelection.metaForTotal(_grandTotal);
       await OrdersService.instance.submitOrderFromCart(
         cartItems: List.from(_cart),
         customerName: _nameController.text.trim(),
@@ -488,8 +728,9 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
         deliveryZoneId: _isPickup ? null : _selectedZone?.id,
         addressDetails:
             _isPickup ? const DeliveryAddressDetails() : _addressDetails,
-        orderSource: 'pos',
+        orderSource: orderSource,
         orderType: _isPickup ? OrderType.pickup : OrderType.delivery,
+        platformMeta: platformMeta,
       );
 
       await CustomerCheckoutCacheService.instance.saveProfile(
@@ -519,13 +760,24 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
         deliveryZoneId: _isPickup ? null : _selectedZone?.id,
         addressDetails:
             _isPickup ? const DeliveryAddressDetails() : _addressDetails,
-        orderSource: 'pos',
+        orderSource: orderSource,
         orderType: _isPickup ? OrderType.pickup : OrderType.delivery,
+        externalOrderId: platformMeta?.externalOrderId,
+        platformCommission: platformMeta?.platformCommission,
       );
 
       _clearCart();
       (widget.onOrderSubmitted ?? widget.onOrdersSubmitted)?.call();
-      _showMessage('تم حفظ الطلب بنجاح');
+      if (autoPrint) {
+        await PosPrintHelper.printIfAuto(
+          order: order,
+          kind: PosReceiptKind.kitchen,
+        );
+        await PosPrintHelper.printIfAuto(
+          order: order,
+          kind: PosReceiptKind.customer,
+        );
+      }
       return order;
     } on ApiRequestException catch (error) {
       if (error.isOfferUsageLimit) {
@@ -547,15 +799,37 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
     }
   }
 
-  Future<void> _completeAndPrint(PosReceiptKind kind) async {
-    final order = await _submitOrder();
-    if (order == null || !mounted) return;
-    final html = PosReceiptHtml.build(
+  Future<void> _openInvoiceDialog(Order order) async {
+    if (!mounted) return;
+    await showAdminOrderDetailsDialog(
+      context,
       order: order,
-      restaurantName: _restaurantName,
-      kind: kind,
+      platforms: _salesPlatforms,
+      onStatusChanged: (orderId, status) =>
+          OrdersService.instance.updateOrderStatus(orderId, status),
     );
-    printPosReceiptHtml(html);
+  }
+
+  Future<void> _completeAndPrint(PosReceiptKind kind) async {
+    if (_isDineIn) {
+      if (kind == PosReceiptKind.kitchen) {
+        unawaited(_sendDineInKitchen());
+        return;
+      }
+      final order = await _checkoutDineIn(
+        autoPrint: false,
+        forcePrintCustomer: true,
+      );
+      if (order == null || !mounted) return;
+      return;
+    }
+    final order = await _submitOrder(autoPrint: false);
+    if (order == null || !mounted) return;
+    await PosPrintHelper.printOrder(order: order, kind: kind);
+    if (!mounted) return;
+    if (kind == PosReceiptKind.customer) {
+      await _openInvoiceDialog(order);
+    }
   }
 
   void _showMessage(String message) {
@@ -578,7 +852,9 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
         actions: {
           PosSubmitIntent: CallbackAction<PosSubmitIntent>(
             onInvoke: (_) {
-              if (!_submitting) unawaited(_submitOrder());
+              if (!_submitting) {
+                unawaited(_completeAndPrint(PosReceiptKind.customer));
+              }
               return null;
             },
           ),
@@ -603,20 +879,19 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
         },
         child: Focus(
           autofocus: true,
-          child: FutureBuilder<_PosPageData>(
-            future: _pageFuture,
-            builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) {
+          child: Builder(
+            builder: (context) {
+              if (_menuLoading) {
                 return const Center(
                   child: CircularProgressIndicator(color: AppTheme.brandOrange),
                 );
               }
-              if (snapshot.hasError) {
+              if (_menuError != null) {
                 return Center(
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text('تعذر تحميل بيانات POS: ${snapshot.error}'),
+                      Text('تعذر تحميل بيانات POS: $_menuError'),
                       const SizedBox(height: 12),
                       FilledButton(
                         onPressed: _reload,
@@ -627,10 +902,9 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
                 );
               }
 
-              final page = snapshot.data!;
-              final categories = _categories(page.items, page.topItemIds);
-              final menuItems = _filteredMenuItems(page.items, page.topItemIds);
-              final quickItems = _quickItems(page.items, page.topItemIds);
+              final categories = _categories(_allItems, _topItemIds);
+              final menuItems = _filteredMenuItems(_allItems, _topItemIds);
+              final quickItems = _quickItems(_allItems, _topItemIds);
 
               return LayoutBuilder(
                 builder: (context, constraints) {
@@ -900,7 +1174,7 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Container(
-              padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
               decoration: const BoxDecoration(
                 border: Border(bottom: BorderSide(color: PosTheme.border)),
               ),
@@ -911,66 +1185,110 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
                     style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
                   ),
                   const Spacer(),
+                  IconButton(
+                    tooltip: 'إعدادات الطابعة',
+                    visualDensity: VisualDensity.compact,
+                    onPressed: () => showPosPrinterSettingsDialog(context),
+                    icon: const Icon(Icons.print_outlined, size: 20),
+                  ),
                   if (_cart.isNotEmpty)
                     TextButton.icon(
                       onPressed: _clearCart,
                       icon: const Icon(Icons.delete_outline, size: 18),
                       label: const Text('تفريغ F8'),
                     ),
+                  if (widget.onLogout != null)
+                    IconButton(
+                      tooltip: 'تسجيل الخروج',
+                      visualDensity: VisualDensity.compact,
+                      onPressed: widget.onLogout,
+                      icon: const Icon(Icons.logout, size: 20),
+                    ),
+                ],
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(14, 12, 14, 0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _buildCustomerFields(),
+                  const SizedBox(height: 10),
+                  if (!_isDineIn) ...[
+                    PosPlatformSelector(
+                      platforms: _salesPlatforms,
+                      selection: _platformSelection,
+                      orderTotal: _grandTotal,
+                      externalOrderIdController: _externalOrderIdController,
+                      onChanged: (next) =>
+                          setState(() => _platformSelection = next),
+                    ),
+                    const SizedBox(height: 10),
+                    _buildFulfillmentToggle(),
+                    if (!_isPickup && _showDeliveryDetails) ...[
+                      const SizedBox(height: 8),
+                      _buildDeliveryFields(),
+                    ],
+                    const SizedBox(height: 8),
+                    _buildPaymentSelector(),
+                  ] else ...[
+                    Text(
+                      'طلب صالة — ${widget.dineInTable!.displayName}',
+                      style: const TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                    const SizedBox(height: 8),
+                    _buildPaymentSelector(),
+                  ],
                 ],
               ),
             ),
             Expanded(
-              child: ListView(
-                padding: const EdgeInsets.all(14),
-                children: [
-                  _buildCustomerFields(),
-                  const SizedBox(height: 12),
-                  _buildFulfillmentToggle(),
-                  if (!_isPickup && _showDeliveryDetails) ...[
-                    const SizedBox(height: 8),
-                    _buildDeliveryFields(),
-                  ],
-                  const SizedBox(height: 12),
-                  _buildPaymentSelector(),
-                  const SizedBox(height: 14),
-                  if (_cart.isEmpty)
-                    Container(
-                      padding: const EdgeInsets.all(24),
-                      decoration: PosTheme.card(color: PosTheme.surfaceAlt),
-                      child: const Center(
-                        child: Text(
-                          'السلة فارغة — اختر أصنافاً من المنيو',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(color: PosTheme.textMuted),
-                        ),
-                      ),
-                    )
-                  else
-                    ..._cart.map(
-                      (item) => PosCartLine(
-                        item: item,
-                        onIncrease: () =>
-                            _updateCartQuantity(item.id, item.quantity + 1),
-                        onDecrease: () =>
-                            _updateCartQuantity(item.id, item.quantity - 1),
-                      ),
-                    ),
-                  if (_cart.isNotEmpty)
-                    SmartSalesmanWidget(
-                      cartItems: List.from(_cart),
-                      cartTotal: _subtotal,
-                      restaurantId: _restaurantId,
-                      compact: true,
-                      onAddItem: _addToCart,
-                    ),
-                ],
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(14, 12, 14, 8),
+                child: _buildCartBody(),
               ),
             ),
             _buildCheckoutFooter(),
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildCartBody() {
+    if (_cart.isEmpty) {
+      return Container(
+        decoration: PosTheme.card(color: PosTheme.surfaceAlt),
+        child: const Center(
+          child: Padding(
+            padding: EdgeInsets.all(24),
+            child: Text(
+              'السلة فارغة — اختر أصنافاً من المنيو',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: PosTheme.textMuted),
+            ),
+          ),
+        ),
+      );
+    }
+
+    return ListView(
+      children: [
+        ..._cart.map(
+          (item) => PosCartLine(
+            item: item,
+            onIncrease: () => _updateCartQuantity(item.id, item.quantity + 1),
+            onDecrease: () => _updateCartQuantity(item.id, item.quantity - 1),
+          ),
+        ),
+        SmartSalesmanWidget(
+          cartItems: List.from(_cart),
+          cartTotal: _subtotal,
+          restaurantId: _restaurantId,
+          compact: true,
+          onAddItem: _addToCart,
+        ),
+      ],
     );
   }
 
@@ -1002,8 +1320,12 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
                     borderRadius: BorderRadius.circular(10),
                   ),
                 ),
-                validator: (value) =>
-                    (value == null || value.trim().length < 8) ? 'مطلوب' : null,
+                validator: (value) {
+                  if (_isDineIn) return null;
+                  return (value == null || value.trim().length < 8)
+                      ? 'مطلوب'
+                      : null;
+                },
               ),
             ),
             const SizedBox(width: 8),
@@ -1014,12 +1336,17 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
                 decoration: InputDecoration(
                   labelText: 'اسم العميل',
                   isDense: true,
+                  prefixIcon: const Icon(Icons.person_outline, size: 20),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(10),
                   ),
                 ),
-                validator: (value) =>
-                    (value == null || value.trim().isEmpty) ? 'مطلوب' : null,
+                validator: (value) {
+                  if (_isDineIn) return null;
+                  return (value == null || value.trim().isEmpty)
+                      ? 'مطلوب'
+                      : null;
+                },
               ),
             ),
           ],
@@ -1043,30 +1370,29 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
   }
 
   Widget _buildFulfillmentToggle() {
-    return Row(
+    return Wrap(
+      spacing: 6,
+      runSpacing: 6,
       children: [
-        Expanded(
-          child: PosPaymentChip(
-            label: 'استلام',
-            icon: Icons.storefront,
-            selected: _isPickup,
-            onTap: () => setState(() {
-              _isPickup = true;
-              _showDeliveryDetails = false;
-            }),
-          ),
+        PosStyleChip(
+          label: 'استلام',
+          icon: Icons.storefront,
+          color: const Color(0xFF6B1124),
+          selected: _isPickup,
+          onSelected: () => setState(() {
+            _isPickup = true;
+            _showDeliveryDetails = false;
+          }),
         ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: PosPaymentChip(
-            label: 'توصيل',
-            icon: Icons.delivery_dining,
-            selected: !_isPickup,
-            onTap: () => setState(() {
-              _isPickup = false;
-              _showDeliveryDetails = true;
-            }),
-          ),
+        PosStyleChip(
+          label: 'توصيل',
+          icon: Icons.delivery_dining,
+          color: const Color(0xFF0EA5E9),
+          selected: !_isPickup,
+          onSelected: () => setState(() {
+            _isPickup = false;
+            _showDeliveryDetails = true;
+          }),
         ),
       ],
     );
@@ -1146,25 +1472,58 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
             ),
           ],
         ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            Expanded(
+              child: TextFormField(
+                controller: _avenueController,
+                decoration: InputDecoration(
+                  labelText: 'الجادة',
+                  isDense: true,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: TextFormField(
+                controller: _houseController,
+                decoration: InputDecoration(
+                  labelText: 'البيت',
+                  isDense: true,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
       ],
     );
   }
 
   Widget _buildPaymentSelector() {
-    return Row(
+    return Wrap(
+      spacing: 6,
+      runSpacing: 6,
       children: [
-        PosPaymentChip(
+        PosStyleChip(
           label: 'كاش',
           icon: Icons.payments_outlined,
+          color: const Color(0xFF059669),
           selected: _paymentMethod == 'كاش',
-          onTap: () => setState(() => _paymentMethod = 'كاش'),
+          onSelected: () => setState(() => _paymentMethod = 'كاش'),
         ),
-        const SizedBox(width: 8),
-        PosPaymentChip(
+        PosStyleChip(
           label: 'K-Net',
           icon: Icons.credit_card,
+          color: const Color(0xFF2563EB),
           selected: _paymentMethod == 'K-Net',
-          onTap: () => setState(() => _paymentMethod = 'K-Net'),
+          onSelected: () => setState(() => _paymentMethod = 'K-Net'),
         ),
       ],
     );
@@ -1181,7 +1540,7 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           PosTotalRow(label: 'المجموع الفرعي', value: _subtotal),
-          if (!_isPickup)
+          if (!_isPickup && !_isDineIn)
             PosTotalRow(label: 'التوصيل', value: _deliveryFee),
           PosTotalRow(
             label: 'الإجمالي',
@@ -1190,32 +1549,17 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
             large: true,
           ),
           const SizedBox(height: 10),
-          FilledButton.icon(
-            style: FilledButton.styleFrom(
-              backgroundColor: PosTheme.success,
-              minimumSize: const Size.fromHeight(52),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-            ),
-            onPressed: _submitting ? null : () => unawaited(_submitOrder()),
-            icon: _submitting
-                ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: Colors.white,
-                    ),
-                  )
-                : const Icon(Icons.flash_on),
-            label: const Text('إتمام الدفع F2'),
-          ),
-          const SizedBox(height: 8),
           Row(
             children: [
               Expanded(
-                child: OutlinedButton.icon(
+                child: FilledButton.icon(
+                  style: FilledButton.styleFrom(
+                    backgroundColor: const Color(0xFFE65100),
+                    minimumSize: const Size.fromHeight(48),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
                   onPressed: _submitting
                       ? null
                       : () => _completeAndPrint(PosReceiptKind.kitchen),
@@ -1225,7 +1569,14 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
               ),
               const SizedBox(width: 8),
               Expanded(
-                child: OutlinedButton.icon(
+                child: FilledButton.icon(
+                  style: FilledButton.styleFrom(
+                    backgroundColor: PosTheme.success,
+                    minimumSize: const Size.fromHeight(48),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
                   onPressed: _submitting
                       ? null
                       : () => _completeAndPrint(PosReceiptKind.customer),

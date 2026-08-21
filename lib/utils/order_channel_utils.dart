@@ -16,11 +16,6 @@ bool isPosOrderSource(String? source) {
 
 bool isOnlineMenuOrder(Order order) {
   if (isPosOrderSource(order.orderSource)) return false;
-  if (order.status == OrderStatus.delivered &&
-      order.shiftId != null &&
-      order.shiftId!.isNotEmpty) {
-    return false;
-  }
   final source = order.orderSource?.trim().toLowerCase() ?? '';
   if (source.isEmpty) return true;
   return _onlineSourcePattern.hasMatch(source) || !isPosOrderSource(source);
@@ -30,6 +25,12 @@ bool isCashPaymentMethod(String? paymentMethod) {
   final value = paymentMethod?.trim() ?? '';
   if (value.isEmpty) return false;
   return _cashPaymentPattern.hasMatch(value);
+}
+
+bool isKnetPaymentMethod(String? paymentMethod) {
+  final value = paymentMethod?.trim() ?? '';
+  if (value.isEmpty) return false;
+  return RegExp(r'k-?net|knet|كي\s*نت', caseSensitive: false).hasMatch(value);
 }
 
 bool isOnlineCashOrder(Order order) {

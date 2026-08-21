@@ -13,6 +13,7 @@ class PosSidebar extends StatefulWidget {
     required this.onShiftCloseRequested,
     this.width = expandedWidth,
     this.enableCollapse = true,
+    this.tableManagementEnabled = false,
   });
 
   static const double expandedWidth = 240;
@@ -29,6 +30,7 @@ class PosSidebar extends StatefulWidget {
   final VoidCallback onShiftCloseRequested;
   final double width;
   final bool enableCollapse;
+  final bool tableManagementEnabled;
 
   @override
   State<PosSidebar> createState() => _PosSidebarState();
@@ -98,7 +100,9 @@ class _PosSidebarState extends State<PosSidebar> {
       );
     }
 
-    final items = PosMenuCatalog.visibleItems();
+    final items = PosMenuCatalog.visibleItems(
+      tableManagementEnabled: widget.tableManagementEnabled,
+    );
 
     return AnimatedContainer(
       duration: const Duration(milliseconds: 260),

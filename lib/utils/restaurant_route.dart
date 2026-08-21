@@ -13,6 +13,7 @@ class RestaurantRoute {
     'legacy-menu',
     'menu',
     'restaurants',
+    'pos',
   };
 
   static String normalizePath(String? path) {

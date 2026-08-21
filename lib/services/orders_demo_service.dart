@@ -16,10 +16,26 @@ class OrdersDemoService {
   static var isDemoData = true;
   static Timer? _pollTimer;
   static Timer? _simulationTimer;
+  static Future<void>? _refreshInFlight;
+  static String _ordersFingerprint = '';
 
   static Stream<List<Order>> watchOrders() {
     unawaited(_ensureInitialized());
-    return _controller.stream;
+    return Stream<List<Order>>.multi((listener) {
+      if (_initialized) {
+        listener.add(List.unmodifiable(_orders));
+      }
+      final sub = _controller.stream.listen(
+        listener.add,
+        onError: listener.addError,
+      );
+      listener
+        ..onPause = sub.pause
+        ..onResume = sub.resume
+        ..onCancel = () async {
+          await sub.cancel();
+        };
+    });
   }
 
   static bool get hasOrders => _orders.isNotEmpty;
@@ -42,14 +58,33 @@ class OrdersDemoService {
       _scheduleDemoSimulation();
     }
 
-    _pollTimer ??= Timer.periodic(const Duration(seconds: 3), (_) {
+    _pollTimer ??= Timer.periodic(const Duration(seconds: 8), (_) {
       unawaited(_refreshFromApi());
     });
   }
 
   static Future<void> refreshFromApi() => _refreshFromApi();
 
-  static Future<void> _refreshFromApi() async {
+  static String _fingerprint(List<Order> orders) {
+    return orders
+        .map(
+          (order) =>
+              '${order.id}:${order.status.name}:${order.cashierId}:${order.shiftId}:${order.totalPrice}',
+        )
+        .join('|');
+  }
+
+  static Future<void> _refreshFromApi() {
+    final inFlight = _refreshInFlight;
+    if (inFlight != null) return inFlight;
+    final future = _loadOrdersFromApi().whenComplete(() {
+      _refreshInFlight = null;
+    });
+    _refreshInFlight = future;
+    return future;
+  }
+
+  static Future<void> _loadOrdersFromApi() async {
     try {
       final apiOrders = await ApiService.instance.fetchOrders();
       if (apiOrders.isEmpty) {
@@ -57,13 +92,20 @@ class OrdersDemoService {
         if (!isDemoData) {
           _orders = [];
           isDemoData = true;
+          _ordersFingerprint = '';
           _emit();
         }
         return;
       }
 
+      final fingerprint = _fingerprint(apiOrders);
+      if (fingerprint == _ordersFingerprint && !isDemoData) {
+        return;
+      }
+
       isDemoData = false;
       _orders = apiOrders;
+      _ordersFingerprint = fingerprint;
       _emit();
     } catch (_) {}
   }
@@ -73,6 +115,7 @@ class OrdersDemoService {
     OrderStatus status, {
     String? shiftId,
     String? cashierId,
+    String? cashierName,
   }) async {
     await _ensureInitialized();
 
@@ -80,20 +123,26 @@ class OrdersDemoService {
     if (index == -1) return;
 
     if (!orderId.startsWith('demo-')) {
-      try {
-        await ApiService.instance.updateOrderStatus(
-          orderId,
-          status,
-          shiftId: shiftId,
-          cashierId: cashierId,
-        );
-      } catch (_) {}
+      final updated = await ApiService.instance.updateOrderStatus(
+        orderId,
+        status,
+        shiftId: shiftId,
+        cashierId: cashierId,
+        cashierName: cashierName,
+      );
+      if (updated != null) {
+        _orders[index] = updated;
+        _ordersFingerprint = _fingerprint(_orders);
+        _emit();
+        return;
+      }
     }
 
     _orders[index] = _orders[index].copyWith(
       status: status,
       shiftId: shiftId,
       cashierId: cashierId,
+      cashierName: cashierName,
     );
     _emit();
   }
@@ -257,6 +306,8 @@ class OrdersDemoService {
     DeliveryAddressDetails? addressDetails,
     String? orderSource,
     OrderType? orderType,
+    String? externalOrderId,
+    double? platformCommission,
     double? walletRedeemAmount,
     double? subtotal,
     double? discountAmount,
@@ -302,6 +353,8 @@ class OrdersDemoService {
       addressDetails: addressDetails ?? const DeliveryAddressDetails(),
       orderSource: orderSource,
       walletRedeemAmount: walletRedeemAmount,
+      externalOrderId: externalOrderId,
+      platformCommission: platformCommission,
     );
   }
 }

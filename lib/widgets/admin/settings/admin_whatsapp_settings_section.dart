@@ -4,7 +4,6 @@ import '../../../services/admin_auth_service.dart';
 import '../../../services/restaurant_settings_service.dart';
 import '../../../services/super_admin_scope_service.dart';
 import '../../../utils/whatsapp_phone.dart';
-import '../admin_platform_settings_card.dart';
 import '../admin_breakpoints.dart';
 import '../admin_corner_toast.dart';
 import '../admin_responsive_layout.dart';
@@ -221,8 +220,6 @@ class _AdminWhatsappSettingsSectionState extends State<AdminWhatsappSettingsSect
             ),
           ),
         ),
-        const SizedBox(height: 12),
-        const AdminPlatformSettingsCard(),
       ],
     );
   }

@@ -6,6 +6,8 @@ import '../../../services/pos_operations_service.dart';
 /// POS sub-routes (synced with `/admin/pos/...` on web).
 enum PosRoute {
   home('/admin/pos'),
+  dineIn('/admin/pos/dine-in'),
+  orders('/admin/pos/orders'),
   shiftClose('/admin/pos/shift-close'),
   reports('/admin/pos/reports'),
   voidOrders('/admin/pos/void-orders'),
@@ -62,6 +64,20 @@ abstract final class PosMenuCatalog {
       route: PosRoute.home,
     ),
     PosSidebarMenuItem(
+      id: 'dine_in',
+      icon: Icons.table_restaurant,
+      label: 'طاولات الصالة',
+      requiredPermission: PosPermissionKeys.processOrders,
+      route: PosRoute.dineIn,
+    ),
+    PosSidebarMenuItem(
+      id: 'online_orders',
+      icon: Icons.language_outlined,
+      label: 'طلبات الموقع / العملاء',
+      requiredPermission: PosPermissionKeys.receiveOnlineOrders,
+      route: PosRoute.orders,
+    ),
+    PosSidebarMenuItem(
       id: 'close_shift',
       icon: Icons.lock_clock,
       label: 'إغلاق الوردية',
@@ -99,12 +115,24 @@ abstract final class PosMenuCatalog {
     ),
   ];
 
-  static List<PosSidebarMenuItem> visibleItems() {
+  static List<PosSidebarMenuItem> visibleItems({
+    bool tableManagementEnabled = false,
+  }) {
     final pos = PosOperationsService.instance;
     return allItems.where((item) {
+      if (item.route == PosRoute.dineIn && !tableManagementEnabled) {
+        return false;
+      }
       if (item.requiredPermission == PosPermissionKeys.posAccess) {
         return pos.allows(PosPermissionKeys.posAccess) ||
             pos.allows(PosPermissionKeys.processOrders);
+      }
+      if (item.requiredPermission == PosPermissionKeys.processOrders) {
+        return pos.allows(PosPermissionKeys.processOrders) ||
+            pos.allows(PosPermissionKeys.posAccess);
+      }
+      if (item.requiredPermission == PosPermissionKeys.receiveOnlineOrders) {
+        return pos.allows(PosPermissionKeys.receiveOnlineOrders);
       }
       return pos.allows(item.requiredPermission);
     }).toList(growable: false);

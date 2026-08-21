@@ -5,6 +5,7 @@ class PosPermissionKeys {
 
   static const posAccess = 'pos_access';
   static const processOrders = 'process_orders';
+  static const receiveOnlineOrders = 'receive_online_orders';
   static const printInvoice = 'print_invoice';
   static const openCashDrawer = 'open_cash_drawer';
   static const overridePrices = 'override_prices';
@@ -90,6 +91,7 @@ class PosRole {
           permissions: PosPermissionCatalog.normalizePermissions({
             PosPermissionKeys.posAccess: true,
             PosPermissionKeys.processOrders: true,
+            PosPermissionKeys.receiveOnlineOrders: true,
             PosPermissionKeys.printInvoice: true,
             PosPermissionKeys.viewShiftReports: true,
             PosPermissionKeys.viewReports: true,
@@ -104,6 +106,7 @@ class PosRole {
           permissions: PosPermissionCatalog.normalizePermissions({
             PosPermissionKeys.posAccess: true,
             PosPermissionKeys.processOrders: true,
+            PosPermissionKeys.receiveOnlineOrders: true,
             PosPermissionKeys.printInvoice: true,
             PosPermissionKeys.openCashDrawer: true,
             PosPermissionKeys.overridePrices: true,

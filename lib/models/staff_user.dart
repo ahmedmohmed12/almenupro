@@ -5,6 +5,8 @@ class StaffUser {
     required this.roleId,
     this.isActive = true,
     this.pin,
+    this.restaurantId,
+    this.restaurantName,
     this.createdAt,
     this.updatedAt,
   });
@@ -14,6 +16,8 @@ class StaffUser {
   final String roleId;
   final bool isActive;
   final String? pin;
+  final String? restaurantId;
+  final String? restaurantName;
   final DateTime? createdAt;
   final DateTime? updatedAt;
 
@@ -31,6 +35,10 @@ class StaffUser {
       roleId: json['roleId']?.toString() ?? json['role_id']?.toString() ?? 'cashier',
       isActive: json['isActive'] != false && json['is_active'] != false,
       pin: json['pin']?.toString() ?? json['maskedPin']?.toString(),
+      restaurantId: json['restaurantId']?.toString() ??
+          json['restaurant_id']?.toString(),
+      restaurantName: json['restaurantName']?.toString() ??
+          json['restaurant_name']?.toString(),
       createdAt: DateTime.tryParse(json['createdAt']?.toString() ?? ''),
       updatedAt: DateTime.tryParse(json['updatedAt']?.toString() ?? ''),
     );
@@ -69,9 +77,11 @@ class PosCashierSession {
     return PosCashierSession(
       staff: StaffUser.fromJson(Map<String, dynamic>.from(json['staff'] as Map? ?? {})),
       permissions: permissions,
-      roleId: json['role'] is Map
-          ? (json['role'] as Map)['id']?.toString() ?? ''
-          : json['roleId']?.toString() ?? '',
+      roleId: json['posRole'] is Map
+          ? (json['posRole'] as Map)['id']?.toString() ?? ''
+          : json['role'] is Map
+              ? (json['role'] as Map)['id']?.toString() ?? ''
+              : json['roleId']?.toString() ?? '',
     );
   }
 }

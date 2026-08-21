@@ -54,7 +54,8 @@ class SeoMetaTags {
     if (raw.isEmpty) return fallback;
 
     if (raw.startsWith('http://') || raw.startsWith('https://')) {
-      return raw;
+      final proxied = resolveImageUrl(raw);
+      return proxied.isNotEmpty ? proxied : raw;
     }
 
     if (raw.startsWith('/menu-images/') ||

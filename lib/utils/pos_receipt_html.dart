@@ -1,6 +1,8 @@
 import 'package:intl/intl.dart';
 
+import '../models/invoice_language.dart';
 import '../models/order.dart';
+import '../services/pos_print_settings_service.dart';
 
 enum PosReceiptKind { kitchen, customer }
 
@@ -13,17 +15,27 @@ class PosReceiptHtml {
     required PosReceiptKind kind,
     String? restaurantPhone,
     String? restaurantAddress,
-    PosReceiptPaperWidth paperWidth = PosReceiptPaperWidth.mm80,
+    String? restaurantLogoUrl,
+    PosReceiptPaperWidth? paperWidth,
+    double? widthMm,
+    PosPrintFontSize fontSize = PosPrintFontSize.medium,
+    InvoiceLanguage language = InvoiceLanguage.arabic,
   }) {
-    final time =
-        DateFormat('yyyy-MM-dd HH:mm').format(order.createdAt.toLocal());
+    final ar = language.isArabic;
+    final resolvedWidth = widthMm ??
+        (paperWidth == PosReceiptPaperWidth.mm58 ? 58.0 : 80.0);
+    final w = resolvedWidth.clamp(40.0, 120.0);
+    final time = DateFormat('hh:mm a').format(order.createdAt.toLocal());
+    final dateLine = DateFormat('yyyy-MM-dd').format(order.createdAt.toLocal());
     final orderId = order.invoiceNumber ?? order.id;
     final isKitchen = kind == PosReceiptKind.kitchen;
-    final title = isKitchen ? 'تذكرة المطبخ' : 'فاتورة العميل';
-    final paperClass =
-        paperWidth == PosReceiptPaperWidth.mm58 ? 'paper-58' : 'paper-80';
-    final bodyClass =
-        '$paperClass ${isKitchen ? 'kitchen-ticket' : 'customer-receipt'}';
+    final title = isKitchen
+        ? (ar ? 'تذكرة المطبخ' : 'Kitchen ticket')
+        : (ar ? 'فاتورة' : 'Invoice');
+    final fonts = _fontScale(fontSize, w);
+    final currency = ar ? 'د.ك' : 'KWD';
+    final langAttr = ar ? 'ar' : 'en';
+    final dirAttr = ar ? 'rtl' : 'ltr';
 
     final rows = order.items.map((item) {
       final addons = item.selectedOptions
@@ -33,13 +45,13 @@ class PosReceiptHtml {
           )
           .join('');
       final notes = item.specialNotes?.trim().isNotEmpty ?? false
-          ? '<div class="note">⚠ ${_escape(item.specialNotes!.trim())}</div>'
+          ? '<div class="note">${_escape(item.specialNotes!.trim())}</div>'
           : '';
 
       if (isKitchen) {
         return '''
         <div class="kitchen-item">
-          <div class="kitchen-qty">${item.quantity}x</div>
+          <div class="kitchen-qty">${item.quantity}</div>
           <div class="kitchen-details">
             <div class="kitchen-name">${_escape(item.name)}</div>
             $addons$notes
@@ -48,91 +60,170 @@ class PosReceiptHtml {
       }
 
       return '''
-        <tr>
-          <td class="qty">${item.quantity}x</td>
-          <td class="item-name">${_escape(item.name)}$addons$notes</td>
-          <td class="price">${item.lineTotal.toStringAsFixed(3)}</td>
-        </tr>''';
+        <div class="item-row">
+          <div class="item-main">
+            <span class="qty">${item.quantity}</span>
+            <span class="item-name">${_escape(item.name)}</span>
+          </div>
+          <div class="price">${item.lineTotal.toStringAsFixed(3)}</div>
+        </div>
+        $addons$notes''';
     }).join();
 
     final subtotal = order.subtotal ?? order.totalPrice;
     final deliveryFee = order.deliveryFee ?? 0;
+    final logo = (restaurantLogoUrl ?? '').trim();
+    final logoHtml = logo.isNotEmpty
+        ? '<img class="logo" src="${_escape(logo)}" alt="">'
+        : '';
     final phoneLine = restaurantPhone?.trim().isNotEmpty ?? false
-        ? '<div class="meta-row">📞 ${_escape(restaurantPhone!.trim())}</div>'
+        ? '<div class="store-meta">${_escape(restaurantPhone!.trim())}</div>'
         : '';
     final addressLine = restaurantAddress?.trim().isNotEmpty ?? false
-        ? '<div class="meta-row">📍 ${_escape(restaurantAddress!.trim())}</div>'
+        ? '<div class="store-meta">${_escape(restaurantAddress!.trim())}</div>'
         : '';
+
+    final orderTypeLabel = switch (order.orderType) {
+      OrderType.pickup => ar ? 'استلام' : 'Pickup',
+      OrderType.dineIn => ar ? 'صالة' : 'Dine-in',
+      OrderType.delivery => ar ? 'توصيل' : 'Delivery',
+    };
+    final defaultPayment = ar ? 'كاش' : 'Cash';
 
     final itemsBlock = isKitchen
         ? '<div class="kitchen-items">$rows</div>'
-        : '''
-  <table class="items-table">
-    <thead>
-      <tr>
-        <th>كم</th>
-        <th>الصنف</th>
-        <th class="price-col">د.ك</th>
-      </tr>
-    </thead>
-    <tbody>$rows</tbody>
-  </table>''';
+        : '<div class="items">$rows</div>';
 
     final totalsBlock = isKitchen
         ? ''
         : '''
   <div class="totals">
-    <div class="total-row"><span>المجموع الفرعي</span><span>${subtotal.toStringAsFixed(3)}</span></div>
-    <div class="total-row"><span>التوصيل</span><span>${deliveryFee.toStringAsFixed(3)}</span></div>
-    <div class="total-row grand"><span>الإجمالي</span><span>${order.totalPrice.toStringAsFixed(3)} د.ك</span></div>
+    <div class="total-row"><span>${ar ? 'المجموع' : 'Subtotal'}</span><span>${subtotal.toStringAsFixed(3)}</span></div>
+    ${deliveryFee > 0 ? '<div class="total-row"><span>${ar ? 'التوصيل' : 'Delivery'}</span><span>${deliveryFee.toStringAsFixed(3)}</span></div>' : ''}
+    <div class="total-row grand"><span>${ar ? 'الإجمالي' : 'Total'}</span><span>${order.totalPrice.toStringAsFixed(3)} $currency</span></div>
   </div>''';
+
+    final customerBlock = isKitchen
+        ? ''
+        : '''
+    <div class="customer">
+      <div class="customer-name">${_escape(order.customerName)}</div>
+      ${_customerAddressHtml(order, ar: ar)}
+      <div class="customer-phone">${_escape(order.phone)}</div>
+    </div>''';
 
     return '''
 <!DOCTYPE html>
-<html lang="ar" dir="rtl">
+<html lang="$langAttr" dir="$dirAttr">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>$title — ${_escape(restaurantName)}</title>
   <style>
-    $_thermalCss
+    ${_thermalCss(widthMm: w, fonts: fonts)}
   </style>
 </head>
-<body class="$bodyClass">
+<body class="${isKitchen ? 'kitchen-ticket' : 'customer-receipt'}">
   <div id="receipt-root" class="receipt-root">
     <div class="receipt-header">
+      $logoHtml
       <div class="brand">${_escape(restaurantName)}</div>
       $phoneLine
       $addressLine
     </div>
-    <div class="divider dashed"></div>
-    <div class="receipt-title">$title</div>
-    <div class="order-meta">
-      <div class="meta-row"><strong>طلب #</strong> ${_escape(orderId)}</div>
-      <div class="meta-row"><strong>الوقت</strong> $time</div>
-      <div class="meta-row"><strong>العميل</strong> ${_escape(order.customerName)}</div>
-      <div class="meta-row"><strong>هاتف</strong> ${_escape(order.phone)}</div>
-      ${isKitchen ? '' : '<div class="meta-row"><strong>العنوان</strong> ${_escape(order.address)}</div>'}
-      ${isKitchen ? '' : '<div class="meta-row"><strong>الدفع</strong> ${_escape(order.paymentMethod ?? 'كاش')}</div>'}
-      <div class="meta-row"><strong>النوع</strong> ${order.orderType == OrderType.pickup ? 'استلام' : 'توصيل'}</div>
+    <div class="status-row">
+      <span class="pill">${_escape(orderTypeLabel)}</span>
+      <span class="pill">$time</span>
+      <span class="pill">${_escape(order.paymentMethod ?? defaultPayment)}</span>
     </div>
-    <div class="divider dashed"></div>
+    <div class="order-no">#${_escape(orderId)}</div>
+    $customerBlock
+    <div class="divider"></div>
     $itemsBlock
     $totalsBlock
-    <div class="divider dashed"></div>
-    <div class="footer">${isKitchen ? '— المطبخ —' : 'شكراً لزيارتكم'}</div>
-    <div class="footer-sub">Almenupro POS</div>
+    <div class="divider"></div>
+    <div class="footer-meta">$dateLine · ${ar ? 'رقم الطلب' : 'Order'} ${_escape(orderId)}</div>
+    <div class="footer">${isKitchen ? (ar ? '— المطبخ —' : '— Kitchen —') : (ar ? 'شكراً لطلبك' : 'Thank you')}</div>
+    <div class="footer-sub">${_escape(restaurantName)}</div>
   </div>
 </body>
 </html>''';
   }
 
-  static const _thermalCss = '''
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    @page {
-      size: 80mm auto;
-      margin: 2mm 3mm;
+  static String _customerAddressHtml(Order order, {required bool ar}) {
+    final details = order.addressDetails;
+    final parts = <String>[];
+    if (order.areaName?.trim().isNotEmpty ?? false) {
+      parts.add(order.areaName!.trim());
     }
+    if (order.governorate?.trim().isNotEmpty ?? false) {
+      parts.add(order.governorate!.trim());
+    }
+    final streetBits = <String>[];
+    if (details.block.trim().isNotEmpty) {
+      streetBits.add(ar ? 'قطعة ${details.block.trim()}' : 'block ${details.block.trim()}');
+    }
+    if (details.street.trim().isNotEmpty) {
+      streetBits.add(ar ? 'شارع ${details.street.trim()}' : 'street ${details.street.trim()}');
+    }
+    if (details.houseNumber.trim().isNotEmpty) {
+      streetBits.add(
+        ar ? 'بيت ${details.houseNumber.trim()}' : details.houseNumber.trim(),
+      );
+    }
+    if (details.avenue.trim().isNotEmpty) {
+      streetBits.add(ar ? 'جادة ${details.avenue.trim()}' : 'avenue ${details.avenue.trim()}');
+    }
+    if (details.floorApartment.trim().isNotEmpty) {
+      streetBits.add(
+        ar ? 'طابق ${details.floorApartment.trim()}' : details.floorApartment.trim(),
+      );
+    }
+
+    final lines = <String>[];
+    if (streetBits.isNotEmpty) lines.add(streetBits.join(', '));
+    if (parts.isNotEmpty) lines.add(parts.join(', '));
+    if (lines.isEmpty && order.address.trim().isNotEmpty) {
+      lines.add(order.address.trim());
+    }
+    if (lines.isEmpty) return '';
+    return lines.map((line) => '<div class="addr">${_escape(line)}</div>').join();
+  }
+
+  static ({double base, double brand, double kitchen, double title, double grand, double orderNo})
+      _fontScale(PosPrintFontSize size, double widthMm) {
+    final narrow = widthMm < 65;
+    final factor = switch (size) {
+      PosPrintFontSize.small => 0.85,
+      PosPrintFontSize.medium => 1.0,
+      PosPrintFontSize.large => 1.2,
+    };
+    final base = (narrow ? 10.0 : 12.0) * factor;
+    return (
+      base: base,
+      brand: (narrow ? 16.0 : 20.0) * factor,
+      kitchen: (narrow ? 15.0 : 18.0) * factor,
+      title: (narrow ? 12.0 : 13.0) * factor,
+      grand: (narrow ? 13.0 : 15.0) * factor,
+      orderNo: (narrow ? 22.0 : 28.0) * factor,
+    );
+  }
+
+  static String _thermalCss({
+    required double widthMm,
+    required ({
+      double base,
+      double brand,
+      double kitchen,
+      double title,
+      double grand,
+      double orderNo,
+    }) fonts,
+  }) {
+    final w = widthMm.toStringAsFixed(2);
+    return '''
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    @page { size: ${w}mm auto; margin: 2mm 2.5mm; }
     html, body {
       background: #fff;
       color: #000;
@@ -140,135 +231,122 @@ class PosReceiptHtml {
       print-color-adjust: exact;
     }
     body {
-      font-family: 'Courier New', Courier, monospace;
+      font-family: Arial, 'Noto Naskh Arabic', Tahoma, sans-serif;
       margin: 0 auto;
-      padding: 4mm 3mm;
+      padding: 3mm 2mm 8mm;
+      width: ${w}mm;
+      max-width: ${w}mm;
+      font-size: ${fonts.base.toStringAsFixed(1)}px;
     }
-    body.paper-80 { width: 80mm; max-width: 80mm; font-size: 12px; }
-    body.paper-58 { width: 58mm; max-width: 58mm; font-size: 10px; }
-    body.paper-58 .brand { font-size: 13px; }
-    body.paper-58 .kitchen-name { font-size: 14px !important; }
-
     .receipt-root { width: 100%; }
-    .receipt-header { text-align: center; margin-bottom: 6px; }
+    .receipt-header { text-align: center; margin-bottom: 8px; }
+    .logo {
+      max-width: 42mm;
+      max-height: 18mm;
+      object-fit: contain;
+      margin: 0 auto 4px;
+      display: block;
+    }
     .brand {
-      font-size: 16px;
-      font-weight: bold;
-      letter-spacing: 0.5px;
-      margin-bottom: 4px;
+      font-size: ${fonts.brand.toStringAsFixed(1)}px;
+      font-weight: 900;
+      letter-spacing: 0.2px;
+      line-height: 1.15;
     }
-    .receipt-title {
+    .store-meta { font-size: ${(fonts.base * 0.85).toStringAsFixed(1)}px; color: #222; }
+    .status-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 4px;
+      margin: 8px 0 4px;
+      font-size: ${(fonts.base * 0.85).toStringAsFixed(1)}px;
+      font-weight: 700;
+    }
+    .pill { flex: 1; text-align: center; }
+    .order-no {
       text-align: center;
-      font-weight: bold;
-      font-size: 13px;
-      margin: 6px 0;
-      padding: 4px 0;
-      border-top: 2px solid #000;
-      border-bottom: 2px solid #000;
+      font-weight: 900;
+      font-size: ${fonts.orderNo.toStringAsFixed(1)}px;
+      line-height: 1.1;
+      margin: 6px 0 8px;
     }
-    .order-meta { line-height: 1.55; margin: 6px 0; }
-    .meta-row { margin: 2px 0; word-break: break-word; }
-    .divider { margin: 6px 0; }
-    .divider.dashed { border-top: 1px dashed #000; }
+    .customer { text-align: center; margin-bottom: 8px; line-height: 1.4; }
+    .customer-name { font-weight: 800; font-size: ${(fonts.base * 1.05).toStringAsFixed(1)}px; }
+    .addr, .customer-phone { word-break: break-word; }
+    .divider { border-top: 1px solid #000; margin: 8px 0; }
 
-    .items-table { width: 100%; border-collapse: collapse; margin: 4px 0; }
-    .items-table th, .items-table td {
-      padding: 3px 2px;
-      text-align: right;
-      vertical-align: top;
-      border-bottom: 1px dotted #999;
+    .item-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      align-items: flex-start;
+      margin: 4px 0;
     }
-    .items-table th { font-size: 10px; font-weight: bold; }
-    .items-table .qty { width: 28px; white-space: nowrap; font-weight: bold; }
-    .items-table .price { width: 42px; text-align: left; white-space: nowrap; }
-    .addon { font-size: 10px; color: #333; margin-top: 2px; padding-right: 4px; }
-    .note {
-      font-size: 11px;
-      font-weight: bold;
-      margin-top: 3px;
-      padding: 2px 4px;
-      background: #eee;
-    }
+    .item-main { display: flex; gap: 6px; flex: 1; }
+    .qty { font-weight: 800; min-width: 14px; }
+    .item-name { font-weight: 700; }
+    .price { white-space: nowrap; font-weight: 700; }
+    .addon { font-size: ${(fonts.base * 0.85).toStringAsFixed(1)}px; padding-inline-start: 18px; }
+    .note { font-size: ${(fonts.base * 0.9).toStringAsFixed(1)}px; font-weight: 700; padding-inline-start: 18px; }
 
-    .kitchen-items { margin: 6px 0; }
     .kitchen-item {
       display: flex;
       gap: 8px;
       padding: 8px 0;
-      border-bottom: 2px dashed #000;
+      border-bottom: 1px dashed #000;
     }
     .kitchen-qty {
-      font-size: 22px;
-      font-weight: bold;
-      min-width: 36px;
-      line-height: 1.1;
+      font-size: ${(fonts.kitchen * 1.2).toStringAsFixed(1)}px;
+      font-weight: 900;
+      min-width: 28px;
     }
     .kitchen-name {
-      font-size: 18px;
-      font-weight: bold;
-      line-height: 1.25;
-    }
-    .kitchen-ticket .addon { font-size: 12px; margin-top: 4px; }
-    .kitchen-ticket .note {
-      font-size: 14px;
-      margin-top: 6px;
-      padding: 4px 6px;
-      border: 2px solid #000;
-      background: #fff;
+      font-size: ${fonts.kitchen.toStringAsFixed(1)}px;
+      font-weight: 800;
     }
 
-    .totals { margin-top: 8px; line-height: 1.7; }
+    .totals { margin-top: 6px; }
     .total-row {
       display: flex;
       justify-content: space-between;
       gap: 8px;
+      margin: 2px 0;
     }
     .total-row.grand {
-      font-size: 14px;
-      font-weight: bold;
+      font-size: ${fonts.grand.toStringAsFixed(1)}px;
+      font-weight: 900;
       margin-top: 4px;
       padding-top: 4px;
       border-top: 2px solid #000;
     }
-
+    .footer-meta {
+      text-align: center;
+      font-size: ${(fonts.base * 0.85).toStringAsFixed(1)}px;
+      margin-bottom: 4px;
+    }
     .footer {
       text-align: center;
-      font-weight: bold;
-      margin-top: 8px;
-      font-size: 12px;
+      font-weight: 800;
+      margin-top: 4px;
     }
     .footer-sub {
       text-align: center;
-      font-size: 9px;
-      color: #666;
-      margin-top: 4px;
+      font-size: ${(fonts.base * 0.85).toStringAsFixed(1)}px;
+      margin-top: 2px;
     }
 
     @media print {
       html, body {
-        width: 80mm !important;
-        max-width: 80mm !important;
+        width: ${w}mm !important;
+        max-width: ${w}mm !important;
         margin: 0 !important;
-        padding: 0 !important;
+        padding: 2mm 2mm 6mm !important;
         background: #fff !important;
       }
-      body.paper-58 {
-        width: 58mm !important;
-        max-width: 58mm !important;
-      }
-      @page {
-        size: 80mm auto;
-        margin: 2mm 3mm;
-      }
-      body.paper-58 @page {
-        size: 58mm auto;
-      }
-      .receipt-root {
-        width: 100% !important;
-      }
-      .no-print { display: none !important; }
+      @page { size: ${w}mm auto; margin: 2mm 2mm; }
     }
   ''';
+  }
 
   static String _escape(String value) {
     return value

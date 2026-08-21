@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../models/invoice_language.dart';
 import '../models/loyalty_cashback.dart';
 import '../models/payment_method_config.dart';
 import '../models/restaurant_settings.dart';
@@ -223,6 +224,22 @@ class RestaurantSettingsService {
         updatedAt: DateTime.now().toUtc(),
       ),
       restaurantId: restaurantId,
+    );
+  }
+
+  Future<void> saveInvoiceLanguage({
+    required InvoiceLanguage invoiceLanguage,
+    String? restaurantId,
+  }) async {
+    final scopedRestaurantId = restaurantId ??
+        SuperAdminScopeService.instance.effectiveRestaurantId;
+    final current = _cached ?? await load(restaurantId: scopedRestaurantId);
+    await _persist(
+      current.copyWith(
+        invoiceLanguage: invoiceLanguage,
+        updatedAt: DateTime.now().toUtc(),
+      ),
+      restaurantId: scopedRestaurantId,
     );
   }
 

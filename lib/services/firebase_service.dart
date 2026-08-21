@@ -109,11 +109,13 @@ class FirebaseService {
     OrderStatus status, {
     String? shiftId,
     String? cashierId,
+    String? cashierName,
   }) async {
     await _ordersRef.doc(orderId).update({
       'status': status.name,
       if (shiftId != null && shiftId.isNotEmpty) 'shiftId': shiftId,
       if (cashierId != null && cashierId.isNotEmpty) 'cashierId': cashierId,
+      if (cashierName != null && cashierName.isNotEmpty) 'cashierName': cashierName,
     });
   }
 

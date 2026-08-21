@@ -31,7 +31,8 @@ class SuperAdminScopeService extends ChangeNotifier {
       AdminAuthService.instance.isRestaurantAdmin || hasSelection;
 
   String get effectiveRestaurantId =>
-      AdminAuthService.instance.isRestaurantAdmin
+      (AdminAuthService.instance.isRestaurantAdmin ||
+              AdminAuthService.instance.isCashier)
           ? (AdminAuthService.instance.restaurantId ??
               ApiService.defaultRestaurantId)
           : (_selectedRestaurantId ?? ApiService.defaultRestaurantId);

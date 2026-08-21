@@ -13,6 +13,7 @@ import '../models/menu_item.dart';
 import '../models/order.dart';
 import '../models/restaurant.dart';
 import '../models/restaurant_settings.dart';
+import '../models/staff_user.dart';
 import '../models/upsell_recommendation.dart';
 import 'admin_auth_service.dart';
 import 'super_admin_scope_service.dart';
@@ -51,6 +52,7 @@ class ApiService {
   static const Duration _writeTimeout = Duration(seconds: 60);
 
   List<MenuItem>? _cachedItems;
+  int _cachedItemsTotal = 0;
   String? _cachedItemsKey;
   DateTime? _cachedItemsAt;
 
@@ -166,6 +168,40 @@ class ApiService {
     return AdminSession.fromJson(Map<String, dynamic>.from(decoded));
   }
 
+  Future<({AdminSession session, PosCashierSession cashierSession})> loginCashier({
+    required String restaurantName,
+    required String cashierName,
+    required String pin,
+  }) async {
+    final response = await http
+        .post(
+          _uri('/auth/cashier-login'),
+          headers: const {'Content-Type': 'application/json'},
+          body: jsonEncode({
+            'restaurantName': restaurantName.trim(),
+            'restaurantSlug': restaurantName.trim(),
+            'cashierName': cashierName.trim(),
+            'pin': pin.trim(),
+            'password': pin.trim(),
+          }),
+        )
+        .timeout(_fetchTimeout);
+
+    if (response.statusCode != 200) {
+      throw Exception('بيانات الكاشير غير صحيحة');
+    }
+
+    final decoded = jsonDecode(response.body);
+    if (decoded is! Map) {
+      throw Exception('استجابة غير متوقعة من السيرفر');
+    }
+    final map = Map<String, dynamic>.from(decoded);
+    return (
+      session: AdminSession.fromJson(map),
+      cashierSession: PosCashierSession.fromJson(map),
+    );
+  }
+
   Future<List<Restaurant>> fetchRestaurants() async {
     final response = await http
         .get(_uri('/restaurants'), headers: _jsonHeaders)
@@ -257,6 +293,7 @@ class ApiService {
     SubscriptionStatus subscriptionStatus = SubscriptionStatus.active,
     DateTime? subscriptionExpiresAt,
     String subscriptionNotes = '',
+    bool tableManagementEnabled = false,
   }) async {
     final response = await http
         .post(
@@ -275,6 +312,7 @@ class ApiService {
               'subscriptionExpiresAt':
                   subscriptionExpiresAt.toUtc().toIso8601String(),
             if (subscriptionNotes.isNotEmpty) 'subscriptionNotes': subscriptionNotes,
+            'tableManagement': tableManagementEnabled,
           }),
         )
         .timeout(_fetchTimeout);
@@ -327,7 +365,10 @@ class ApiService {
           _cachedItemsAt != null &&
           DateTime.now().difference(_cachedItemsAt!) < const Duration(seconds: 45);
       if (cacheFresh) {
-        return (items: _cachedItems!, total: _cachedItems!.length);
+        return (
+          items: _cachedItems!,
+          total: _cachedItemsTotal > 0 ? _cachedItemsTotal : _cachedItems!.length,
+        );
       }
 
       final response = await _get(_uri('/items', query), headers: _jsonHeaders);
@@ -379,6 +420,7 @@ class ApiService {
         // Only cache the first page of a default-sized request.
         if ((offset ?? 0) == 0) {
           _cachedItems = items;
+          _cachedItemsTotal = total;
           _cachedItemsKey = cacheKey;
           _cachedItemsAt = DateTime.now();
         }
@@ -399,6 +441,7 @@ class ApiService {
 
   void invalidateItemsCache() {
     _cachedItems = null;
+    _cachedItemsTotal = 0;
     _cachedItemsKey = null;
     _cachedItemsAt = null;
   }
@@ -569,11 +612,12 @@ class ApiService {
     }
   }
 
-  Future<void> updateOrderStatus(
+  Future<Order?> updateOrderStatus(
     String orderId,
     OrderStatus status, {
     String? shiftId,
     String? cashierId,
+    String? cashierName,
   }) async {
     try {
       final response = await http
@@ -584,6 +628,8 @@ class ApiService {
               'status': status.name,
               if (shiftId != null && shiftId.isNotEmpty) 'shiftId': shiftId,
               if (cashierId != null && cashierId.isNotEmpty) 'cashierId': cashierId,
+              if (cashierName != null && cashierName.isNotEmpty)
+                'cashierName': cashierName,
             }),
           )
           .timeout(_fetchTimeout);
@@ -591,6 +637,17 @@ class ApiService {
       if (response.statusCode != 200) {
         throw Exception('فشل في تحديث الطلب (${response.statusCode})');
       }
+
+      final decoded = jsonDecode(response.body);
+      if (decoded is Map) {
+        final map = Map<String, dynamic>.from(decoded);
+        final id = map['id']?.toString().trim();
+        return Order.fromMap(
+          (id != null && id.isNotEmpty) ? id : orderId,
+          map,
+        );
+      }
+      return null;
     } on TimeoutException {
       throw Exception('انتهت مهلة الاتصال بالسيرفر');
     } catch (error) {
@@ -850,6 +907,7 @@ class ApiService {
     DateTime? subscriptionExpiresAt,
     String subscriptionNotes = '',
     String? adminPassword,
+    bool? tableManagementEnabled,
   }) async {
     final response = await http
         .patch(
@@ -868,6 +926,8 @@ class ApiService {
             if (subscriptionNotes.isNotEmpty) 'subscriptionNotes': subscriptionNotes,
             if (adminPassword != null && adminPassword.isNotEmpty)
               'adminPassword': adminPassword,
+            if (tableManagementEnabled != null)
+              'tableManagement': tableManagementEnabled,
           }),
         )
         .timeout(_fetchTimeout);
@@ -889,6 +949,59 @@ class ApiService {
     }
 
     return Restaurant.fromJson(Map<String, dynamic>.from(decoded));
+  }
+
+  Map<String, dynamic> _decodeObject(http.Response response, String fallback) {
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw _exceptionFromResponse(response, fallback);
+    }
+    final decoded = jsonDecode(response.body);
+    if (decoded is! Map) {
+      throw Exception('استجابة غير متوقعة من السيرفر');
+    }
+    return Map<String, dynamic>.from(decoded);
+  }
+
+  Future<Map<String, dynamic>> getJson(String path) async {
+    final response = await _get(_uri(path), headers: _jsonHeaders);
+    return _decodeObject(response, 'فشل في تحميل البيانات');
+  }
+
+  Future<Map<String, dynamic>> postJson(
+    String path,
+    Map<String, dynamic> body,
+  ) async {
+    final response = await http
+        .post(_uri(path), headers: _jsonHeaders, body: jsonEncode(body))
+        .timeout(_writeTimeout);
+    return _decodeObject(response, 'فشل في حفظ البيانات');
+  }
+
+  Future<Map<String, dynamic>> putJson(
+    String path,
+    Map<String, dynamic> body,
+  ) async {
+    final response = await http
+        .put(_uri(path), headers: _jsonHeaders, body: jsonEncode(body))
+        .timeout(_writeTimeout);
+    return _decodeObject(response, 'فشل في حفظ البيانات');
+  }
+
+  Future<Map<String, dynamic>> patchJson(
+    String path,
+    Map<String, dynamic> body,
+  ) async {
+    final response = await http
+        .patch(_uri(path), headers: _jsonHeaders, body: jsonEncode(body))
+        .timeout(_writeTimeout);
+    return _decodeObject(response, 'فشل في حفظ البيانات');
+  }
+
+  Future<Map<String, dynamic>> deleteJson(String path) async {
+    final response = await http
+        .delete(_uri(path), headers: _jsonHeaders)
+        .timeout(_writeTimeout);
+    return _decodeObject(response, 'فشل في الحذف');
   }
 
   Future<TalabatImportResult> importTalabatMenu({

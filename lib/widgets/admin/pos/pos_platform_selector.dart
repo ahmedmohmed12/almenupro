@@ -95,49 +95,56 @@ class PosPlatformSelector extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 8),
-        Wrap(
-          spacing: 6,
-          runSpacing: 6,
-          children: platforms.map((platform) {
-            final selected = selection.platform.id == platform.id;
-            return ChoiceChip(
-              avatar: Icon(
-                platform.icon,
-                size: 16,
-                color: selected ? Colors.white : platform.color,
-              ),
-              label: Text(
-                platform.name,
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                  color: selected ? Colors.white : AppThemeCompat.text,
+        SizedBox(
+          height: 40,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            itemCount: platforms.length,
+            separatorBuilder: (_, __) => const SizedBox(width: 6),
+            itemBuilder: (context, index) {
+              final platform = platforms[index];
+              final selected = selection.platform.id == platform.id;
+              return ChoiceChip(
+                visualDensity: VisualDensity.compact,
+                avatar: Icon(
+                  platform.icon,
+                  size: 16,
+                  color: selected ? Colors.white : platform.color,
                 ),
-              ),
-              selected: selected,
-              selectedColor: platform.color,
-              backgroundColor: platform.color.withValues(alpha: 0.08),
-              side: BorderSide(
-                color: selected
-                    ? platform.color
-                    : platform.color.withValues(alpha: 0.35),
-              ),
-              onSelected: (_) {
-                _update(
-                  PosPlatformSelection(
-                    platform: platform,
-                    externalOrderId: selection.externalOrderId,
-                    trackCommission:
-                        platform.isExternal && selection.trackCommission,
-                    commissionPercent: platform.isExternal
-                        ? (selection.commissionPercent ?? platform.commissionPercent)
-                        : null,
-                    manualNetRevenue: selection.manualNetRevenue,
+                label: Text(
+                  platform.name,
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: selected ? Colors.white : AppThemeCompat.text,
                   ),
-                );
-              },
-            );
-          }).toList(),
+                ),
+                selected: selected,
+                selectedColor: platform.color,
+                backgroundColor: platform.color.withValues(alpha: 0.08),
+                side: BorderSide(
+                  color: selected
+                      ? platform.color
+                      : platform.color.withValues(alpha: 0.35),
+                ),
+                onSelected: (_) {
+                  _update(
+                    PosPlatformSelection(
+                      platform: platform,
+                      externalOrderId: selection.externalOrderId,
+                      trackCommission:
+                          platform.isExternal && selection.trackCommission,
+                      commissionPercent: platform.isExternal
+                          ? (selection.commissionPercent ??
+                              platform.commissionPercent)
+                          : null,
+                      manualNetRevenue: selection.manualNetRevenue,
+                    ),
+                  );
+                },
+              );
+            },
+          ),
         ),
         if (isExternal) ...[
           const SizedBox(height: 10),

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -5,39 +7,51 @@ import 'package:flutter/services.dart';
 import '../../../models/pos_role.dart';
 import '../../../models/shift_session.dart';
 import '../../../models/staff_user.dart';
+import '../../../utils/admin_route_nav.dart';
 import '../../../services/admin_auth_service.dart';
+import '../../../services/admin_order_monitor_service.dart';
 import '../../../services/pos_operations_service.dart';
 import '../../../services/pos_security_service.dart';
 import '../../../services/restaurant_settings_service.dart';
-import '../../../utils/admin_route_nav.dart';
 import '../admin_pos_panel.dart';
 import 'pos_add_staff_dialog.dart';
 import 'pos_close_shift_dialog.dart';
 import 'pos_layout.dart';
 import 'pos_menu_catalog.dart';
 import 'pos_menu_page.dart';
+import 'pos_online_orders_alert.dart';
+import 'pos_online_orders_page.dart';
 import 'pos_reports_page.dart';
 import 'pos_staff_empty_state.dart';
 import 'pos_staff_page.dart';
 import 'pos_void_orders_page.dart';
+import 'pos_dine_in_page.dart';
 
 class PosShiftShell extends StatefulWidget {
   const PosShiftShell({
     super.key,
     this.onOrderSubmitted,
     this.onOpenMenu,
+    this.onLogout,
+    this.restaurantId,
     this.initialRoute = PosRoute.home,
+    this.tableManagementEnabled = false,
   });
 
   final VoidCallback? onOrderSubmitted;
   final VoidCallback? onOpenMenu;
+  final VoidCallback? onLogout;
+  final String? restaurantId;
   final PosRoute initialRoute;
+  final bool tableManagementEnabled;
 
   @override
   State<PosShiftShell> createState() => _PosShiftShellState();
 }
 
 class _PosShiftShellState extends State<PosShiftShell> {
+  final _restaurantController = TextEditingController();
+  final _cashierNameController = TextEditingController();
   final _pinController = TextEditingController();
   final _openingFloatController = TextEditingController(text: '0');
 
@@ -47,20 +61,35 @@ class _PosShiftShellState extends State<PosShiftShell> {
   ShiftSession? _shift;
   List<StaffUser> _staff = const [];
   late PosRoute _selectedRoute;
+  var _tableManagementEnabled = false;
 
   @override
   void initState() {
     super.initState();
     _selectedRoute = widget.initialRoute;
+    final restaurantName = AdminAuthService.instance.restaurantName;
+    if (restaurantName != null && restaurantName.trim().isNotEmpty) {
+      _restaurantController.text = restaurantName.trim();
+    }
     _bootstrap();
   }
 
   @override
   void dispose() {
+    _restaurantController.dispose();
+    _cashierNameController.dispose();
     _pinController.dispose();
     _openingFloatController.dispose();
     PosSecurityService.instance.dispose();
     super.dispose();
+  }
+
+  Future<void> _refreshStaff() async {
+    if (AdminAuthService.instance.isCashier) return;
+    try {
+      _staff = await loadPosStaffUsers();
+    } catch (_) {}
+    if (mounted) setState(() {});
   }
 
   Future<void> _bootstrap() async {
@@ -70,10 +99,13 @@ class _PosShiftShellState extends State<PosShiftShell> {
     });
 
     try {
-      if (!AdminAuthService.instance.isCashier) {
-        await PosOperationsService.instance.bootstrapAdminCashier();
+      if (AdminAuthService.instance.isCashier) {
+        await PosOperationsService.instance.restoreCashierSessionIfNeeded();
       }
+
       final settings = await RestaurantSettingsService.instance.load();
+      _tableManagementEnabled =
+          widget.tableManagementEnabled || settings.tableManagementEnabled;
       PosSecurityService.instance.configure(
         autoLockMinutes: settings.posAutoLockMinutes,
         onLockChanged: () {
@@ -81,12 +113,15 @@ class _PosShiftShellState extends State<PosShiftShell> {
         },
       );
 
-      _staff = await loadPosStaffUsers();
+      if (!AdminAuthService.instance.isCashier) {
+        _staff = await loadPosStaffUsers();
+      }
 
       final cashier = PosOperationsService.instance.cashierSession;
       _shift = await PosOperationsService.instance.fetchCurrentShift(
         cashierId: cashier?.staff.id,
       );
+      unawaited(AdminOrderMonitorService.instance.start());
     } catch (error) {
       _error = error.toString().replaceFirst('Exception: ', '');
     } finally {
@@ -95,8 +130,22 @@ class _PosShiftShellState extends State<PosShiftShell> {
   }
 
   Future<void> _loginCashier() async {
-    final pin = _pinController.text.trim();
-    if (pin.isEmpty) return;
+    final restaurantName = _restaurantController.text.trim();
+    final cashierName = _cashierNameController.text.trim();
+    final password = _pinController.text.trim();
+
+    if (restaurantName.isEmpty) {
+      setState(() => _error = 'أدخل اسم المطعم');
+      return;
+    }
+    if (cashierName.isEmpty) {
+      setState(() => _error = 'أدخل اسم الكاشير');
+      return;
+    }
+    if (password.isEmpty) {
+      setState(() => _error = 'أدخل كلمة المرور');
+      return;
+    }
 
     setState(() {
       _loading = true;
@@ -104,7 +153,11 @@ class _PosShiftShellState extends State<PosShiftShell> {
     });
 
     try {
-      await PosOperationsService.instance.loginWithPin(pin);
+      await PosOperationsService.instance.loginWithPin(
+        password,
+        cashierName: cashierName,
+        restaurantName: restaurantName,
+      );
       final cashier = PosOperationsService.instance.cashierSession;
       _shift = await PosOperationsService.instance.fetchCurrentShift(
         cashierId: cashier?.staff.id,
@@ -166,15 +219,13 @@ class _PosShiftShellState extends State<PosShiftShell> {
     PosSecurityService.instance.registerActivity();
   }
 
-  Future<void> _refreshStaff() async {
-    try {
-      _staff = await loadPosStaffUsers();
-      if (mounted) setState(() {});
-    } catch (_) {}
-  }
-
   void _onRouteSelected(PosRoute route) {
     setState(() => _selectedRoute = route);
+  }
+
+  void _openOnlineOrders() {
+    setState(() => _selectedRoute = PosRoute.orders);
+    navigateToAdminPath(PosRoute.orders.path);
   }
 
   Widget _buildRouteContent() {
@@ -183,21 +234,36 @@ class _PosShiftShellState extends State<PosShiftShell> {
         if (_shift == null || !_shift!.isOpen) {
           final cashier = PosOperationsService.instance.cashierSession;
           return cashier == null
-              ? _buildCashierLogin(useAdminFallback: _staff.isEmpty)
+              ? _buildCashierLogin()
               : _buildOpenShiftScreen(cashier.staff.name);
         }
+        final canReceiveOnline = PosOperationsService.instance.allows(
+          PosPermissionKeys.receiveOnlineOrders,
+        );
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             _buildShiftBanner(),
+            if (canReceiveOnline)
+              ValueListenableBuilder<int>(
+                valueListenable: AdminOrderMonitorService.instance.pendingCount,
+                builder: (context, count, _) => PosOnlineOrdersAlertBar(
+                  pendingCount: count,
+                  onOpen: _openOnlineOrders,
+                ),
+              ),
             Expanded(
               child: AdminPosPanel(
+                restaurantId: widget.restaurantId,
                 onOrderSubmitted: widget.onOrderSubmitted,
                 onOpenMenu: widget.onOpenMenu,
+                onLogout: widget.onLogout,
               ),
             ),
           ],
         );
+      case PosRoute.orders:
+        return const PosOnlineOrdersPage();
       case PosRoute.reports:
         return const PosReportsPage();
       case PosRoute.voidOrders:
@@ -206,6 +272,11 @@ class _PosShiftShellState extends State<PosShiftShell> {
         return const PosStaffPage();
       case PosRoute.menu:
         return const PosMenuPage();
+      case PosRoute.dineIn:
+        return PosDineInPage(
+          restaurantId: widget.restaurantId,
+          onOrderSubmitted: widget.onOrderSubmitted,
+        );
       case PosRoute.shiftClose:
         return _buildShiftClosePlaceholder();
     }
@@ -251,7 +322,8 @@ class _PosShiftShellState extends State<PosShiftShell> {
     }
 
     if (!PosOperationsService.instance.allows(PosPermissionKeys.posAccess) &&
-        !PosOperationsService.instance.allows(PosPermissionKeys.processOrders)) {
+        !PosOperationsService.instance.allows(PosPermissionKeys.processOrders) &&
+        !AdminAuthService.instance.isCashier) {
       return _buildPermissionDenied(
         'لا تملك صلاحية الوصول لشاشة POS.',
       );
@@ -259,7 +331,7 @@ class _PosShiftShellState extends State<PosShiftShell> {
 
     final cashier = PosOperationsService.instance.cashierSession;
     if (cashier == null) {
-      return _buildCashierLogin(useAdminFallback: _staff.isEmpty);
+      return _buildCashierLogin();
     }
 
     final content = Listener(
@@ -281,6 +353,7 @@ class _PosShiftShellState extends State<PosShiftShell> {
       onRouteSelected: _onRouteSelected,
       onShiftCloseRequested: _closeShift,
       showSidebar: true,
+      tableManagementEnabled: _tableManagementEnabled,
       child: content,
     );
   }
@@ -307,10 +380,19 @@ class _PosShiftShellState extends State<PosShiftShell> {
     );
   }
 
-  Widget _buildCashierLogin({required bool useAdminFallback}) {
+  Widget _buildCashierLogin() {
+    final isCashierJwt = AdminAuthService.instance.isCashier;
+    final canAddStaff = !isCashierJwt &&
+        (AdminAuthService.instance.isRestaurantAdmin ||
+            AdminAuthService.instance.isSuperAdmin ||
+            PosOperationsService.instance.allows(PosPermissionKeys.manageStaff));
+    final canContinueAsAdmin = !isCashierJwt &&
+        (AdminAuthService.instance.isRestaurantAdmin ||
+            AdminAuthService.instance.isSuperAdmin);
+
     return Center(
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 420),
+        constraints: const BoxConstraints(maxWidth: 440),
         child: Card(
           margin: const EdgeInsets.all(24),
           child: Padding(
@@ -326,33 +408,55 @@ class _PosShiftShellState extends State<PosShiftShell> {
                 ),
                 const SizedBox(height: 8),
                 const Text(
-                  'أدخل رمز PIN الخاص بك لبدء جلسة POS',
+                  'أدخل اسم المطعم واسم الكاشير وكلمة المرور لبدء جلسة POS',
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 16),
-                if (_staff.isEmpty) ...[
+                if (!isCashierJwt && _staff.isEmpty) ...[
                   PosStaffEmptyState(onStaffAdded: _refreshStaff),
                   const SizedBox(height: 16),
                 ],
                 TextField(
+                  controller: _restaurantController,
+                  textCapitalization: TextCapitalization.words,
+                  decoration: const InputDecoration(
+                    labelText: 'اسم المطعم',
+                    hintText: 'مثال: Molton Cookies أو molton-cookies',
+                    border: OutlineInputBorder(),
+                    prefixIcon: Icon(Icons.storefront_outlined),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: _cashierNameController,
+                  textCapitalization: TextCapitalization.words,
+                  decoration: const InputDecoration(
+                    labelText: 'اسم الكاشير',
+                    hintText: 'مثال: أحمد',
+                    border: OutlineInputBorder(),
+                    prefixIcon: Icon(Icons.person_outline),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
                   controller: _pinController,
                   obscureText: true,
-                  keyboardType: TextInputType.number,
-                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                  keyboardType: TextInputType.visiblePassword,
                   decoration: InputDecoration(
-                    labelText: 'رمز PIN',
+                    labelText: 'كلمة المرور',
+                    hintText: 'رمز PIN الخاص بالكاشير',
                     border: const OutlineInputBorder(),
+                    prefixIcon: const Icon(Icons.lock_outline),
                     errorText: _error.isEmpty ? null : _error,
                   ),
                   onSubmitted: (_) => _loginCashier(),
                 ),
                 const SizedBox(height: 12),
                 FilledButton(
-                  onPressed: _loginCashier,
+                  onPressed: _loading ? null : _loginCashier,
                   child: const Text('دخول'),
                 ),
-                if (_staff.isNotEmpty &&
-                    PosOperationsService.instance.allows(PosPermissionKeys.manageStaff)) ...[
+                if (canAddStaff) ...[
                   const SizedBox(height: 8),
                   OutlinedButton.icon(
                     onPressed: () async {
@@ -360,17 +464,17 @@ class _PosShiftShellState extends State<PosShiftShell> {
                       await _refreshStaff();
                     },
                     icon: const Icon(Icons.person_add),
-                    label: const Text('إضافة موظف / كاشier جديد'),
+                    label: const Text('إضافة موظف / كاشير جديد'),
                   ),
                 ],
-                if (useAdminFallback) ...[
+                if (canContinueAsAdmin) ...[
                   const SizedBox(height: 8),
                   TextButton(
                     onPressed: () async {
                       await PosOperationsService.instance.bootstrapAdminCashier();
                       setState(() {});
                     },
-                    child: const Text('متابعة كمدير (بدون PIN)'),
+                    child: const Text('متابعة كمدير (بدون كاشير)'),
                   ),
                 ],
               ],
@@ -422,6 +526,14 @@ class _PosShiftShellState extends State<PosShiftShell> {
                         )
                       : const Text('فتح الوردية'),
                 ),
+                if (widget.onLogout != null) ...[
+                  const SizedBox(height: 8),
+                  TextButton.icon(
+                    onPressed: widget.onLogout,
+                    icon: const Icon(Icons.logout),
+                    label: const Text('تسجيل الخروج'),
+                  ),
+                ],
               ],
             ),
           ),

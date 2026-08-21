@@ -493,6 +493,50 @@ class PosTotalRow extends StatelessWidget {
   }
 }
 
+class PosStyleChip extends StatelessWidget {
+  const PosStyleChip({
+    super.key,
+    required this.label,
+    required this.icon,
+    required this.color,
+    required this.selected,
+    required this.onSelected,
+  });
+
+  final String label;
+  final IconData icon;
+  final Color color;
+  final bool selected;
+  final VoidCallback onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    return ChoiceChip(
+      visualDensity: VisualDensity.compact,
+      avatar: Icon(
+        icon,
+        size: 16,
+        color: selected ? Colors.white : color,
+      ),
+      label: Text(
+        label,
+        style: TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w600,
+          color: selected ? Colors.white : const Color(0xFF1A1A1A),
+        ),
+      ),
+      selected: selected,
+      selectedColor: color,
+      backgroundColor: color.withValues(alpha: 0.08),
+      side: BorderSide(
+        color: selected ? color : color.withValues(alpha: 0.35),
+      ),
+      onSelected: (_) => onSelected(),
+    );
+  }
+}
+
 class PosPaymentChip extends StatelessWidget {
   const PosPaymentChip({
     super.key,
@@ -509,34 +553,38 @@ class PosPaymentChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Expanded(
-      child: Material(
-        color: selected ? PosTheme.accent : PosTheme.surface,
+    return Material(
+      color: selected ? PosTheme.accent : PosTheme.surface,
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        onTap: onTap,
         borderRadius: BorderRadius.circular(12),
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(12),
-          child: Container(
-            padding: const EdgeInsets.symmetric(vertical: 14),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: selected ? PosTheme.accent : PosTheme.border,
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: selected ? PosTheme.accent : PosTheme.border,
+            ),
+          ),
+          child: Column(
+            children: [
+              Icon(
+                icon,
+                size: 20,
+                color: selected ? Colors.white : PosTheme.textMuted,
               ),
-            ),
-            child: Column(
-              children: [
-                Icon(icon, color: selected ? Colors.white : PosTheme.textMuted),
-                const SizedBox(height: 4),
-                Text(
-                  label,
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    color: selected ? Colors.white : AppTheme.brandBlack,
-                  ),
+              const SizedBox(height: 2),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.bold,
+                  color: selected ? Colors.white : AppTheme.brandBlack,
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),
@@ -553,7 +601,7 @@ class PosShortcutHint extends StatelessWidget {
       spacing: 8,
       runSpacing: 4,
       children: const [
-        _HintBadge('F2', 'دفع'),
+        _HintBadge('F2', 'فاتورة'),
         _HintBadge('F4', 'بحث'),
         _HintBadge('F8', 'تفريغ'),
         _HintBadge('Esc', 'إلغاء'),

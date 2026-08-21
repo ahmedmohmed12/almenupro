@@ -19,6 +19,11 @@ enum AdminSettingsTab {
     'audio-notifications',
     '🔔 إعدادات التنبيه الصوتي',
     'audio_notifications',
+  ),
+  printer(
+    'printer',
+    '🖨️ إعدادات الطابعة والفواتير',
+    'printer',
   );
 
   const AdminSettingsTab(this.id, this.labelAr, this.iconName);

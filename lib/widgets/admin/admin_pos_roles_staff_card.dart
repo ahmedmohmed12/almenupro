@@ -23,6 +23,7 @@ class _AdminPosRolesStaffCardState extends State<AdminPosRolesStaffCard> {
 
   var _loading = true;
   var _savingRoles = false;
+  String? _loadError;
   List<PosRole> _roles = PosRole.defaults();
   List<StaffUser> _staff = const [];
   int _autoLockMinutes = 5;
@@ -49,12 +50,19 @@ class _AdminPosRolesStaffCardState extends State<AdminPosRolesStaffCard> {
   }
 
   Future<void> _load() async {
-    setState(() => _loading = true);
+    setState(() {
+      _loading = true;
+      _loadError = null;
+    });
     try {
+      final scope = SuperAdminScopeService.instance;
+      final listingAll = scope.isSuperAdmin && !scope.hasSelection;
       final settings = await RestaurantSettingsService.instance.load(
-        restaurantId: SuperAdminScopeService.instance.effectiveRestaurantId,
+        restaurantId: scope.effectiveRestaurantId,
       );
-      final staff = await PosOperationsService.instance.fetchStaffUsers();
+      final staff = await PosOperationsService.instance.fetchStaffUsers(
+        allRestaurants: listingAll,
+      );
       if (!mounted) return;
       setState(() {
         _roles = settings.resolvedPosRoles.map(_normalizeRole).toList();
@@ -62,9 +70,12 @@ class _AdminPosRolesStaffCardState extends State<AdminPosRolesStaffCard> {
         _staff = staff;
         _loading = false;
       });
-    } catch (_) {
+    } catch (error) {
       if (!mounted) return;
-      setState(() => _loading = false);
+      setState(() {
+        _loadError = error.toString().replaceFirst('Exception: ', '');
+        _loading = false;
+      });
     }
   }
 
@@ -119,6 +130,70 @@ class _AdminPosRolesStaffCardState extends State<AdminPosRolesStaffCard> {
 
   bool _canEditRole(PosRole role) {
     return !(role.isBuiltIn && role.id == 'pos_admin');
+  }
+
+  Map<String, List<StaffUser>> get _staffByRestaurant {
+    final grouped = <String, List<StaffUser>>{};
+    for (final member in _staff) {
+      final key = (member.restaurantName?.trim().isNotEmpty == true)
+          ? member.restaurantName!.trim()
+          : (member.restaurantId?.trim().isNotEmpty == true
+              ? member.restaurantId!.trim()
+              : 'بدون مطعم');
+      grouped.putIfAbsent(key, () => []).add(member);
+    }
+    final keys = grouped.keys.toList()..sort();
+    return {for (final key in keys) key: grouped[key]!};
+  }
+
+  Widget _buildRestaurantStaffGroup(MapEntry<String, List<StaffUser>> entry) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            'مطعم: ${entry.key}  (${entry.value.length})',
+            style: const TextStyle(
+              fontWeight: FontWeight.w700,
+              color: burgundy,
+            ),
+          ),
+          const SizedBox(height: 8),
+          ...entry.value.map(_buildStaffTile),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStaffTile(StaffUser member) {
+    final created = member.createdAt;
+    final createdLabel = created == null
+        ? ''
+        : 'أُضيف: ${created.toLocal().toString().substring(0, 16)}';
+    return Card(
+      margin: const EdgeInsets.only(bottom: 8),
+      child: ListTile(
+        leading: CircleAvatar(
+          backgroundColor: burgundy.withValues(alpha: 0.12),
+          child: Text(member.name.isNotEmpty ? member.name[0] : '?'),
+        ),
+        title: Text(member.name),
+        subtitle: Text(
+          [
+            'الدور: ${roleLabelForStaff(member, roles: _roles)}',
+            if (member.restaurantName?.trim().isNotEmpty == true)
+              'المطعم: ${member.restaurantName}',
+            member.isActive ? 'الحالة: نشط' : 'الحالة: غير نشط',
+            if (createdLabel.isNotEmpty) createdLabel,
+          ].join('  •  '),
+        ),
+        trailing: Icon(
+          member.isActive ? Icons.check_circle : Icons.cancel,
+          color: member.isActive ? Colors.green : Colors.grey,
+        ),
+      ),
+    );
   }
 
   @override
@@ -179,42 +254,45 @@ class _AdminPosRolesStaffCardState extends State<AdminPosRolesStaffCard> {
                     children: [
                       const Expanded(
                         child: Text(
-                          'موظفو POS',
+                          'الموظفون والكاشير حسب المطعم',
                           style: TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.bold,
                           ),
                         ),
                       ),
-                      FilledButton.icon(
-                        onPressed: _addStaff,
-                        icon: const Icon(Icons.person_add),
-                        label: const Text('إضافة موظف'),
-                      ),
+                      if (SuperAdminScopeService.instance.hasEffectiveRestaurant)
+                        FilledButton.icon(
+                          onPressed: _addStaff,
+                          icon: const Icon(Icons.person_add),
+                          label: const Text('إضافة موظف'),
+                        ),
                     ],
                   ),
                   const SizedBox(height: 8),
-                  if (_staff.isEmpty)
-                    PosStaffEmptyState(
-                      compact: true,
-                      onStaffAdded: () async {
-                        await _load();
-                        if (!mounted) return;
-                        AdminCornerToast.success(context, 'تم إضافة الموظف');
-                      },
+                  if (_loadError != null)
+                    Text(
+                      'تعذر تحميل الموظفين: $_loadError',
+                      style: TextStyle(color: Colors.red.shade700),
                     )
+                  else if (_staff.isEmpty)
+                    SuperAdminScopeService.instance.hasEffectiveRestaurant
+                        ? PosStaffEmptyState(
+                            compact: true,
+                            onStaffAdded: () async {
+                              await _load();
+                              if (!mounted) return;
+                              AdminCornerToast.success(context, 'تم إضافة الموظف');
+                            },
+                          )
+                        : const Padding(
+                            padding: EdgeInsets.symmetric(vertical: 16),
+                            child: Text(
+                              'لا يوجد موظفون أو كاشير محفوظون حالياً. اختر مطعماً لإضافة موظفين.',
+                            ),
+                          )
                   else
-                    ..._staff.map(
-                      (member) => ListTile(
-                        contentPadding: EdgeInsets.zero,
-                        title: Text(member.name),
-                        subtitle: Text(roleLabelForStaff(member, roles: _roles)),
-                        trailing: Icon(
-                          member.isActive ? Icons.check_circle : Icons.cancel,
-                          color: member.isActive ? Colors.green : Colors.grey,
-                        ),
-                      ),
-                    ),
+                    ..._staffByRestaurant.entries.map(_buildRestaurantStaffGroup),
                 ],
               ),
       ),

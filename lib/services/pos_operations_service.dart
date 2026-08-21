@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 import '../models/pos_permission_catalog.dart';
+import '../models/pos_role.dart';
 import '../models/shift_session.dart';
 import '../models/staff_user.dart';
 import 'admin_auth_service.dart';
@@ -44,9 +45,50 @@ class PosOperationsService extends ChangeNotifier {
     _notifySessionChanged();
   }
 
+  Map<String, bool> _ensurePosAccess(Map<String, bool> permissions) {
+    if (permissions[PosPermissionKeys.posAccess] == true ||
+        permissions[PosPermissionKeys.processOrders] == true) {
+      return PosPermissionCatalog.normalizePermissions(
+        Map<String, dynamic>.from(permissions),
+      );
+    }
+    return PosPermissionCatalog.normalizePermissions(
+      Map<String, dynamic>.from(PosRole.defaults().first.permissions),
+    );
+  }
+
   void applyCashierSession(PosCashierSession session) {
-    _cashierSession = session;
+    final permissions = _ensurePosAccess(session.permissions);
+    _cashierSession = PosCashierSession(
+      staff: session.staff,
+      permissions: permissions,
+      roleId: session.roleId.isNotEmpty ? session.roleId : 'cashier',
+    );
     _notifySessionChanged();
+    if (AdminAuthService.instance.isCashier) {
+      AdminAuthService.instance.persistCashierPermissions(
+        permissions,
+        roleId: _cashierSession!.roleId,
+      );
+    }
+  }
+
+  Future<void> restoreCashierSessionIfNeeded() async {
+    if (_cashierSession != null) return;
+    final session = AdminAuthService.instance.session;
+    if (session == null || !session.isCashier) return;
+    final stored = await AdminAuthService.instance.loadCashierPermissions();
+    applyCashierSession(
+      PosCashierSession(
+        staff: StaffUser(
+          id: session.staffId ?? 'cashier',
+          name: session.staffName ?? 'كاشير',
+          roleId: stored?.roleId.isNotEmpty == true ? stored!.roleId : 'cashier',
+        ),
+        permissions: stored?.permissions ?? const {},
+        roleId: stored?.roleId ?? 'cashier',
+      ),
+    );
   }
 
   void clearCashierSession() {
@@ -66,12 +108,18 @@ class PosOperationsService extends ChangeNotifier {
         ...SuperAdminScopeService.instance.scopeHeaders,
       };
 
-  Uri _posUri(String path, [Map<String, String>? query]) {
+  Uri _posUri(
+    String path, {
+    Map<String, String>? query,
+    bool scoped = true,
+  }) {
     final normalizedPath = path.startsWith('/') ? path : '/$path';
     final params = {...?query};
-    final restaurantId = SuperAdminScopeService.instance.effectiveRestaurantId;
-    if (restaurantId.isNotEmpty) {
-      params['restaurant_id'] = restaurantId;
+    if (scoped) {
+      final restaurantId = SuperAdminScopeService.instance.effectiveRestaurantId;
+      if (restaurantId.isNotEmpty) {
+        params['restaurant_id'] = restaurantId;
+      }
     }
     return Uri.parse('${ApiService.baseUrl}$normalizedPath')
         .replace(queryParameters: params.isEmpty ? null : params);
@@ -121,12 +169,44 @@ class PosOperationsService extends ChangeNotifier {
     }
   }
 
-  Future<PosCashierSession> loginWithPin(String pin) async {
+  Future<PosCashierSession> loginWithPin(
+    String pin, {
+    String? cashierName,
+    String? restaurantName,
+  }) async {
+    final password = pin.trim();
+    final name = cashierName?.trim() ?? '';
+    final restaurant = restaurantName?.trim() ?? '';
+    final auth = AdminAuthService.instance;
+
+    final useCashierJwtLogin = restaurant.isNotEmpty &&
+        name.isNotEmpty &&
+        (!auth.isLoggedIn || auth.isCashier);
+
+    if (useCashierJwtLogin) {
+      final result = await auth.loginCashier(
+        restaurantName: restaurant,
+        cashierName: name,
+        password: password,
+      );
+      applyCashierSession(result.cashierSession);
+      return result.cashierSession;
+    }
+
+    if (!auth.isLoggedIn) {
+      throw Exception('يرجى إدخال اسم المطعم واسم الكاشير وكلمة المرور');
+    }
+
     final response = await http
         .post(
           _posUri('/pos/staff/login'),
           headers: _headers,
-          body: jsonEncode({'pin': pin.trim()}),
+          body: jsonEncode({
+            'pin': password,
+            'password': password,
+            if (name.isNotEmpty) 'cashierName': name,
+            if (name.isNotEmpty) 'name': name,
+          }),
         )
         .timeout(const Duration(seconds: 30));
 
@@ -178,9 +258,12 @@ class PosOperationsService extends ChangeNotifier {
   Future<ShiftSession?> fetchCurrentShift({String? cashierId}) async {
     final response = await http
         .get(
-          _posUri('/pos/shifts/current', {
-            if (cashierId != null && cashierId.isNotEmpty) 'cashierId': cashierId,
-          }),
+          _posUri(
+            '/pos/shifts/current',
+            query: {
+              if (cashierId != null && cashierId.isNotEmpty) 'cashierId': cashierId,
+            },
+          ),
           headers: _headers,
         )
         .timeout(const Duration(seconds: 30));
@@ -240,16 +323,24 @@ class PosOperationsService extends ChangeNotifier {
     String notes = '',
     String? closedById,
     String? closedByName,
+    String? cashierId,
+    String? cashierName,
+    double? openingFloat,
+    String? roleId,
   }) async {
     final response = await http
         .post(
-          _posUri('/pos/shifts/$shiftId/close'),
+          _posUri('/pos/shifts/${Uri.encodeComponent(shiftId)}/close'),
           headers: _headers,
           body: jsonEncode({
             'closingCashCounted': closingCashCounted,
             'notes': notes,
             if (closedById != null) 'closedById': closedById,
             if (closedByName != null) 'closedByName': closedByName,
+            'cashierId': cashierId ?? closedById ?? _activeShift?.cashierId,
+            'cashierName': cashierName ?? closedByName ?? _activeShift?.cashierName,
+            'openingFloat': openingFloat ?? _activeShift?.openingFloat ?? 0,
+            'roleId': roleId ?? _activeShift?.roleId,
           }),
         )
         .timeout(const Duration(seconds: 30));
@@ -284,13 +375,16 @@ class PosOperationsService extends ChangeNotifier {
 
     final response = await http
         .get(
-          _posUri('/pos/shifts', {
-            if (scopedRestaurantId.isNotEmpty) 'restaurant_id': scopedRestaurantId,
-            if (cashierId != null && cashierId.isNotEmpty) 'cashierId': cashierId,
-            if (from != null) 'from': from.toUtc().toIso8601String(),
-            if (to != null) 'to': to.toUtc().toIso8601String(),
-            'includeOpen': includeOpen ? 'true' : 'false',
-          }),
+          _posUri(
+            '/pos/shifts',
+            query: {
+              if (scopedRestaurantId.isNotEmpty) 'restaurant_id': scopedRestaurantId,
+              if (cashierId != null && cashierId.isNotEmpty) 'cashierId': cashierId,
+              if (from != null) 'from': from.toUtc().toIso8601String(),
+              if (to != null) 'to': to.toUtc().toIso8601String(),
+              'includeOpen': includeOpen ? 'true' : 'false',
+            },
+          ),
           headers: _headers,
         )
         .timeout(const Duration(seconds: 30));
@@ -329,9 +423,16 @@ class PosOperationsService extends ChangeNotifier {
     return ShiftReportsResult(shifts: shifts, meta: meta);
   }
 
-  Future<List<StaffUser>> fetchStaffUsers() async {
+  Future<List<StaffUser>> fetchStaffUsers({bool allRestaurants = false}) async {
     final response = await http
-        .get(_posUri('/pos/staff'), headers: _headers)
+        .get(
+          _posUri(
+            '/pos/staff',
+            query: allRestaurants ? {'all': '1'} : null,
+            scoped: !allRestaurants,
+          ),
+          headers: _headers,
+        )
         .timeout(const Duration(seconds: 30));
 
     if (response.statusCode != 200) {

@@ -19,7 +19,9 @@ bool isLegacyTalabatImageUrl(String url) {
       host.contains('talabat.com') ||
       host.contains('cloudinary.com') ||
       host.contains('googleusercontent.com') ||
-      host.contains('fbcdn.net');
+      host.contains('fbcdn.net') ||
+      host.contains('cdninstagram.com') ||
+      host.contains('instagram.com');
 }
 
 bool isLocalMenuImagePath(String url) {

@@ -42,6 +42,11 @@ class PosPermissionCatalog {
       category: PosPermissionCategory.pos,
     ),
     PosPermissionDefinition(
+      key: PosPermissionKeys.receiveOnlineOrders,
+      labelAr: 'استلام طلبات الموقع الإلكتروني للعملاء',
+      category: PosPermissionCategory.orders,
+    ),
+    PosPermissionDefinition(
       key: PosPermissionKeys.printInvoice,
       labelAr: 'طباعة الفواتير',
       category: PosPermissionCategory.pos,
@@ -132,7 +137,13 @@ class PosPermissionCatalog {
   static Map<String, bool> normalizePermissions(Map<String, dynamic>? raw) {
     final normalized = <String, bool>{};
     for (final key in allKeys) {
-      normalized[key] = raw?[key] == true;
+      if (key == PosPermissionKeys.receiveOnlineOrders &&
+          raw != null &&
+          !raw.containsKey(key)) {
+        normalized[key] = raw[PosPermissionKeys.processOrders] == true;
+      } else {
+        normalized[key] = raw?[key] == true;
+      }
     }
     if (raw != null) {
       raw.forEach((key, value) {
@@ -152,6 +163,9 @@ class PosPermissionCatalog {
     if (permission == PosPermissionKeys.viewReports) {
       return permissions[PosPermissionKeys.viewShiftReports] == true ||
           permissions[PosPermissionKeys.viewDailySales] == true;
+    }
+    if (permission == PosPermissionKeys.receiveOnlineOrders) {
+      return permissions[PosPermissionKeys.processOrders] == true;
     }
     return false;
   }

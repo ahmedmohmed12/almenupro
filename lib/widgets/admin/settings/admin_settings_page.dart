@@ -10,6 +10,7 @@ import '../admin_sound_settings_card.dart';
 import '../admin_store_profile_card.dart';
 import '../admin_working_hours_card.dart';
 import 'admin_email_notifications_card.dart';
+import 'admin_printer_settings_card.dart';
 import 'admin_settings_tab.dart';
 import 'admin_whatsapp_settings_section.dart';
 
@@ -47,6 +48,8 @@ class AdminSettingsPage extends StatelessWidget {
         return const AdminWorkingHoursCard();
       case AdminSettingsTab.audioNotifications:
         return const AdminSoundSettingsCard();
+      case AdminSettingsTab.printer:
+        return const AdminPrinterSettingsCard();
     }
   }
 

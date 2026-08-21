@@ -5,18 +5,20 @@ import 'delivery_address_details.dart';
 
 enum OrderType {
   delivery,
-  pickup;
+  pickup,
+  dineIn;
 
   String get label => switch (this) {
         OrderType.delivery => 'Delivery',
         OrderType.pickup => 'Pickup',
+        OrderType.dineIn => 'صالة',
       };
 
   static OrderType fromString(String? value) {
-    return OrderType.values.firstWhere(
-      (type) => type.name == value?.toLowerCase(),
-      orElse: () => OrderType.delivery,
-    );
+    final raw = value?.trim().toLowerCase().replaceAll('_', '').replaceAll('-', '') ?? '';
+    if (raw == 'pickup' || raw == 'takeaway') return OrderType.pickup;
+    if (raw == 'dinein') return OrderType.dineIn;
+    return OrderType.delivery;
   }
 }
 
@@ -48,6 +50,7 @@ enum OrderStatus {
         OrderStatus.pending => 'قبول',
         OrderStatus.confirmed => 'في الطريق',
         OrderStatus.preparing => 'تم التوصيل',
+        OrderStatus.ready => 'تم التوصيل',
         _ => null,
       };
 
@@ -55,8 +58,14 @@ enum OrderStatus {
         OrderStatus.pending => OrderStatus.confirmed,
         OrderStatus.confirmed => OrderStatus.preparing,
         OrderStatus.preparing => OrderStatus.delivered,
+        OrderStatus.ready => OrderStatus.delivered,
         _ => null,
       };
+
+  bool get isInProgressForCashier =>
+      this == OrderStatus.confirmed ||
+      this == OrderStatus.preparing ||
+      this == OrderStatus.ready;
 
   /// Active orders shown under "الطلبات الجديدة".
   bool get isActiveForAdmin =>
@@ -95,16 +104,19 @@ class OrderLineItem {
     final rawOptions = map['selectedOptions'] as List<dynamic>? ?? [];
 
     return OrderLineItem(
-      menuItemId: map['menuItemId'] as String? ?? '',
-      name: map['name'] as String? ?? '',
+      menuItemId: map['menuItemId']?.toString() ??
+          map['menu_item_id']?.toString() ??
+          '',
+      name: map['name']?.toString() ?? '',
       unitPrice: (map['unitPrice'] as num?)?.toDouble() ??
           (map['price'] as num?)?.toDouble() ??
           0,
       quantity: (map['quantity'] as num?)?.toInt() ?? 1,
       selectedOptions: rawOptions
-          .map((option) => SelectedOption.fromMap(option as Map<String, dynamic>))
+          .whereType<Map>()
+          .map((option) => SelectedOption.fromMap(Map<String, dynamic>.from(option)))
           .toList(),
-      specialNotes: map['specialNotes'] as String?,
+      specialNotes: map['specialNotes']?.toString(),
       offerId: map['offerId']?.toString() ?? map['offer_id']?.toString(),
     );
   }
@@ -158,6 +170,7 @@ class Order {
     this.orderSource,
     this.shiftId,
     this.cashierId,
+    this.cashierName,
     this.externalOrderId,
     this.platformCommission,
     this.walletRedeemAmount,
@@ -186,12 +199,19 @@ class Order {
   final String? orderSource;
   final String? shiftId;
   final String? cashierId;
+  final String? cashierName;
   final String? externalOrderId;
   final double? platformCommission;
   final double? walletRedeemAmount;
   final double? discountAmount;
   final String? offerId;
   final String? offerTitle;
+
+  String get receivedByCashierLabel {
+    final name = cashierName?.trim() ?? '';
+    if (name.isNotEmpty) return name;
+    return '';
+  }
 
   double get netRevenue =>
       totalPrice - (platformCommission == null ? 0 : platformCommission!);
@@ -229,6 +249,8 @@ class Order {
           map['orderSource']?.toString() ?? map['order_source']?.toString(),
       shiftId: map['shiftId']?.toString() ?? map['shift_id']?.toString(),
       cashierId: map['cashierId']?.toString() ?? map['cashier_id']?.toString(),
+      cashierName:
+          map['cashierName']?.toString() ?? map['cashier_name']?.toString(),
       externalOrderId: map['externalOrderId']?.toString() ??
           map['external_order_id']?.toString(),
       platformCommission: (map['platformCommission'] as num?)?.toDouble() ??
@@ -252,6 +274,7 @@ class Order {
     double? totalPrice,
     String? shiftId,
     String? cashierId,
+    String? cashierName,
     String? externalOrderId,
     double? platformCommission,
     String? orderSource,
@@ -281,6 +304,7 @@ class Order {
       orderSource: orderSource ?? this.orderSource,
       shiftId: shiftId ?? this.shiftId,
       cashierId: cashierId ?? this.cashierId,
+      cashierName: cashierName ?? this.cashierName,
       externalOrderId: externalOrderId ?? this.externalOrderId,
       platformCommission: platformCommission ?? this.platformCommission,
       walletRedeemAmount: walletRedeemAmount ?? this.walletRedeemAmount,
@@ -314,6 +338,7 @@ class Order {
       if (orderSource != null && orderSource!.isNotEmpty) 'orderSource': orderSource,
       if (shiftId != null && shiftId!.isNotEmpty) 'shiftId': shiftId,
       if (cashierId != null && cashierId!.isNotEmpty) 'cashierId': cashierId,
+      if (cashierName != null && cashierName!.isNotEmpty) 'cashierName': cashierName,
       if (externalOrderId != null && externalOrderId!.isNotEmpty)
         'externalOrderId': externalOrderId,
       if (platformCommission != null) 'platformCommission': platformCommission,

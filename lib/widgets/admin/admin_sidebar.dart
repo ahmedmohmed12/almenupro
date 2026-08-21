@@ -41,16 +41,26 @@ class AdminSidebar extends StatefulWidget {
   static const int offersIndex = 5;
   static const int analyticsIndex = 6;
   static const int smartUpsellIndex = 7;
-  static const int settingsIndex = 8;
+  static const int staffIndex = 8;
+  static const int settingsIndex = 9;
+  static const int tablesIndex = 10;
 
-  /// Super Admin sidebar — no orders tab (restaurant admins only).
-  static const int superMenuIndex = 0;
-  static const int superRestaurantsIndex = 1;
-  static const int superDeliveryZonesIndex = 2;
-  static const int superOffersIndex = 3;
-  static const int superAnalyticsIndex = 4;
-  static const int superSmartUpsellIndex = 5;
-  static const int superSettingsIndex = 6;
+  /// Super Admin sidebar — POS plus restaurant management (no orders tab).
+  static const int superPosIndex = 0;
+  static const int superMenuIndex = 1;
+  static const int superRestaurantsIndex = 2;
+  static const int superDeliveryZonesIndex = 3;
+  static const int superOffersIndex = 4;
+  static const int superAnalyticsIndex = 5;
+  static const int superSmartUpsellIndex = 6;
+  static const int superStaffIndex = 7;
+  static const int superSettingsIndex = 8;
+  static const int superTablesIndex = 9;
+
+  static const AdminSidebarItem tablesItem = AdminSidebarItem(
+    icon: Icons.table_restaurant,
+    label: 'إدارة الطاولات',
+  );
 
   static const List<AdminSidebarItem> defaultItems = [
     AdminSidebarItem(
@@ -86,12 +96,27 @@ class AdminSidebar extends StatefulWidget {
       label: 'البياع الشاطر',
     ),
     AdminSidebarItem(
+      icon: Icons.badge_outlined,
+      label: 'الموظفين والكاشير',
+    ),
+    AdminSidebarItem(
       icon: Icons.store,
       label: 'إعدادات المحل والواتساب',
     ),
   ];
 
+  static const List<AdminSidebarItem> cashierItems = [
+    AdminSidebarItem(
+      icon: Icons.point_of_sale,
+      label: 'نقطة البيع POS',
+    ),
+  ];
+
   static const List<AdminSidebarItem> superAdminItems = [
+    AdminSidebarItem(
+      icon: Icons.point_of_sale,
+      label: 'نقطة البيع POS',
+    ),
     AdminSidebarItem(
       icon: Icons.restaurant_menu,
       label: 'إدارة المنيو والأصناف',
@@ -115,6 +140,10 @@ class AdminSidebar extends StatefulWidget {
     AdminSidebarItem(
       icon: Icons.auto_awesome,
       label: 'البياع الشاطر',
+    ),
+    AdminSidebarItem(
+      icon: Icons.badge_outlined,
+      label: 'الموظفين والكاشير',
     ),
     AdminSidebarItem(
       icon: Icons.settings,
@@ -219,6 +248,8 @@ class _AdminSidebarState extends State<AdminSidebar> {
         return Icons.schedule_outlined;
       case AdminSettingsTab.audioNotifications:
         return Icons.notifications_active_outlined;
+      case AdminSettingsTab.printer:
+        return Icons.print_outlined;
     }
   }
 

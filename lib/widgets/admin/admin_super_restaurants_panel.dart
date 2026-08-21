@@ -37,6 +37,7 @@ class _AdminSuperRestaurantsPanelState extends State<AdminSuperRestaurantsPanel>
   RestaurantStatus _status = RestaurantStatus.active;
   SubscriptionPlan _subscriptionPlan = SubscriptionPlan.free;
   SubscriptionStatus _subscriptionStatus = SubscriptionStatus.active;
+  var _tableManagementEnabled = false;
 
   bool get _isEditMode => _editingRestaurant != null;
 
@@ -106,6 +107,7 @@ class _AdminSuperRestaurantsPanelState extends State<AdminSuperRestaurantsPanel>
       _status = RestaurantStatus.active;
       _subscriptionPlan = SubscriptionPlan.free;
       _subscriptionStatus = SubscriptionStatus.active;
+      _tableManagementEnabled = false;
     });
   }
 
@@ -124,6 +126,7 @@ class _AdminSuperRestaurantsPanelState extends State<AdminSuperRestaurantsPanel>
       _status = restaurant.status;
       _subscriptionPlan = restaurant.subscriptionPlan;
       _subscriptionStatus = restaurant.subscriptionStatus;
+      _tableManagementEnabled = restaurant.tableManagementEnabled;
     });
   }
 
@@ -200,6 +203,7 @@ class _AdminSuperRestaurantsPanelState extends State<AdminSuperRestaurantsPanel>
           subscriptionExpiresAt: subscriptionExpiresAt,
           subscriptionNotes: subscriptionNotes,
           adminPassword: password.isEmpty ? null : password,
+          tableManagementEnabled: _tableManagementEnabled,
         );
       } else {
         saved = await ApiService.instance.createRestaurant(
@@ -213,6 +217,7 @@ class _AdminSuperRestaurantsPanelState extends State<AdminSuperRestaurantsPanel>
           subscriptionStatus: _subscriptionStatus,
           subscriptionExpiresAt: subscriptionExpiresAt,
           subscriptionNotes: subscriptionNotes,
+          tableManagementEnabled: _tableManagementEnabled,
         );
       }
 
@@ -504,6 +509,18 @@ class _AdminSuperRestaurantsPanelState extends State<AdminSuperRestaurantsPanel>
                   border: OutlineInputBorder(),
                 ),
               ),
+              const SizedBox(height: 12),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('إدارة الطاولات / الصالة'),
+                subtitle: const Text(
+                  'يظهر للكاشير شبكة الطاولات، ولمدير المطعم تبويب إدارة الطاولات.',
+                ),
+                value: _tableManagementEnabled,
+                onChanged: _saving
+                    ? null
+                    : (value) => setState(() => _tableManagementEnabled = value),
+              ),
               const SizedBox(height: 16),
               const Divider(),
               const SizedBox(height: 8),
@@ -604,6 +621,8 @@ class _AdminSuperRestaurantsPanelState extends State<AdminSuperRestaurantsPanel>
                           restaurant.subscriptionStatus.labelAr,
                           const Color(0xFF1565C0),
                         ),
+                        if (restaurant.tableManagementEnabled)
+                          _badge('طاولات', const Color(0xFF2E7D32)),
                       ],
                     ),
                   ],

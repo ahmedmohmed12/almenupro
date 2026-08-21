@@ -1,3 +1,4 @@
+import '../models/invoice_language.dart';
 import '../models/loyalty_cashback.dart';
 import '../models/payment_method_config.dart';
 import '../models/pos_role.dart';
@@ -34,6 +35,8 @@ class RestaurantSettings {
     this.notificationEmail = '',
     this.notifyOnNewOrderEmail = true,
     this.notifyOnShiftCloseEmail = false,
+    this.tableManagementEnabled = false,
+    this.invoiceLanguage = InvoiceLanguage.arabic,
   });
 
   final String whatsappNumber;
@@ -67,6 +70,8 @@ class RestaurantSettings {
   final String notificationEmail;
   final bool notifyOnNewOrderEmail;
   final bool notifyOnShiftCloseEmail;
+  final bool tableManagementEnabled;
+  final InvoiceLanguage invoiceLanguage;
 
   List<PaymentMethodConfig> get configuredPaymentMethods =>
       PaymentMethodCatalog.mergeWithDefaults(paymentMethods);
@@ -197,6 +202,15 @@ class RestaurantSettings {
           json['notify_on_new_order_email'] != false,
       notifyOnShiftCloseEmail: json['notifyOnShiftCloseEmail'] == true ||
           json['notify_on_shift_close_email'] == true,
+      tableManagementEnabled: json['tableManagementEnabled'] == true ||
+          json['tableManagement'] == true ||
+          (json['features'] is Map &&
+              (json['features']['tableManagement'] == true ||
+                  json['features']['table_management'] == true)),
+      invoiceLanguage: InvoiceLanguage.fromStorage(
+        json['invoiceLanguage']?.toString() ??
+            json['invoice_language']?.toString(),
+      ),
     );
   }
 
@@ -228,6 +242,8 @@ class RestaurantSettings {
     String? notificationEmail,
     bool? notifyOnNewOrderEmail,
     bool? notifyOnShiftCloseEmail,
+    bool? tableManagementEnabled,
+    InvoiceLanguage? invoiceLanguage,
   }) {
     final nextCountry = whatsappCountryCode ?? this.whatsappCountryCode;
     final nextPhone = whatsappPhone ?? this.whatsappPhone;
@@ -270,6 +286,9 @@ class RestaurantSettings {
       notifyOnNewOrderEmail: notifyOnNewOrderEmail ?? this.notifyOnNewOrderEmail,
       notifyOnShiftCloseEmail:
           notifyOnShiftCloseEmail ?? this.notifyOnShiftCloseEmail,
+      tableManagementEnabled:
+          tableManagementEnabled ?? this.tableManagementEnabled,
+      invoiceLanguage: invoiceLanguage ?? this.invoiceLanguage,
     );
   }
 
@@ -300,6 +319,7 @@ class RestaurantSettings {
         'notificationEmail': notificationEmail,
         'notifyOnNewOrderEmail': notifyOnNewOrderEmail,
         'notifyOnShiftCloseEmail': notifyOnShiftCloseEmail,
+        'invoiceLanguage': invoiceLanguage.code,
         if (updatedAt != null) 'updatedAt': updatedAt!.toIso8601String(),
       };
 

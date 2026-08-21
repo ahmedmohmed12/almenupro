@@ -2,8 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../../models/order.dart';
+import '../../models/sales_platform_config.dart';
 import '../../services/orders_service.dart';
+import '../../services/restaurant_settings_service.dart';
 import '../../utils/order_sound.dart';
+import 'admin_order_details_dialog.dart';
 import 'order_status_chip.dart';
 
 class AdminOrdersPanel extends StatefulWidget {
@@ -469,13 +472,16 @@ class _AdminOrderCard extends StatelessWidget {
 
     return Card(
       elevation: order.status == OrderStatus.pending ? 4 : 1,
+      clipBehavior: Clip.antiAlias,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(14),
         side: order.status == OrderStatus.pending
             ? BorderSide(color: Colors.green.shade400, width: 2)
             : BorderSide.none,
       ),
-      child: Padding(
+      child: InkWell(
+        onTap: () => _openInvoice(context),
+        child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -509,6 +515,11 @@ class _AdminOrderCard extends StatelessWidget {
             _InfoRow(icon: Icons.phone, text: order.phone),
             _InfoRow(icon: Icons.location_on, text: order.address),
             _InfoRow(icon: Icons.payment, text: paymentLabel),
+            if (order.receivedByCashierLabel.isNotEmpty)
+              _InfoRow(
+                icon: Icons.badge_outlined,
+                text: 'الكاشير المستلم: ${order.receivedByCashierLabel}',
+              ),
             const SizedBox(height: 10),
             Text(
               itemLines,
@@ -556,7 +567,23 @@ class _AdminOrderCard extends StatelessWidget {
             ],
           ],
         ),
+        ),
       ),
+    );
+  }
+
+  Future<void> _openInvoice(BuildContext context) async {
+    var platforms = SalesPlatformConfig.defaults();
+    try {
+      final settings = await RestaurantSettingsService.instance.load();
+      platforms = settings.resolvedSalesPlatforms;
+    } catch (_) {}
+    if (!context.mounted) return;
+    await showAdminOrderDetailsDialog(
+      context,
+      order: order,
+      platforms: platforms,
+      onStatusChanged: onStatusChanged,
     );
   }
 

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../services/restaurant_settings_service.dart';
 import '../../services/super_admin_scope_service.dart';
 import '../../utils/image_url.dart';
+import '../network_menu_image.dart';
 import 'admin_corner_toast.dart';
 import 'admin_responsive_layout.dart';
 
@@ -78,8 +79,8 @@ class _AdminStoreProfileCardState extends State<AdminStoreProfileCard> {
   String? _previewImageUrl() {
     final raw = _logoUrlController.text.trim();
     if (raw.isEmpty) return null;
-    if (raw.startsWith('http://') || raw.startsWith('https://')) return raw;
-    return resolveImageUrl(raw);
+    final resolved = resolveImageUrl(raw);
+    return resolved.isEmpty ? null : resolved;
   }
 
   @override
@@ -90,7 +91,7 @@ class _AdminStoreProfileCardState extends State<AdminStoreProfileCard> {
 
     return Card(
       child: Padding(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
         child: _loading
             ? const Center(
                 child: Padding(
@@ -112,13 +113,16 @@ class _AdminStoreProfileCardState extends State<AdminStoreProfileCard> {
                     controller: _logoUrlController,
                     enabled: !disabled,
                     onChanged: (_) => setState(() {}),
+                    minLines: 1,
+                    maxLines: 2,
                     decoration: const InputDecoration(
                       labelText: 'رابط شعار المطعم',
                       hintText: 'https://example.com/logo.png',
+                      isDense: true,
                       prefixIcon: Icon(Icons.image_outlined, color: burgundy),
                       border: OutlineInputBorder(),
                       helperText:
-                          'يجب أن يكون الرابط مباشراً ويبدأ بـ https:// لظهور الصورة في المعاينة',
+                          'روابط إنستجرام/فيسبوك وطلبات تُحمَّل عبر السيرفر لتظهر في المعاينة والمشاركة',
                     ),
                   ),
                   if (previewUrl != null) ...[
@@ -130,16 +134,20 @@ class _AdminStoreProfileCardState extends State<AdminStoreProfileCard> {
                         padding: const EdgeInsets.all(12),
                         child: Row(
                           children: [
-                            Image.network(
-                              previewUrl,
+                            SizedBox(
                               width: 72,
                               height: 72,
-                              fit: BoxFit.cover,
-                              errorBuilder: (_, __, ___) => Container(
+                              child: NetworkMenuImage(
+                                imageUrl: previewUrl,
                                 width: 72,
                                 height: 72,
-                                color: Colors.grey.shade200,
-                                child: const Icon(Icons.broken_image_outlined),
+                                fit: BoxFit.cover,
+                                errorBuilder: (_, __, ___) => Container(
+                                  width: 72,
+                                  height: 72,
+                                  color: Colors.grey.shade200,
+                                  child: const Icon(Icons.broken_image_outlined),
+                                ),
                               ),
                             ),
                             const SizedBox(width: 12),

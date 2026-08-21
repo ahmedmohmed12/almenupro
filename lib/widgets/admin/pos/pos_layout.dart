@@ -12,6 +12,7 @@ class PosLayout extends StatelessWidget {
     required this.onShiftCloseRequested,
     required this.child,
     this.showSidebar = true,
+    this.tableManagementEnabled = false,
   });
 
   final PosRoute selectedRoute;
@@ -19,6 +20,7 @@ class PosLayout extends StatelessWidget {
   final VoidCallback onShiftCloseRequested;
   final Widget child;
   final bool showSidebar;
+  final bool tableManagementEnabled;
 
   @override
   Widget build(BuildContext context) {
@@ -26,7 +28,10 @@ class PosLayout extends StatelessWidget {
       builder: (context, constraints) {
         final compact = constraints.maxWidth < 900;
 
-        if (!showSidebar || PosMenuCatalog.visibleItems().isEmpty) {
+        if (!showSidebar ||
+            PosMenuCatalog.visibleItems(
+              tableManagementEnabled: tableManagementEnabled,
+            ).isEmpty) {
           return child;
         }
 
@@ -42,6 +47,7 @@ class PosLayout extends StatelessWidget {
                   onRouteSelected: onRouteSelected,
                   onShiftCloseRequested: onShiftCloseRequested,
                   enableCollapse: false,
+                  tableManagementEnabled: tableManagementEnabled,
                 ),
               ),
             ),
@@ -71,6 +77,7 @@ class PosLayout extends StatelessWidget {
               selectedRoute: selectedRoute,
               onRouteSelected: onRouteSelected,
               onShiftCloseRequested: onShiftCloseRequested,
+              tableManagementEnabled: tableManagementEnabled,
             ),
             Expanded(child: child),
           ],

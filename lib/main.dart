@@ -78,12 +78,14 @@ class MyApp extends StatelessWidget {
       ...uri.queryParameters,
     };
 
+    if (path == '/admin' || path.startsWith('/admin/')) {
+      return MaterialPageRoute(
+        settings: settings,
+        builder: (_) => const AdminDashboard(),
+      );
+    }
+
     switch (path) {
-      case '/admin':
-        return MaterialPageRoute(
-          settings: settings,
-          builder: (_) => const AdminDashboard(),
-        );
       case '/legacy-menu':
         return MaterialPageRoute(
           settings: settings,
