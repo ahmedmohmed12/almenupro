@@ -7,11 +7,14 @@ import 'package:http/http.dart' as http;
 import '../models/customer.dart';
 import '../models/customer_checkout_profile.dart';
 import '../models/delivery_zone.dart';
+import '../models/expense.dart';
+import '../models/kitchen.dart';
 import '../models/loyalty_cashback.dart';
 import '../models/offer.dart';
 import '../models/menu_item.dart';
 import '../models/order.dart';
 import '../models/restaurant.dart';
+import '../models/restaurant_review.dart';
 import '../models/restaurant_settings.dart';
 import '../models/staff_user.dart';
 import '../models/upsell_recommendation.dart';
@@ -49,6 +52,7 @@ class ApiService {
   }
 
   static const Duration _fetchTimeout = Duration(seconds: 45);
+  static const Duration _statusTimeout = Duration(seconds: 18);
   static const Duration _writeTimeout = Duration(seconds: 60);
 
   List<MenuItem>? _cachedItems;
@@ -188,7 +192,7 @@ class ApiService {
         .timeout(_fetchTimeout);
 
     if (response.statusCode != 200) {
-      throw Exception('بيانات الكاشير غير صحيحة');
+      throw Exception('بيانات الكاشير أو المطبخ غير صحيحة');
     }
 
     final decoded = jsonDecode(response.body);
@@ -294,6 +298,7 @@ class ApiService {
     DateTime? subscriptionExpiresAt,
     String subscriptionNotes = '',
     bool tableManagementEnabled = false,
+    bool kitchenManagementEnabled = false,
   }) async {
     final response = await http
         .post(
@@ -313,6 +318,7 @@ class ApiService {
                   subscriptionExpiresAt.toUtc().toIso8601String(),
             if (subscriptionNotes.isNotEmpty) 'subscriptionNotes': subscriptionNotes,
             'tableManagement': tableManagementEnabled,
+            'kitchenManagement': kitchenManagementEnabled,
           }),
         )
         .timeout(_fetchTimeout);
@@ -524,7 +530,7 @@ class ApiService {
             headers: const {'Content-Type': 'application/json'},
             body: jsonEncode(payload),
           )
-          .timeout(_fetchTimeout);
+          .timeout(const Duration(seconds: 22));
 
       if (response.statusCode != 200 && response.statusCode != 201) {
         throw _exceptionFromResponse(
@@ -632,7 +638,7 @@ class ApiService {
                 'cashierName': cashierName,
             }),
           )
-          .timeout(_fetchTimeout);
+          .timeout(_statusTimeout);
 
       if (response.statusCode != 200) {
         throw Exception('فشل في تحديث الطلب (${response.statusCode})');
@@ -908,6 +914,7 @@ class ApiService {
     String subscriptionNotes = '',
     String? adminPassword,
     bool? tableManagementEnabled,
+    bool? kitchenManagementEnabled,
   }) async {
     final response = await http
         .patch(
@@ -928,6 +935,8 @@ class ApiService {
               'adminPassword': adminPassword,
             if (tableManagementEnabled != null)
               'tableManagement': tableManagementEnabled,
+            if (kitchenManagementEnabled != null)
+              'kitchenManagement': kitchenManagementEnabled,
           }),
         )
         .timeout(_fetchTimeout);
@@ -975,6 +984,25 @@ class ApiService {
         .post(_uri(path), headers: _jsonHeaders, body: jsonEncode(body))
         .timeout(_writeTimeout);
     return _decodeObject(response, 'فشل في حفظ البيانات');
+  }
+
+  Future<String> uploadStoreAsset({
+    required String restaurantId,
+    required String kind,
+    required String contentType,
+    required String base64,
+  }) async {
+    final decoded = await postJson('/store-assets', {
+      'restaurantId': restaurantId,
+      'kind': kind,
+      'contentType': contentType,
+      'data': base64,
+    });
+    final url = decoded['url']?.toString().trim() ?? '';
+    if (url.isEmpty) {
+      throw Exception('تعذر رفع الصورة');
+    }
+    return url;
   }
 
   Future<Map<String, dynamic>> putJson(
@@ -1133,6 +1161,89 @@ class ApiService {
     }
 
     return DeliveryZone.fromMap(Map<String, dynamic>.from(decoded));
+  }
+
+  Future<List<Kitchen>> fetchKitchens({
+    String? restaurantId,
+    bool includeInactive = false,
+  }) async {
+    try {
+      final query = {
+        ..._restaurantQuery(restaurantId: restaurantId),
+        if (includeInactive) 'include_inactive': '1',
+      };
+      final response = await http
+          .get(_uri('/kitchens', query), headers: _jsonHeaders)
+          .timeout(_fetchTimeout);
+      if (response.statusCode != 200) {
+        throw _exceptionFromResponse(
+          response,
+          'فشل في تحميل المطابخ (${response.statusCode})',
+        );
+      }
+      final decoded = jsonDecode(response.body);
+      if (decoded is! List) return const [];
+      return decoded
+          .whereType<Map>()
+          .map((raw) => Kitchen.fromMap(Map<String, dynamic>.from(raw)))
+          .toList();
+    } on TimeoutException {
+      throw Exception('انتهت مهلة تحميل المطابخ');
+    }
+  }
+
+  Future<Kitchen> saveKitchen({
+    required Kitchen kitchen,
+    String? restaurantId,
+    String? pin,
+  }) async {
+    final scoped = _scopedRestaurantId(restaurantId: restaurantId);
+    final payload = kitchen.toMap()
+      ..['restaurant_id'] = scoped
+      ..['restaurantId'] = scoped;
+    if (pin != null && pin.trim().isNotEmpty) {
+      payload['pin'] = pin.trim();
+      payload['password'] = pin.trim();
+    }
+    final isUpdate = kitchen.id.isNotEmpty;
+    final response = isUpdate
+        ? await http
+            .put(
+              _uri('/kitchens/${kitchen.id}'),
+              headers: _jsonHeaders,
+              body: jsonEncode(payload),
+            )
+            .timeout(_writeTimeout)
+        : await http
+            .post(
+              _uri('/kitchens'),
+              headers: _jsonHeaders,
+              body: jsonEncode(payload),
+            )
+            .timeout(_writeTimeout);
+    if (response.statusCode != 200 && response.statusCode != 201) {
+      throw _exceptionFromResponse(
+        response,
+        isUpdate
+            ? 'فشل في تحديث المطبخ (${response.statusCode})'
+            : 'فشل في إضافة المطبخ (${response.statusCode})',
+      );
+    }
+    final decoded = jsonDecode(response.body);
+    if (decoded is! Map) throw Exception('استجابة غير متوقعة من السيرفر');
+    return Kitchen.fromMap(Map<String, dynamic>.from(decoded));
+  }
+
+  Future<void> deleteKitchen(String kitchenId) async {
+    final response = await http
+        .delete(_uri('/kitchens/$kitchenId'), headers: _jsonHeaders)
+        .timeout(_writeTimeout);
+    if (response.statusCode != 200) {
+      throw _exceptionFromResponse(
+        response,
+        'فشل في حذف المطبخ (${response.statusCode})',
+      );
+    }
   }
 
   Future<void> deleteDeliveryZone(String zoneId) async {
@@ -1371,6 +1482,84 @@ class ApiService {
     );
   }
 
+  Future<PnlReport> fetchPnlReport({
+    String? restaurantId,
+    int days = 30,
+  }) async {
+    final map = await _getJsonMap(
+      '/analytics/pnl',
+      query: {
+        ..._restaurantQuery(restaurantId: restaurantId),
+        'days': '$days',
+      },
+    );
+    return PnlReport.fromJson(map);
+  }
+
+  Future<List<ExpenseRecord>> fetchExpenses({
+    String? restaurantId,
+    String? category,
+    String? from,
+    String? to,
+  }) async {
+    final query = {
+      ..._restaurantQuery(restaurantId: restaurantId),
+      if (category != null && category.isNotEmpty) 'category': category,
+      if (from != null && from.isNotEmpty) 'from': from,
+      if (to != null && to.isNotEmpty) 'to': to,
+    };
+    final response = await http
+        .get(_uri('/expenses', query), headers: _jsonHeaders)
+        .timeout(_fetchTimeout);
+    if (response.statusCode != 200) {
+      throw Exception('فشل تحميل المصاريف (${response.statusCode})');
+    }
+    final decoded = jsonDecode(response.body);
+    final raw = decoded is Map ? decoded['expenses'] : decoded;
+    if (raw is! List) return const [];
+    return raw
+        .whereType<Map>()
+        .map((row) => ExpenseRecord.fromJson(Map<String, dynamic>.from(row)))
+        .toList();
+  }
+
+  Future<ExpenseRecord> createExpense(
+    ExpenseRecord expense, {
+    String? restaurantId,
+  }) async {
+    final scoped = _scopedRestaurantId(restaurantId: restaurantId);
+    final response = await http
+        .post(
+          _uri('/expenses', {'restaurant_id': scoped}),
+          headers: _jsonHeaders,
+          body: jsonEncode({
+            ...expense.toJson(),
+            'restaurantId': scoped,
+            'restaurant_id': scoped,
+          }),
+        )
+        .timeout(_fetchTimeout);
+    if (response.statusCode != 200 && response.statusCode != 201) {
+      throw Exception('فشل إضافة المصروف (${response.statusCode})');
+    }
+    final decoded = jsonDecode(response.body);
+    if (decoded is! Map) throw Exception('استجابة غير متوقعة من السيرفر');
+    return ExpenseRecord.fromJson(Map<String, dynamic>.from(decoded));
+  }
+
+  Future<void> deleteExpense(String expenseId, {String? restaurantId}) async {
+    final scoped = _scopedRestaurantId(restaurantId: restaurantId);
+    final response = await http
+        .delete(
+          _uri('/expenses/$expenseId', {'restaurant_id': scoped}),
+          headers: _jsonHeaders,
+        )
+        .timeout(_fetchTimeout);
+    if (response.statusCode != 200) {
+      throw Exception('فشل حذف المصروف (${response.statusCode})');
+    }
+  }
+
   Future<Map<String, dynamic>> fetchUpsellAnalytics({
     String? restaurantId,
     int days = 30,
@@ -1480,6 +1669,135 @@ class ApiService {
       throw Exception('استجابة غير متوقعة من السيرفر');
     }
     return Map<String, dynamic>.from(decoded);
+  }
+
+  Future<ReviewSummary> fetchReviewSummary({
+    String? restaurantId,
+    String? slug,
+  }) async {
+    final query = _publicRestaurantQuery(slug: slug, restaurantId: restaurantId);
+    final response = await http
+        .get(
+          _uri('/reviews/summary', query.isEmpty ? null : query),
+          headers: _publicHeaders,
+        )
+        .timeout(_fetchTimeout);
+    if (response.statusCode != 200) {
+      return const ReviewSummary();
+    }
+    final decoded = jsonDecode(response.body);
+    if (decoded is! Map) return const ReviewSummary();
+    return ReviewSummary.fromJson(Map<String, dynamic>.from(decoded));
+  }
+
+  Future<ReviewEligibility> fetchReviewEligibility({
+    required String orderId,
+    String? restaurantId,
+    String? slug,
+  }) async {
+    final query = {
+      ..._publicRestaurantQuery(slug: slug, restaurantId: restaurantId),
+      'orderId': orderId,
+    };
+    final response = await http
+        .get(
+          _uri('/reviews/eligibility', query),
+          headers: _publicHeaders,
+        )
+        .timeout(_fetchTimeout);
+    if (response.statusCode != 200) {
+      return const ReviewEligibility(eligible: false, reason: 'request_failed');
+    }
+    final decoded = jsonDecode(response.body);
+    if (decoded is! Map) {
+      return const ReviewEligibility(eligible: false, reason: 'invalid_response');
+    }
+    return ReviewEligibility.fromJson(Map<String, dynamic>.from(decoded));
+  }
+
+  Future<ReviewSummary> submitRestaurantReview({
+    required String orderId,
+    required int rating,
+    required String restaurantId,
+    String? slug,
+    String comment = '',
+    String customerName = '',
+    String phone = '',
+  }) async {
+    final payload = <String, dynamic>{
+      'orderId': orderId,
+      'rating': rating,
+      'comment': comment,
+      'restaurantId': restaurantId,
+      'restaurant_id': restaurantId,
+      if (slug != null && slug.trim().isNotEmpty) 'restaurantSlug': slug.trim(),
+      if (customerName.trim().isNotEmpty) 'customerName': customerName.trim(),
+      if (phone.trim().isNotEmpty) 'phone': phone.trim(),
+    };
+    final response = await http
+        .post(
+          _uri('/reviews'),
+          headers: _publicHeaders,
+          body: jsonEncode(payload),
+        )
+        .timeout(_fetchTimeout);
+    if (response.statusCode != 200 && response.statusCode != 201) {
+      final decoded = jsonDecode(response.body);
+      final message = decoded is Map
+          ? (decoded['error']?.toString() ?? 'فشل إرسال التقييم')
+          : 'فشل إرسال التقييم (${response.statusCode})';
+      throw Exception(message);
+    }
+    final decoded = jsonDecode(response.body);
+    if (decoded is Map && decoded['summary'] is Map) {
+      return ReviewSummary.fromJson(
+        Map<String, dynamic>.from(decoded['summary'] as Map),
+      );
+    }
+    return const ReviewSummary();
+  }
+
+  Future<AdminReviewsPayload> fetchAdminReviews({
+    String? restaurantId,
+    int days = 30,
+    bool includeHidden = true,
+  }) async {
+    final scoped = _scopedRestaurantId(restaurantId: restaurantId);
+    final query = <String, String>{
+      if (scoped.isNotEmpty) 'restaurant_id': scoped,
+      'days': '$days',
+      'includeHidden': includeHidden ? 'true' : 'false',
+    };
+    final response = await http
+        .get(_uri('/reviews', query), headers: _jsonHeaders)
+        .timeout(_fetchTimeout);
+    if (response.statusCode != 200) {
+      throw Exception('فشل تحميل التقييمات (${response.statusCode})');
+    }
+    final decoded = jsonDecode(response.body);
+    if (decoded is! Map) {
+      throw Exception('استجابة غير متوقعة من السيرفر');
+    }
+    return AdminReviewsPayload.fromJson(Map<String, dynamic>.from(decoded));
+  }
+
+  Future<void> updateReviewStatus({
+    required String reviewId,
+    required String status,
+    String? restaurantId,
+  }) async {
+    final scoped = _scopedRestaurantId(restaurantId: restaurantId);
+    final query = scoped.isEmpty ? null : {'restaurant_id': scoped};
+    final response = await http
+        .patch(
+          _uri('/reviews/$reviewId', query),
+          headers: _jsonHeaders,
+          body: jsonEncode({'status': status}),
+        )
+        .timeout(_fetchTimeout);
+    if (response.statusCode != 200) {
+      throw Exception('فشل تحديث التقييم (${response.statusCode})');
+    }
   }
 }
 

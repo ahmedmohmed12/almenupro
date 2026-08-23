@@ -13,9 +13,11 @@ const {
   loginCashierSession,
   isSuperAdmin,
   isCashier,
+  isKitchen,
   canAccessRestaurant,
   resolveRestaurantId,
   authError,
+  DEFAULT_RESTAURANT_ID,
 } = require('./lib/adminAuth');
 const {
   filterByRestaurant,
@@ -30,9 +32,14 @@ const {
   resolveReportRestaurantId,
 } = require('./lib/restaurantScopeUtils');
 const { handlePosRoutes } = require('./lib/posRoutes');
-const { handleTableRoutes, normalizeFeatures } = require('./lib/tableRoutes');
+const { handleKitchenRoutes } = require('./lib/kitchenRoutes');
+const { assignTargetKitchen, findKitchenByLogin, orderTargetKitchenId } = require('./lib/kitchenRouting');
+const { handleTableRoutes, normalizeFeatures, isKitchenManagementEnabled, isTableManagementEnabled } = require('./lib/tableRoutes');
+const { handleReviewRoutes } = require('./lib/reviewRoutes');
+const { handleExpenseRoutes } = require('./lib/expenseRoutes');
+const { computeProfitAndLoss } = require('./lib/pnlAnalytics');
 const { ALL_PERMISSION_KEYS } = require('./lib/posPermissions');
-const { serveMenuImage, persistMenuItemsImages, proxyExternalImage } = require('./lib/menuImageStorage');
+const { serveMenuImage, persistMenuItemsImages, proxyExternalImage, fetchUpstreamImage } = require('./lib/menuImageStorage');
 const { normalizeMenuItemsForApi, normalizeMenuItemForApi } = require('./lib/bilingualItemMigration');
 const { migrateMenuItems } = require('./lib/bilingualMenu');
 const { scrapeTalabatMenu } = require('./lib/talabatScraper');
@@ -41,7 +48,7 @@ const { computeDailySalesAnalytics } = require('./lib/platformSalesAnalytics');
 const { computeFoodCostReport } = require('./lib/foodCostReportAnalytics');
 const { computeUpsellAnalytics, normalizeIncomingEvent, trimEvents } = require('./lib/upsellAnalytics');
 const { previewEarnedCashback, applyLoyaltyCashbackToOrder, redeemCustomerWallet, normalizeLoyaltySettings, isDeliveredStatus } = require('./lib/loyaltyCashback');
-const { normalizeOffer, isOfferLive, collectOfferIdsFromOrder, evaluateOfferUsage, assertOffersUsageAllowed, OFFER_USAGE_LIMIT_MESSAGE } = require('./lib/offers');
+const { normalizeOffer, isOfferLive, collectOfferIdsFromOrder, evaluateOfferUsage, findExhaustedOfferIds, repriceOrderIfOffersExhausted, assertOffersUsageAllowed, OFFER_USAGE_LIMIT_MESSAGE } = require('./lib/offers');
 const {
   enrichCustomersForRestaurant,
   upsertCustomerFromSource,
@@ -135,6 +142,23 @@ function requestUrl(req) {
   const host = req.headers.host || 'localhost';
   const proto = req.headers['x-forwarded-proto'] || 'http';
   return new URL(req.url || '/', `${proto}://${host}`);
+}
+
+function requestFrontendOrigin(req) {
+  const forwarded = String(req.headers['x-forwarded-host'] || '')
+    .split(',')[0]
+    .trim();
+  const host = forwarded || String(req.headers.host || '').split(':')[0];
+  const proto = String(req.headers['x-forwarded-proto'] || 'https')
+    .split(',')[0]
+    .trim();
+  if (
+    host &&
+    !/backend-henna|almenupro-api|onrender\.com|localhost/i.test(host)
+  ) {
+    return `${proto}://${host}`.replace(/\/+$/, '');
+  }
+  return process.env.FRONTEND_ORIGIN || 'https://frontend-six-lime-13.vercel.app';
 }
 
 function publicRestaurant(entry) {
@@ -328,6 +352,33 @@ async function routeRequest(req, res, url, pathname) {
     return true;
   }
 
+  if (await handleKitchenRoutes(req, res, url, {
+    readBody,
+    sendJson,
+    authError,
+    parseAuthHeader,
+    requireAuth,
+    rejectCashier: (auth, res, message) => {
+      if (isCashier(auth) || isKitchen(auth)) {
+        sendJson(res, 403, { error: message, code: 'STATION_FORBIDDEN' });
+        return true;
+      }
+      return false;
+    },
+    resolveScopedRestaurantId,
+    resolveRestaurantId,
+    assertRestaurantAccess,
+    filterByRestaurant,
+    readKitchens: () => dataStore.readKitchens(),
+    writeKitchens: (value) => dataStore.writeKitchens(value),
+    readOrders: () => dataStore.readOrders(),
+    readRestaurants: () => dataStore.readRestaurants(),
+    isKitchenManagementEnabled,
+    DEFAULT_RESTAURANT_ID,
+  })) {
+    return true;
+  }
+
   if (await handleTableRoutes(req, res, url, {
     readBody,
     sendJson,
@@ -344,6 +395,87 @@ async function routeRequest(req, res, url, pathname) {
     readOrders: () => dataStore.readOrders(),
     writeOrders: (value) => dataStore.writeOrders(value),
   })) {
+    return true;
+  }
+
+  if (await handleReviewRoutes(req, res, url, {
+    readBody,
+    sendJson,
+    authError,
+    requireAuth,
+    parseAuthHeader,
+    isCashier,
+    assertRestaurantAccess,
+    resolveScopedRestaurantId,
+    filterByRestaurant,
+    readReviews: () => dataStore.readReviews(),
+    writeReviews: (value) => dataStore.writeReviews(value),
+    readOrders: () => dataStore.readOrders(),
+    rejectCashier: (auth, res, message) => {
+      if (isCashier(auth) || isKitchen(auth)) {
+        sendJson(res, 403, { error: message, code: 'STATION_FORBIDDEN' });
+        return true;
+      }
+      return false;
+    },
+  })) {
+    return true;
+  }
+
+  if (await handleExpenseRoutes(req, res, url, {
+    readBody,
+    sendJson,
+    authError,
+    requireAuth,
+    assertRestaurantAccess,
+    resolveScopedRestaurantId,
+    filterByRestaurant,
+    readExpenses: () => dataStore.readExpenses(),
+    writeExpenses: (value) => dataStore.writeExpenses(value),
+    rejectCashier: (auth, res, message) => {
+      if (isCashier(auth) || isKitchen(auth)) {
+        sendJson(res, 403, { error: message, code: 'STATION_FORBIDDEN' });
+        return true;
+      }
+      return false;
+    },
+  })) {
+    return true;
+  }
+
+  const ogImageMatch = pathname.match(/^\/api\/og-image\/([^/]+)$/);
+  if (ogImageMatch && (req.method === 'GET' || req.method === 'HEAD')) {
+    const slug = decodeURIComponent(ogImageMatch[1]).replace(/\/+$/, '');
+    const restaurants = await dataStore.readRestaurants();
+    const restaurant = restaurants.find(
+      (entry) => String(entry.slug || '').toLowerCase() === slug.toLowerCase(),
+    );
+    const settingsMap = restaurant ? await dataStore.readSettingsMap() : { byRestaurant: {} };
+    const settings = restaurant ? settingsMap.byRestaurant?.[restaurant.id] || {} : {};
+    const logoUrl = String(
+      settings.logoUrl ||
+        settings.logo_url ||
+        restaurant?.logoUrl ||
+        restaurant?.logo_url ||
+        '',
+    ).trim();
+    const source =
+      logoUrl || 'https://frontend-six-lime-13.vercel.app/icons/Icon-512.png';
+    const result = await fetchUpstreamImage(source);
+    if (result.error) {
+      sendJson(res, result.status || 502, { error: result.error });
+      return true;
+    }
+    res.statusCode = 200;
+    res.setHeader('Content-Type', result.contentType);
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Cache-Control', 'public, max-age=86400');
+    if (req.method === 'HEAD') {
+      res.setHeader('Content-Length', String(result.buffer.length));
+      res.end();
+      return true;
+    }
+    res.end(result.buffer);
     return true;
   }
 
@@ -418,11 +550,42 @@ async function routeRequest(req, res, url, pathname) {
     const { findStaffByNameAndPin, resolveStaffPermissions, sanitizeStaffPublic } = require('./lib/staffUsers');
     const { normalizePosRoles, findRoleById } = require('./lib/posPermissions');
     const staffUsers = await extraStore.staffUsers.read();
-    const staff = findStaffByNameAndPin(staffUsers, restaurant.id, cashierName, pin);
+    let staff = findStaffByNameAndPin(staffUsers, restaurant.id, cashierName, pin);
+    const kitchens = await dataStore.readKitchens();
+    const kitchenFromLogin = findKitchenByLogin(kitchens, restaurant.id, cashierName, pin);
+    if (!staff && kitchenFromLogin) {
+      staff = {
+        id: `kitchen_login_${kitchenFromLogin.id}`,
+        name: kitchenFromLogin.loginName || kitchenFromLogin.login_name,
+        roleId: 'kitchen',
+        kitchenId: kitchenFromLogin.id,
+        kitchen_id: kitchenFromLogin.id,
+        restaurantId: restaurant.id,
+        isActive: true,
+      };
+    }
     if (!staff) {
       sendJson(res, 401, { error: 'Invalid credentials' });
       return true;
     }
+
+    const kitchenId = String(staff.kitchenId || staff.kitchen_id || kitchenFromLogin?.id || '').trim();
+    const isKitchenRole =
+      String(staff.roleId || staff.role_id || '').toLowerCase() === 'kitchen' || Boolean(kitchenId);
+    if (isKitchenRole && !isKitchenManagementEnabled(restaurant)) {
+      sendJson(res, 403, {
+        error: 'شاشات المطابخ غير مفعّلة في اشتراك هذا المطعم',
+        code: 'KITCHEN_MANAGEMENT_DISABLED',
+      });
+      return true;
+    }
+    const kitchenRecord =
+      (kitchenId && kitchens.find((entry) => String(entry.id) === kitchenId)) ||
+      kitchenFromLogin ||
+      null;
+    const kitchenName = kitchenRecord
+      ? kitchenRecord.name_ar || kitchenRecord.name || kitchenRecord.name_en || kitchenRecord.id
+      : null;
 
     const settingsMap = await dataStore.readSettingsMap();
     const posRoles = normalizePosRoles(
@@ -434,17 +597,22 @@ async function routeRequest(req, res, url, pathname) {
       restaurantName: restaurant.name,
       staffId: staff.id,
       staffName: staff.name,
+      kitchenId: isKitchenRole ? kitchenId || null : null,
+      kitchenName: isKitchenRole ? kitchenName : null,
+      asKitchen: isKitchenRole,
     });
     sendJson(res, 200, {
       token,
-      role: 'cashier',
+      role: isKitchenRole ? 'kitchen' : 'cashier',
       restaurantId: restaurant.id,
       restaurantName: restaurant.name,
       staffId: staff.id,
       staffName: staff.name,
+      kitchenId: isKitchenRole ? kitchenId || null : null,
+      kitchenName: isKitchenRole ? kitchenName : null,
       staff: sanitizeStaffPublic(staff),
-      permissions: resolveStaffPermissions(staff, posRoles),
-      posRole: findRoleById(posRoles, staff.roleId || staff.role_id),
+      permissions: isKitchenRole ? {} : resolveStaffPermissions(staff, posRoles),
+      posRole: isKitchenRole ? null : findRoleById(posRoles, staff.roleId || staff.role_id),
     });
     return true;
   }
@@ -519,7 +687,12 @@ async function routeRequest(req, res, url, pathname) {
         subscriptionStatus: body.subscriptionStatus || body.subscription_status || 'active',
         subscriptionExpiresAt: body.subscriptionExpiresAt || body.subscription_expires_at || null,
         subscriptionNotes: body.subscriptionNotes || body.subscription_notes || '',
-        features: normalizeFeatures(body.features || { tableManagement: body.tableManagement }),
+        features: normalizeFeatures(
+          body.features || {
+            tableManagement: body.tableManagement,
+            kitchenManagement: body.kitchenManagement,
+          },
+        ),
         updatedAt: new Date().toISOString(),
       };
       const restaurants = await dataStore.readRestaurants();
@@ -557,28 +730,39 @@ async function routeRequest(req, res, url, pathname) {
       ownerName: body.ownerName ?? body.owner_name ?? current.ownerName ?? '',
       phone: body.phone ?? current.phone ?? '',
       status: body.status ?? current.status,
-      subscriptionPlan: body.subscriptionPlan ?? body.subscription_plan ?? current.subscriptionPlan,
-      subscriptionStatus:
-        body.subscriptionStatus ?? body.subscription_status ?? current.subscriptionStatus,
-      subscriptionExpiresAt:
-        body.subscriptionExpiresAt ?? body.subscription_expires_at ?? current.subscriptionExpiresAt,
-      subscriptionNotes:
-        body.subscriptionNotes ?? body.subscription_notes ?? current.subscriptionNotes ?? '',
       adminPassword: body.adminPassword || current.adminPassword,
       updatedAt: new Date().toISOString(),
     };
     if (isSuperAdmin(auth)) {
-      const enabled =
+      next.subscriptionPlan =
+        body.subscriptionPlan ?? body.subscription_plan ?? current.subscriptionPlan;
+      next.subscriptionStatus =
+        body.subscriptionStatus ?? body.subscription_status ?? current.subscriptionStatus;
+      next.subscriptionExpiresAt =
+        body.subscriptionExpiresAt ?? body.subscription_expires_at ?? current.subscriptionExpiresAt;
+      next.subscriptionNotes =
+        body.subscriptionNotes ?? body.subscription_notes ?? current.subscriptionNotes ?? '';
+      const tableEnabled =
         body.tableManagement ??
         body.tableManagementEnabled ??
         body.features?.tableManagement ??
         body.features?.table_management;
-      if (enabled !== undefined) {
-        next.features = {
-          ...normalizeFeatures(current.features),
-          tableManagement: enabled === true,
-        };
-      }
+      const kitchenEnabled =
+        body.kitchenManagement ??
+        body.kitchenManagementEnabled ??
+        body.features?.kitchenManagement ??
+        body.features?.kitchen_management;
+      next.features = {
+        ...normalizeFeatures(current.features),
+        ...(tableEnabled !== undefined ? { tableManagement: tableEnabled === true } : {}),
+        ...(kitchenEnabled !== undefined ? { kitchenManagement: kitchenEnabled === true } : {}),
+      };
+    } else {
+      next.subscriptionPlan = current.subscriptionPlan;
+      next.subscriptionStatus = current.subscriptionStatus;
+      next.subscriptionExpiresAt = current.subscriptionExpiresAt;
+      next.subscriptionNotes = current.subscriptionNotes;
+      next.features = normalizeFeatures(current.features);
     }
     restaurants[index] = next;
     await dataStore.writeRestaurants(restaurants);
@@ -746,53 +930,95 @@ async function routeRequest(req, res, url, pathname) {
     if (!auth) return true;
     const restaurantId = await resolveScopedRestaurantId(req, url, auth);
     if (!restaurantId || !assertRestaurantAccess(auth, restaurantId, authError, res)) return true;
-    const orders = filterByRestaurant(await dataStore.readOrders(), restaurantId);
+    let orders = filterByRestaurant(await dataStore.readOrders(), restaurantId);
+    if (isKitchen(auth)) {
+      const kitchenId = String(auth.kitchenId || '').trim();
+      orders = kitchenId
+        ? orders.filter((order) => {
+            const status = String(order.status || '').toLowerCase();
+            return (
+              orderTargetKitchenId(order) === kitchenId &&
+              status !== 'pending'
+            );
+          })
+        : [];
+    }
     sendJson(res, 200, selectRecentOrders(orders, 250));
     return true;
   }
 
   if (pathname === '/api/orders' && req.method === 'POST') {
     const body = parseJson(await readBody(req));
-    const restaurants = await dataStore.readRestaurants();
+    const [restaurants, existingOrders, customersSeed] = await Promise.all([
+      dataStore.readRestaurants(),
+      dataStore.readOrders(),
+      extraStore.customers.read(),
+    ]);
     const restaurantId =
       body.restaurantId ||
       body.restaurant_id ||
       resolveRestaurantFromQuery(url, restaurants);
     const offerIds = collectOfferIdsFromOrder(body);
+    let orderPayload = { ...body };
     if (offerIds.length > 0) {
-      try {
-        const offers = filterByRestaurant(await extraStore.offers.read(), restaurantId)
-          .map((offer) => normalizeOffer(offer, restaurantId));
-        const existingOrders = await dataStore.readOrders();
-        assertOffersUsageAllowed({
-          offers,
-          orders: existingOrders,
-          offerIds,
-          phone: body.phone,
-          restaurantId,
-        });
-      } catch (error) {
-        if (error && (error.code === 'OFFER_USAGE_LIMIT' || error.code === 'OFFER_PHONE_REQUIRED')) {
-          sendJson(res, error.statusCode || 409, {
-            error: error.message || OFFER_USAGE_LIMIT_MESSAGE,
-            code: error.code,
-            offerId: error.offerId,
+      const offers = filterByRestaurant(await extraStore.offers.read(), restaurantId)
+        .map((offer) => normalizeOffer(offer, restaurantId));
+      const exhaustedIds = findExhaustedOfferIds({
+        offers,
+        orders: existingOrders,
+        offerIds,
+        phone: body.phone,
+        restaurantId,
+      });
+      if (exhaustedIds.length > 0) {
+        orderPayload = repriceOrderIfOffersExhausted(body, exhaustedIds).body;
+      } else if (!body.phone) {
+        try {
+          assertOffersUsageAllowed({
+            offers,
+            orders: existingOrders,
+            offerIds,
+            phone: body.phone,
+            restaurantId,
           });
-          return true;
+        } catch (error) {
+          if (error && error.code === 'OFFER_PHONE_REQUIRED') {
+            sendJson(res, error.statusCode || 400, {
+              error: error.message,
+              code: error.code,
+            });
+            return true;
+          }
+          throw error;
         }
-        throw error;
       }
     }
-    const orders = await dataStore.readOrders();
     const created = {
-      ...body,
+      ...orderPayload,
       id: body.id || `ord_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
       restaurant_id: restaurantId,
       restaurantId,
       status: body.status || 'pending',
       createdAt: body.createdAt || new Date().toISOString(),
     };
-    let customers = await extraStore.customers.read();
+    try {
+      const assignment = await assignTargetKitchen({
+        body: created,
+        restaurantId,
+        auth: parseAuthHeader(req),
+        deliveryZoneId: created.deliveryZoneId || created.delivery_zone_id,
+      });
+      if (assignment && assignment.targetKitchenId) {
+        Object.assign(created, assignment);
+      }
+    } catch (error) {
+      if (error && error.code === 'INVALID_TARGET_KITCHEN') {
+        sendJson(res, 400, { error: error.message, code: error.code });
+        return true;
+      }
+      throw error;
+    }
+    let customers = customersSeed;
     const requestedRedeem = Number(
       body.walletRedeemAmount ?? body.wallet_redeem_amount ?? 0,
     ) || 0;
@@ -809,12 +1035,11 @@ async function routeRequest(req, res, url, pathname) {
       const currentTotal = Number(created.totalPrice ?? created.total_price ?? 0) || 0;
       created.totalPrice = Math.max(0, Number((currentTotal - redemption.redeemed).toFixed(3)));
     }
-    orders.unshift(created);
-    await dataStore.writeOrders(orders);
+    await dataStore.prependOrder(created, existingOrders);
     if (created.phone) {
       customers = upsertCustomerFromSource(customers, created, restaurantId);
+      await extraStore.customers.write(customers);
     }
-    await extraStore.customers.write(customers);
     sendJson(res, 201, created);
     return true;
   }
@@ -832,6 +1057,21 @@ async function routeRequest(req, res, url, pathname) {
     }
     const restaurantId = orders[index].restaurant_id || orders[index].restaurantId;
     if (!assertRestaurantAccess(auth, restaurantId, authError, res)) return true;
+    if (isKitchen(auth)) {
+      const kitchenId = String(auth.kitchenId || '').trim();
+      if (!kitchenId || orderTargetKitchenId(orders[index]) !== kitchenId) {
+        sendJson(res, 403, {
+          error: 'Order is not assigned to this kitchen',
+          code: 'KITCHEN_FORBIDDEN',
+        });
+        return true;
+      }
+      sendJson(res, 403, {
+        error: 'Cashier must accept and complete orders; kitchen is view and print only',
+        code: 'CASHIER_MUST_ACCEPT',
+      });
+      return true;
+    }
     const body = parseJson(await readBody(req));
     const previous = orders[index];
     const previousStatus = previous.status;
@@ -841,28 +1081,36 @@ async function routeRequest(req, res, url, pathname) {
       updatedAt: new Date().toISOString(),
     };
     next = attachReceivingCashier(next, previous, body);
-    const shifts = await extraStore.shiftSessions.read();
-    const bound = applyShiftBindingOnAccept({
-      order: next,
-      previousOrder: previous,
-      previousStatus,
-      nextStatus: body.status,
-      shifts,
-      restaurantId,
-      auth,
-      body,
-    });
-    if (bound.bound) {
-      next = bound.order;
-    }
-    const cancelled = applyShiftAdjustmentOnCancel({
-      order: next,
-      previousStatus,
-      shifts: bound.shifts || shifts,
-    });
-    next = cancelled.order || next;
-    if (cancelled.shifts) {
-      await extraStore.shiftSessions.write(cancelled.shifts);
+    const nextStatus = String(body.status || next.status || '').toLowerCase();
+    const prevStatus = String(previousStatus || '').toLowerCase();
+    const needsShiftIo =
+      prevStatus === 'pending' ||
+      nextStatus === 'cancelled' ||
+      nextStatus === 'canceled';
+    if (needsShiftIo) {
+      const shifts = await extraStore.shiftSessions.read();
+      const bound = applyShiftBindingOnAccept({
+        order: next,
+        previousOrder: previous,
+        previousStatus,
+        nextStatus: body.status,
+        shifts,
+        restaurantId,
+        auth,
+        body,
+      });
+      if (bound.bound) {
+        next = bound.order;
+      }
+      const cancelled = applyShiftAdjustmentOnCancel({
+        order: next,
+        previousStatus,
+        shifts: bound.shifts || shifts,
+      });
+      next = cancelled.order || next;
+      if (cancelled.shifts) {
+        await extraStore.shiftSessions.write(cancelled.shifts);
+      }
     }
     if (isDeliveredStatus(next.status)) {
       const settingsMap = await dataStore.readSettingsMap();
@@ -875,8 +1123,123 @@ async function routeRequest(req, res, url, pathname) {
       }
     }
     orders[index] = next;
-    await dataStore.writeOrders(orders);
-    sendJson(res, 200, next);
+    const patched = await dataStore.patchOrderById(orderId, next, orders);
+    sendJson(res, 200, patched || next);
+    return true;
+  }
+
+  const orderKitchenMatch = pathname.match(/^\/api\/orders\/([^/]+)\/kitchen$/);
+  if (orderKitchenMatch && req.method === 'PATCH') {
+    const auth = requireAuth(req, res);
+    if (!auth) return true;
+    const orderId = decodeURIComponent(orderKitchenMatch[1]);
+    const orders = await dataStore.readOrders();
+    const index = orders.findIndex((order) => String(order.id) === orderId);
+    if (index === -1) {
+      sendJson(res, 404, { error: 'Order not found' });
+      return true;
+    }
+    const restaurantId = orders[index].restaurant_id || orders[index].restaurantId;
+    if (!assertRestaurantAccess(auth, restaurantId, authError, res)) return true;
+    if (isKitchen(auth)) {
+      sendJson(res, 403, {
+        error: 'Kitchen stations cannot reassign orders',
+        code: 'KITCHEN_FORBIDDEN',
+      });
+      return true;
+    }
+    const body = parseJson(await readBody(req));
+    try {
+      const assignment = await assignTargetKitchen({
+        body: { ...orders[index], ...body, orderType: orders[index].orderType || orders[index].order_type },
+        restaurantId,
+        auth,
+        deliveryZoneId: orders[index].deliveryZoneId || orders[index].delivery_zone_id,
+      });
+      if (!assignment || !assignment.targetKitchenId) {
+        sendJson(res, 400, { error: 'No kitchen configured' });
+        return true;
+      }
+      const next = { ...orders[index], ...assignment, updatedAt: new Date().toISOString() };
+      orders[index] = next;
+      const patched = await dataStore.patchOrderById(orderId, next, orders);
+      sendJson(res, 200, { order: patched || next });
+    } catch (error) {
+      sendJson(res, 400, { error: error.message || 'Invalid kitchen' });
+    }
+    return true;
+  }
+
+  if (pathname === '/api/store-assets' && req.method === 'POST') {
+    const auth = requireAuth(req, res);
+    if (!auth) return true;
+    const body = parseJson(await readBody(req));
+    const restaurantId =
+      body.restaurantId ||
+      body.restaurant_id ||
+      (await resolveScopedRestaurantId(req, url, auth));
+    if (!restaurantId || !assertRestaurantAccess(auth, restaurantId, authError, res)) {
+      return true;
+    }
+    const kind = String(body.kind || 'hero').trim().toLowerCase() === 'logo' ? 'logo' : 'hero';
+    const contentType = String(body.contentType || body.content_type || 'image/jpeg')
+      .split(';')[0]
+      .trim()
+      .toLowerCase();
+    if (!contentType.startsWith('image/')) {
+      sendJson(res, 400, { error: 'Expected an image file' });
+      return true;
+    }
+    const raw = String(body.data || body.base64 || '').replace(/^data:image\/[a-zA-Z0-9.+-]+;base64,/, '');
+    let buffer;
+    try {
+      buffer = Buffer.from(raw, 'base64');
+    } catch {
+      sendJson(res, 400, { error: 'Invalid image data' });
+      return true;
+    }
+    if (!buffer.length || buffer.length > 2 * 1024 * 1024) {
+      sendJson(res, 413, { error: 'Image too large. Use a smaller photo (max 2MB).' });
+      return true;
+    }
+    const id = `${String(restaurantId).replace(/[^\w.-]/g, '_')}_${kind}`;
+    const assets = await dataStore.readStoreAssets();
+    assets[id] = {
+      restaurantId,
+      kind,
+      contentType,
+      data: buffer.toString('base64'),
+      updatedAt: new Date().toISOString(),
+    };
+    await dataStore.writeStoreAssets(assets);
+    sendJson(res, 200, {
+      ok: true,
+      id,
+      url: `/api/store-assets/${id}`,
+    });
+    return true;
+  }
+
+  const storeAssetMatch = pathname.match(/^\/api\/store-assets\/([^/]+)$/);
+  if (storeAssetMatch && (req.method === 'GET' || req.method === 'HEAD')) {
+    const id = decodeURIComponent(storeAssetMatch[1]);
+    const assets = await dataStore.readStoreAssets();
+    const asset = assets[id];
+    if (!asset || !asset.data) {
+      sendJson(res, 404, { error: 'Image not found' });
+      return true;
+    }
+    const buffer = Buffer.from(String(asset.data), 'base64');
+    applyCorsHeaders(req, res);
+    res.statusCode = 200;
+    res.setHeader('Content-Type', asset.contentType || 'image/jpeg');
+    res.setHeader('Cache-Control', 'public, max-age=86400');
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    if (req.method === 'HEAD') {
+      res.end();
+    } else {
+      res.end(buffer);
+    }
     return true;
   }
 
@@ -888,12 +1251,15 @@ async function routeRequest(req, res, url, pathname) {
     const map = await dataStore.readSettingsMap();
     const payload = map.byRestaurant?.[restaurantId] || defaultSettingsPayload();
     const restaurant = restaurants.find((entry) => String(entry.id) === String(restaurantId));
-    const features = normalizeFeatures(restaurant?.features);
     sendJson(res, 200, {
       ...payload,
       ...normalizeWhatsappSettings(payload),
-      tableManagementEnabled: features.tableManagement,
-      features,
+      tableManagementEnabled: isTableManagementEnabled(restaurant),
+      kitchenManagementEnabled: isKitchenManagementEnabled(restaurant),
+      features: {
+        tableManagement: isTableManagementEnabled(restaurant),
+        kitchenManagement: isKitchenManagementEnabled(restaurant),
+      },
     });
     return true;
   }
@@ -919,6 +1285,8 @@ async function routeRequest(req, res, url, pathname) {
     delete next.restaurant_id;
     delete next.tableManagementEnabled;
     delete next.tableManagement;
+    delete next.kitchenManagementEnabled;
+    delete next.kitchenManagement;
     delete next.features;
     map.byRestaurant = map.byRestaurant || {};
     map.byRestaurant[restaurantId] = next;
@@ -930,6 +1298,9 @@ async function routeRequest(req, res, url, pathname) {
     );
     if (restaurantIndex >= 0) {
       const logo = String(next.logoUrl || next.logo_url || '').trim();
+      const heroImage = String(
+        next.heroImageUrl || next.hero_image_url || next.coverUrl || '',
+      ).trim();
       const description = String(
         next.restaurantDescription || next.restaurant_description || '',
       ).trim();
@@ -937,6 +1308,9 @@ async function routeRequest(req, res, url, pathname) {
         ...restaurants[restaurantIndex],
         logoUrl: logo,
         logo_url: logo,
+        heroImageUrl: heroImage,
+        hero_image_url: heroImage,
+        coverUrl: heroImage,
         description,
         description_ar: description,
         descriptionAr: description,
@@ -982,6 +1356,24 @@ async function routeRequest(req, res, url, pathname) {
       computeDailySalesAnalytics(await dataStore.readOrders(), restaurantId, {
         days: Number(url.searchParams.get('days') || 1),
       }),
+    );
+    return true;
+  }
+
+  if (pathname === '/api/analytics/pnl' && req.method === 'GET') {
+    const auth = requireAuth(req, res);
+    if (!auth) return true;
+    const restaurantId = resolveReportRestaurantId(req, url, auth);
+    if (!restaurantId || !assertRestaurantAccess(auth, restaurantId, authError, res)) return true;
+    sendJson(
+      res,
+      200,
+      computeProfitAndLoss(
+        await dataStore.readOrders(),
+        await dataStore.readExpenses(),
+        restaurantId,
+        { days: Number(url.searchParams.get('days') || 30) },
+      ),
     );
     return true;
   }
@@ -1135,6 +1527,7 @@ async function routeRequest(req, res, url, pathname) {
       deliveryFee: Number(body.deliveryFee ?? body.delivery_fee ?? 0),
       isActive: body.isActive !== false,
       defaultKitchenId: body.defaultKitchenId || body.default_kitchen_id || null,
+      default_kitchen_id: body.defaultKitchenId || body.default_kitchen_id || null,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
@@ -1165,12 +1558,18 @@ async function routeRequest(req, res, url, pathname) {
       return true;
     }
     const body = parseJson(await readBody(req));
+    const nextKitchenId =
+      body.defaultKitchenId !== undefined || body.default_kitchen_id !== undefined
+        ? body.defaultKitchenId || body.default_kitchen_id || null
+        : zones[index].defaultKitchenId || zones[index].default_kitchen_id || null;
     zones[index] = {
       ...zones[index],
       ...body,
       restaurant_id: restaurantId,
       areaName: body.areaName || body.area_name || zones[index].areaName,
       deliveryFee: Number(body.deliveryFee ?? body.delivery_fee ?? zones[index].deliveryFee),
+      defaultKitchenId: nextKitchenId,
+      default_kitchen_id: nextKitchenId,
       updatedAt: new Date().toISOString(),
     };
     await extraStore.deliveryZones.write(zones);
@@ -1441,8 +1840,17 @@ async function routeRequest(req, res, url, pathname) {
             description_ar: description,
             descriptionAr: description,
           },
-          { slug, items },
+          {
+            slug,
+            items,
+            frontendOrigin: requestFrontendOrigin(req),
+            siteOrigin: requestFrontendOrigin(req),
+            menuPath: `/${slug}`,
+            ogUrl: `${requestFrontendOrigin(req)}/${slug}`,
+            ogImageUrl: `https://backend-henna-chi-76.vercel.app/api/og-image/${encodeURIComponent(slug)}`,
+          },
         );
+        res.setHeader('Cache-Control', 'public, max-age=60');
         sendHtml(res, 200, buildOgMenuHtml(ogData));
         return true;
       }

@@ -4,6 +4,7 @@ import '../../services/admin_auth_service.dart';
 import '../../services/super_admin_scope_service.dart';
 import 'admin_daily_sales_card.dart';
 import 'admin_food_cost_report_panel.dart';
+import 'admin_profit_loss_card.dart';
 import 'admin_responsive_layout.dart';
 import 'admin_shift_reports_card.dart';
 
@@ -45,6 +46,8 @@ class AdminAnalyticsReportsPanel extends StatelessWidget {
           ] else ...[
             const SizedBox(height: 20),
             const AdminDailySalesCard(),
+            const SizedBox(height: 20),
+            const AdminProfitLossCard(),
             const SizedBox(height: 20),
             const AdminShiftReportsCard(),
             const SizedBox(height: 20),

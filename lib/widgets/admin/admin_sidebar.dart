@@ -42,8 +42,10 @@ class AdminSidebar extends StatefulWidget {
   static const int analyticsIndex = 6;
   static const int smartUpsellIndex = 7;
   static const int staffIndex = 8;
-  static const int settingsIndex = 9;
-  static const int tablesIndex = 10;
+  static const int reviewsIndex = 9;
+  static const int expensesIndex = 10;
+  static const int settingsIndex = 11;
+  static const int tablesIndex = 12;
 
   /// Super Admin sidebar — POS plus restaurant management (no orders tab).
   static const int superPosIndex = 0;
@@ -54,8 +56,10 @@ class AdminSidebar extends StatefulWidget {
   static const int superAnalyticsIndex = 5;
   static const int superSmartUpsellIndex = 6;
   static const int superStaffIndex = 7;
-  static const int superSettingsIndex = 8;
-  static const int superTablesIndex = 9;
+  static const int superReviewsIndex = 8;
+  static const int superExpensesIndex = 9;
+  static const int superSettingsIndex = 10;
+  static const int superTablesIndex = 11;
 
   static const AdminSidebarItem tablesItem = AdminSidebarItem(
     icon: Icons.table_restaurant,
@@ -98,6 +102,14 @@ class AdminSidebar extends StatefulWidget {
     AdminSidebarItem(
       icon: Icons.badge_outlined,
       label: 'الموظفين والكاشير',
+    ),
+    AdminSidebarItem(
+      icon: Icons.star_rate_rounded,
+      label: 'التقييمات والمراجعات',
+    ),
+    AdminSidebarItem(
+      icon: Icons.account_balance_wallet_outlined,
+      label: 'إدارة المصاريف',
     ),
     AdminSidebarItem(
       icon: Icons.store,
@@ -144,6 +156,14 @@ class AdminSidebar extends StatefulWidget {
     AdminSidebarItem(
       icon: Icons.badge_outlined,
       label: 'الموظفين والكاشير',
+    ),
+    AdminSidebarItem(
+      icon: Icons.star_rate_rounded,
+      label: 'التقييمات والمراجعات',
+    ),
+    AdminSidebarItem(
+      icon: Icons.account_balance_wallet_outlined,
+      label: 'إدارة المصاريف',
     ),
     AdminSidebarItem(
       icon: Icons.settings,

@@ -1,21 +1,19 @@
 import 'dart:async';
 
-import 'package:cloud_firestore/cloud_firestore.dart' hide Order;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../firebase_options.dart';
 import '../models/order.dart';
 import '../models/restaurant_settings.dart';
 import '../models/staff_user.dart';
 import '../utils/admin_settings_url.dart';
 import '../utils/firebase_config.dart';
+import '../utils/food_cost_utils.dart';
 import '../utils/image_url.dart';
 import '../utils/whatsapp_phone.dart';
 import '../services/admin_auth_service.dart';
 import '../services/admin_order_monitor_service.dart';
-import '../services/analytics_demo_service.dart';
 import '../services/api_service.dart';
 import '../services/menu_storage_service.dart';
 import '../services/orders_service.dart';
@@ -25,12 +23,16 @@ import '../services/pos_operations_service.dart';
 import '../services/restaurant_settings_service.dart';
 import '../services/super_admin_scope_service.dart';
 import '../services/talabat_menu_service.dart';
+import '../widgets/admin/admin_analytics_reports_panel.dart';
 import '../widgets/admin/admin_corner_toast.dart';
 import '../widgets/admin/admin_pos_roles_staff_card.dart';
 import '../widgets/admin/pos/pos_cashier_login_panel.dart';
 import '../widgets/admin/pos/pos_shift_shell.dart';
+import '../widgets/admin/kitchen_station_screen.dart';
 import '../widgets/admin/admin_delivery_zones_panel.dart';
 import '../widgets/admin/admin_offers_panel.dart';
+import '../widgets/admin/admin_reviews_panel.dart';
+import '../widgets/admin/admin_expenses_panel.dart';
 import '../widgets/admin/admin_item_addons_editor.dart';
 import '../widgets/admin/admin_item_linked_sides_editor.dart';
 import '../widgets/admin/admin_menu_panel.dart';
@@ -83,20 +85,26 @@ class _AdminDashboardState extends State<AdminDashboard> {
   bool get _tableManagementEnabled =>
       _loadedSettings?.tableManagementEnabled == true;
 
+  bool get _kitchenManagementEnabled =>
+      _loadedSettings?.kitchenManagementEnabled == true;
+
   List<AdminSidebarItem> get _sidebarItems {
     if (_isSuperAdmin) {
       return [
         ...AdminSidebar.superAdminItems,
-        if (SuperAdminScopeService.instance.hasSelection) AdminSidebar.tablesItem,
+        if (SuperAdminScopeService.instance.hasSelection &&
+            _tableManagementEnabled)
+          AdminSidebar.tablesItem,
       ];
     }
     return [
       ...AdminSidebar.defaultItems,
-      AdminSidebar.tablesItem,
+      if (_tableManagementEnabled) AdminSidebar.tablesItem,
     ];
   }
 
   bool get _isCashierSession => AdminAuthService.instance.isCashier;
+  bool get _isKitchenSession => AdminAuthService.instance.isKitchen;
 
   int get _settingsNavIndex => _isSuperAdmin
       ? AdminSidebar.superSettingsIndex
@@ -113,7 +121,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
   }
 
   bool get _shouldShowWhatsappBanner {
-    if (_isCashierSession) return false;
+    if (_isCashierSession || _isKitchenSession) return false;
     if (_isSuperAdmin && !SuperAdminScopeService.instance.hasSelection) {
       return false;
     }
@@ -159,7 +167,8 @@ class _AdminDashboardState extends State<AdminDashboard> {
       await _initSuperAdminScope();
       await _loadSettings();
       if (!AdminAuthService.instance.isSuperAdmin &&
-          !AdminAuthService.instance.isCashier) {
+          !AdminAuthService.instance.isCashier &&
+          !AdminAuthService.instance.isKitchen) {
         await _startAdminMonitoring();
       }
     } else {
@@ -188,6 +197,13 @@ class _AdminDashboardState extends State<AdminDashboard> {
       _loadedSettings = settings;
       _whatsappCountryCode = settings.whatsappCountryCode;
       _whatsappController.text = settings.whatsappPhone;
+      if (!settings.tableManagementEnabled &&
+          (_selectedIndex == AdminSidebar.tablesIndex ||
+              _selectedIndex == AdminSidebar.superTablesIndex)) {
+        _selectedIndex = _isSuperAdmin
+            ? AdminSidebar.superPosIndex
+            : AdminSidebar.posIndex;
+      }
       if (mounted) {
         setState(() {});
       }
@@ -259,7 +275,9 @@ class _AdminDashboardState extends State<AdminDashboard> {
           cashierName: _cashierNameController.text.trim(),
           password: _passwordController.text,
         );
-        PosOperationsService.instance.applyCashierSession(result.cashierSession);
+        if (!result.session.isKitchen) {
+          PosOperationsService.instance.applyCashierSession(result.cashierSession);
+        }
       } else {
         await AdminAuthService.instance.loginRestaurantAdmin(
           restaurantSlug: _slugController.text.trim(),
@@ -281,7 +299,8 @@ class _AdminDashboardState extends State<AdminDashboard> {
       await _initSuperAdminScope();
       await _loadSettings();
       if (!AdminAuthService.instance.isSuperAdmin &&
-          !AdminAuthService.instance.isCashier) {
+          !AdminAuthService.instance.isCashier &&
+          !AdminAuthService.instance.isKitchen) {
         await _startAdminMonitoring();
       }
     } catch (error) {
@@ -359,7 +378,8 @@ class _AdminDashboardState extends State<AdminDashboard> {
   Future<void> _startAdminMonitoring() async {
     if (_isSuperAdmin ||
         AdminAuthService.instance.isSuperAdmin ||
-        AdminAuthService.instance.isCashier) {
+        AdminAuthService.instance.isCashier ||
+        AdminAuthService.instance.isKitchen) {
       return;
     }
 
@@ -424,26 +444,6 @@ class _AdminDashboardState extends State<AdminDashboard> {
     }
   }
 
-  String _getDayName(int weekday) {
-    switch (weekday) {
-      case DateTime.monday:
-        return 'الإثنين';
-      case DateTime.tuesday:
-        return 'الثلاثاء';
-      case DateTime.wednesday:
-        return 'الأربعاء';
-      case DateTime.thursday:
-        return 'الخميس';
-      case DateTime.friday:
-        return 'الجمعة';
-      case DateTime.saturday:
-        return 'السبت';
-      case DateTime.sunday:
-        return 'الأحد';
-      default:
-        return '';
-    }
-  }
 
   Future<void> _showItemDialog({MenuItemRecord? record}) async {
     final isEditing = record != null;
@@ -471,6 +471,12 @@ class _AdminDashboardState extends State<AdminDashboard> {
     );
     final priceController = TextEditingController(
       text: data != null ? data['price'].toString() : '',
+    );
+    final costPriceRaw = data?['costPrice'] ?? data?['cost_price'];
+    final costPriceController = TextEditingController(
+      text: costPriceRaw != null && costPriceRaw.toString().isNotEmpty
+          ? costPriceRaw.toString()
+          : '',
     );
     final originalPriceController = TextEditingController(
       text: (data?['originalPrice'] ?? data?['original_price'] ?? '').toString(),
@@ -554,15 +560,59 @@ class _AdminDashboardState extends State<AdminDashboard> {
                       ),
                     ),
                     const SizedBox(height: 12),
-                    TextField(
-                      controller: priceController,
-                      keyboardType:
-                          const TextInputType.numberWithOptions(decimal: true),
-                      decoration: const InputDecoration(
-                        labelText: 'السعر النهائي (د.ك)',
-                        helperText: 'السعر بعد الخصم إن وُجد',
-                        border: OutlineInputBorder(),
-                      ),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: priceController,
+                            keyboardType: const TextInputType.numberWithOptions(
+                              decimal: true,
+                            ),
+                            decoration: const InputDecoration(
+                              labelText: 'السعر النهائي (د.ك)',
+                              helperText: 'السعر بعد الخصم إن وُجد',
+                              border: OutlineInputBorder(),
+                            ),
+                            onChanged: (_) => setDialogState(() {}),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: TextField(
+                            controller: costPriceController,
+                            keyboardType: const TextInputType.numberWithOptions(
+                              decimal: true,
+                            ),
+                            decoration: const InputDecoration(
+                              labelText: 'تكلفة الطعام / Food Cost (د.ك)',
+                              helperText: 'تكلفة المكونات لكل حصة',
+                              border: OutlineInputBorder(),
+                            ),
+                            onChanged: (_) => setDialogState(() {}),
+                          ),
+                        ),
+                      ],
+                    ),
+                    Builder(
+                      builder: (context) {
+                        final sellingPrice =
+                            double.tryParse(priceController.text.trim()) ?? 0;
+                        final costPrice =
+                            double.tryParse(costPriceController.text.trim());
+                        if (sellingPrice <= 0 ||
+                            costPrice == null ||
+                            costPrice < 0) {
+                          return const SizedBox.shrink();
+                        }
+                        return Padding(
+                          padding: const EdgeInsets.only(top: 8),
+                          child: FoodCostBadge(
+                            sellingPrice: sellingPrice,
+                            costPrice: costPrice,
+                          ),
+                        );
+                      },
                     ),
                     const SizedBox(height: 12),
                     TextField(
@@ -658,6 +708,9 @@ class _AdminDashboardState extends State<AdminDashboard> {
                       'descriptionAr': descriptionAr,
                       'descriptionEn': descriptionEn,
                       'price': double.tryParse(priceController.text) ?? 0.0,
+                      if (costPriceController.text.trim().isNotEmpty)
+                        'costPrice':
+                            double.tryParse(costPriceController.text.trim()),
                       'originalPrice':
                           double.tryParse(originalPriceController.text.trim()),
                       'categoryName': categoryController.text.trim(),
@@ -964,7 +1017,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                     ),
                     segments: const [
                       ButtonSegment(value: 0, label: Text('مدير')),
-                      ButtonSegment(value: 2, label: Text('كاشير')),
+                      ButtonSegment(value: 2, label: Text('كاشير / مطبخ')),
                       ButtonSegment(value: 1, label: Text('AlMenuPro')),
                     ],
                     selected: {_loginMode},
@@ -1005,8 +1058,8 @@ class _AdminDashboardState extends State<AdminDashboard> {
                         controller: _cashierNameController,
                         textCapitalization: TextCapitalization.words,
                         decoration: const InputDecoration(
-                          labelText: 'اسم الكاشير',
-                          hintText: 'مثال: أحمد',
+                          labelText: 'اسم المستخدم',
+                          hintText: 'اسم الكاشير أو مستخدم المطبخ',
                           border: OutlineInputBorder(),
                           prefixIcon: Icon(Icons.badge_outlined),
                         ),
@@ -1019,7 +1072,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                     obscureText: true,
                     onSubmitted: (_) => _login(),
                     decoration: InputDecoration(
-                      labelText: _loginMode == 2 ? 'رمز PIN' : 'كلمة المرور',
+                      labelText: _loginMode == 2 ? 'كلمة المرور / PIN' : 'كلمة المرور',
                       errorText: _errorMessage,
                       border: const OutlineInputBorder(),
                       prefixIcon: const Icon(Icons.lock),
@@ -1047,7 +1100,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                               _loginMode == 1
                                   ? 'دخول Super Admin'
                                   : _loginMode == 2
-                                      ? 'دخول الكاشير'
+                                      ? 'دخول الكاشير / المطبخ'
                                       : 'دخول لوحة المطعم',
                               style: const TextStyle(
                                 color: Colors.white,
@@ -1091,6 +1144,9 @@ class _AdminDashboardState extends State<AdminDashboard> {
   }
 
   Widget _buildAuthenticatedShell() {
+    if (_isKitchenSession) {
+      return KitchenStationScreen(onLogout: _confirmLogout);
+    }
     if (_isCashierSession) {
       return Scaffold(
         backgroundColor: const Color(0xFFF4F6F8),
@@ -1270,6 +1326,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
       key: ValueKey('delivery-zones-$restaurantId'),
       restaurantId: restaurantId,
       canManage: canManage,
+      kitchenManagementEnabled: _kitchenManagementEnabled,
     );
   }
 
@@ -1371,6 +1428,9 @@ class _AdminDashboardState extends State<AdminDashboard> {
   }
 
   Widget _buildActiveTab() {
+    if (_isKitchenSession) {
+      return KitchenStationScreen(onLogout: _confirmLogout);
+    }
     if (_isCashierSession) {
       return _buildPosTab();
     }
@@ -1407,6 +1467,10 @@ class _AdminDashboardState extends State<AdminDashboard> {
           return const AdminSmartUpsellPanel();
         case AdminSidebar.superStaffIndex:
           return _buildStaffTab();
+        case AdminSidebar.superReviewsIndex:
+          return const AdminReviewsPanel();
+        case AdminSidebar.superExpensesIndex:
+          return const AdminExpensesPanel();
         case AdminSidebar.superSettingsIndex:
           return AdminSettingsTabbedPanel(
             isSuperAdmin: true,
@@ -1449,6 +1513,10 @@ class _AdminDashboardState extends State<AdminDashboard> {
         return const AdminSmartUpsellPanel();
       case AdminSidebar.staffIndex:
         return _buildStaffTab();
+      case AdminSidebar.reviewsIndex:
+        return const AdminReviewsPanel();
+      case AdminSidebar.expensesIndex:
+        return const AdminExpensesPanel();
       case AdminSidebar.settingsIndex:
         return AdminSettingsTabbedPanel(
           isSuperAdmin: false,
@@ -1775,389 +1843,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
     );
   }
 
-  // Analytics tab kept below
-
   Widget _buildAnalyticsTab() {
-    if (!isFirebaseConfigured) {
-      return FutureBuilder<AnalyticsSnapshot>(
-        future: AnalyticsDemoService.load(),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(
-              child: CircularProgressIndicator(color: Color(0xFF6B1124)),
-            );
-          }
-
-          return _buildAnalyticsDashboard(
-            snapshot.data ?? AnalyticsDemoService.fallback(),
-            showDemoBanner: true,
-          );
-        },
-      );
-    }
-
-    return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance.collection('orders').snapshots(),
-      builder: (context, snapshot) {
-        if (snapshot.hasError) {
-          return Center(child: Text('خطأ: ${snapshot.error}'));
-        }
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
-        }
-
-        final docs = snapshot.data?.docs ?? [];
-        var todaySales = 0.0;
-        var lastWeekSales = 0.0;
-        var lastMonthSales = 0.0;
-        final itemSalesCount = <String, int>{};
-        final hourlyOrders = <String, int>{};
-        final dailyOrders = <String, int>{};
-
-        final now = DateTime.now();
-        final startOfToday = DateTime(now.year, now.month, now.day);
-        final sevenDaysAgo = now.subtract(const Duration(days: 7));
-        final thirtyDaysAgo = now.subtract(const Duration(days: 30));
-
-        for (final doc in docs) {
-          final data = doc.data() as Map<String, dynamic>;
-          final price = (data['totalPrice'] ?? 0).toDouble();
-          final timestamp = data['createdAt'] as Timestamp?;
-          final orderDate =
-              timestamp != null ? timestamp.toDate() : DateTime.now();
-
-          if (orderDate.isAfter(startOfToday)) todaySales += price;
-          if (orderDate.isAfter(sevenDaysAgo)) lastWeekSales += price;
-          if (orderDate.isAfter(thirtyDaysAgo)) lastMonthSales += price;
-
-          final hourKey = '${orderDate.hour}:00';
-          hourlyOrders[hourKey] = (hourlyOrders[hourKey] ?? 0) + 1;
-
-          final dayKey = _getDayName(orderDate.weekday);
-          dailyOrders[dayKey] = (dailyOrders[dayKey] ?? 0) + 1;
-
-          final items = data['items'] as List<dynamic>? ?? [];
-          for (final item in items) {
-            if (item is! Map) continue;
-            final itemName = item['name'] as String? ?? 'صنف غير معروف';
-            final qty = (item['quantity'] as num?)?.toInt() ?? 1;
-            itemSalesCount[itemName] = (itemSalesCount[itemName] ?? 0) + qty;
-          }
-        }
-
-        final sortedItems = itemSalesCount.entries.toList()
-          ..sort((a, b) => b.value.compareTo(a.value));
-
-        return _buildAnalyticsDashboard(
-          AnalyticsSnapshot(
-            todaySales: todaySales,
-            lastWeekSales: lastWeekSales,
-            lastMonthSales: lastMonthSales,
-            topItems: sortedItems,
-            hourlyOrders: hourlyOrders,
-            dailyOrders: dailyOrders,
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildAnalyticsDashboard(
-    AnalyticsSnapshot data, {
-    bool showDemoBanner = false,
-  }) {
-    final todaySales = data.todaySales;
-    final lastWeekSales = data.lastWeekSales;
-    final lastMonthSales = data.lastMonthSales;
-    final sortedItems = data.topItems;
-    final hourlyOrders = data.hourlyOrders;
-    final dailyOrders = data.dailyOrders;
-
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final isWide = constraints.maxWidth >= 900;
-
-        return SingleChildScrollView(
-          padding: const EdgeInsets.all(20),
-          child: ConstrainedBox(
-            constraints: BoxConstraints(minWidth: constraints.maxWidth),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                if (showDemoBanner) _buildDemoAnalyticsBanner(),
-                if (showDemoBanner) const SizedBox(height: 16),
-                if (isWide)
-                  Row(
-                    children: [
-                      _buildStatCard(
-                        'مبيعات اليوم',
-                        '${todaySales.toStringAsFixed(3)} د.ك',
-                        Icons.today,
-                        Colors.green,
-                      ),
-                      const SizedBox(width: 15),
-                      _buildStatCard(
-                        'مبيعات آخر 7 أيام',
-                        '${lastWeekSales.toStringAsFixed(3)} د.ك',
-                        Icons.date_range,
-                        Colors.blue,
-                      ),
-                      const SizedBox(width: 15),
-                      _buildStatCard(
-                        'مبيعات آخر 30 يوم',
-                        '${lastMonthSales.toStringAsFixed(3)} د.ك',
-                        Icons.calendar_month,
-                        Colors.orange,
-                      ),
-                    ],
-                  )
-                else
-                  Column(
-                    children: [
-                      _buildStatCard(
-                        'مبيعات اليوم',
-                        '${todaySales.toStringAsFixed(3)} د.ك',
-                        Icons.today,
-                        Colors.green,
-                        expanded: false,
-                      ),
-                      const SizedBox(height: 12),
-                      _buildStatCard(
-                        'مبيعات آخر 7 أيام',
-                        '${lastWeekSales.toStringAsFixed(3)} د.ك',
-                        Icons.date_range,
-                        Colors.blue,
-                        expanded: false,
-                      ),
-                      const SizedBox(height: 12),
-                      _buildStatCard(
-                        'مبيعات آخر 30 يوم',
-                        '${lastMonthSales.toStringAsFixed(3)} د.ك',
-                        Icons.calendar_month,
-                        Colors.orange,
-                        expanded: false,
-                      ),
-                    ],
-                  ),
-                const SizedBox(height: 25),
-                if (isWide)
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(child: _buildTopItemsCard(sortedItems)),
-                      const SizedBox(width: 20),
-                      Expanded(
-                        child: _buildTimeCard(hourlyOrders, dailyOrders),
-                      ),
-                    ],
-                  )
-                else ...[
-                  _buildTopItemsCard(sortedItems),
-                  const SizedBox(height: 20),
-                  _buildTimeCard(hourlyOrders, dailyOrders),
-                ],
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildDemoAnalyticsBanner() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      decoration: BoxDecoration(
-        color: const Color(0xFFFFF8E7),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFD49A00).withValues(alpha: 0.45)),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Icon(Icons.insights_outlined, color: Color(0xFF6B1124)),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'عرض تجريبي للتحليلات',
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFF6B1124),
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  'البيانات المعروضة تقديرية مبنية على المنيو الحالي. '
-                  'لتتبع المبيعات والطلبات الحقيقية، اربط Firebase في firebase_options.dart.',
-                  style: TextStyle(
-                    color: Colors.brown.shade700,
-                    height: 1.4,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildTopItemsCard(List<MapEntry<String, int>> sortedItems) {
-    return Card(
-      elevation: 3,
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'الأطباق وعدد الوجبات المباعة',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: Colors.brown,
-              ),
-            ),
-            const Divider(),
-            if (sortedItems.isEmpty)
-              const Padding(
-                padding: EdgeInsets.all(20),
-                child: Text('لا توجد مبيعات مسجلة بعد'),
-              )
-            else
-              ListView.builder(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                itemCount: sortedItems.length,
-                itemBuilder: (context, index) {
-                  final entry = sortedItems[index];
-                  return ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    title: Text(
-                      entry.key,
-                      style: const TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                    trailing: Text(
-                      '${entry.value} وجبة',
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        color: Colors.brown,
-                      ),
-                    ),
-                  );
-                },
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildTimeCard(
-    Map<String, int> hourlyOrders,
-    Map<String, int> dailyOrders,
-  ) {
-    return Card(
-      elevation: 3,
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'تحليل أوقات الطلبات',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: Colors.brown,
-              ),
-            ),
-            const Divider(),
-            const Text(
-              'أكثر الساعات طلباً:',
-              style: TextStyle(fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 10),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: hourlyOrders.entries
-                  .map(
-                    (e) => Chip(
-                      label: Text('الساعة ${e.key}: ${e.value} طلبات'),
-                    ),
-                  )
-                  .toList(),
-            ),
-            const SizedBox(height: 20),
-            const Text(
-              'الطلبات حسب أيام الأسبوع:',
-              style: TextStyle(fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 10),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: dailyOrders.entries
-                  .map((e) => Chip(label: Text('${e.key}: ${e.value} طلبات')))
-                  .toList(),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildStatCard(
-    String title,
-    String value,
-    IconData icon,
-    Color color, {
-    bool expanded = true,
-  }) {
-    final card = Card(
-      elevation: 4,
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Row(
-          children: [
-            CircleAvatar(
-              radius: 28,
-              backgroundColor: color.withValues(alpha: 0.15),
-              child: Icon(icon, color: color, size: 30),
-            ),
-            const SizedBox(width: 15),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: const TextStyle(fontSize: 14, color: Colors.grey),
-                  ),
-                  const SizedBox(height: 5),
-                  Text(
-                    value,
-                    style: const TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-
-    if (expanded) {
-      return Expanded(child: card);
-    }
-    return card;
+    return const AdminAnalyticsReportsPanel();
   }
 }
