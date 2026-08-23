@@ -144,6 +144,7 @@ class Restaurant {
     this.subscriptionExpiresAt,
     this.subscriptionNotes = '',
     this.tableManagementEnabled = false,
+    this.kitchenManagementEnabled = false,
     this.createdAt,
     this.updatedAt,
   });
@@ -159,6 +160,7 @@ class Restaurant {
   final DateTime? subscriptionExpiresAt;
   final String subscriptionNotes;
   final bool tableManagementEnabled;
+  final bool kitchenManagementEnabled;
   final DateTime? createdAt;
   final DateTime? updatedAt;
 
@@ -196,6 +198,11 @@ class Restaurant {
           (json['features'] is Map &&
               (json['features']['tableManagement'] == true ||
                   json['features']['table_management'] == true)),
+      kitchenManagementEnabled: json['kitchenManagementEnabled'] == true ||
+          json['kitchenManagement'] == true ||
+          (json['features'] is Map &&
+              (json['features']['kitchenManagement'] == true ||
+                  json['features']['kitchen_management'] == true)),
       createdAt: DateTime.tryParse(json['createdAt']?.toString() ?? ''),
       updatedAt: DateTime.tryParse(
         json['updatedAt']?.toString() ?? json['updated_at']?.toString() ?? '',
@@ -216,7 +223,11 @@ class Restaurant {
           'subscriptionExpiresAt': subscriptionExpiresAt!.toIso8601String(),
         if (subscriptionNotes.isNotEmpty) 'subscriptionNotes': subscriptionNotes,
         'tableManagement': tableManagementEnabled,
-        'features': {'tableManagement': tableManagementEnabled},
+        'kitchenManagement': kitchenManagementEnabled,
+        'features': {
+          'tableManagement': tableManagementEnabled,
+          'kitchenManagement': kitchenManagementEnabled,
+        },
         if (createdAt != null) 'createdAt': createdAt!.toIso8601String(),
         if (updatedAt != null) 'updatedAt': updatedAt!.toIso8601String(),
       };
@@ -233,6 +244,7 @@ class Restaurant {
     DateTime? subscriptionExpiresAt,
     String? subscriptionNotes,
     bool? tableManagementEnabled,
+    bool? kitchenManagementEnabled,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) {
@@ -249,6 +261,8 @@ class Restaurant {
       subscriptionNotes: subscriptionNotes ?? this.subscriptionNotes,
       tableManagementEnabled:
           tableManagementEnabled ?? this.tableManagementEnabled,
+      kitchenManagementEnabled:
+          kitchenManagementEnabled ?? this.kitchenManagementEnabled,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );
@@ -263,6 +277,8 @@ class AdminSession {
     this.restaurantName,
     this.staffId,
     this.staffName,
+    this.kitchenId,
+    this.kitchenName,
   });
 
   final String token;
@@ -271,10 +287,13 @@ class AdminSession {
   final String? restaurantName;
   final String? staffId;
   final String? staffName;
+  final String? kitchenId;
+  final String? kitchenName;
 
   bool get isSuperAdmin => role.isSuperAdmin;
   bool get isRestaurantAdmin => role.isRestaurantAdmin;
   bool get isCashier => role.isCashier;
+  bool get isKitchen => role.isKitchen;
 
   factory AdminSession.fromJson(Map<String, dynamic> json) {
     return AdminSession(
@@ -285,6 +304,10 @@ class AdminSession {
       restaurantName: json['restaurantName']?.toString(),
       staffId: json['staffId']?.toString() ?? json['staff_id']?.toString(),
       staffName: json['staffName']?.toString() ?? json['staff_name']?.toString(),
+      kitchenId:
+          json['kitchenId']?.toString() ?? json['kitchen_id']?.toString(),
+      kitchenName:
+          json['kitchenName']?.toString() ?? json['kitchen_name']?.toString(),
     );
   }
 }

@@ -138,6 +138,8 @@ class OrdersDemoService {
     String? cashierId,
     String? cashierName,
     bool autoAccepted = false,
+    String? acceptedBy,
+    String? acceptedByName,
   }) async {
     await _ensureInitialized();
 
@@ -150,6 +152,8 @@ class OrdersDemoService {
       shiftId: shiftId,
       cashierId: cashierId,
       cashierName: cashierName,
+      acceptedBy: acceptedBy,
+      acceptedByName: acceptedByName,
     );
 
     if (orderId.startsWith('demo-')) {
@@ -168,6 +172,8 @@ class OrdersDemoService {
         cashierId: cashierId,
         cashierName: cashierName,
         autoAccepted: autoAccepted,
+        acceptedBy: acceptedBy,
+        acceptedByName: acceptedByName,
       );
       _statusInFlight.remove(orderId);
       if (updated != null) {

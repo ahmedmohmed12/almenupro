@@ -164,6 +164,8 @@ class IncomingOrderAutoAcceptService extends ChangeNotifier {
         cashierName:
             identity.cashierName.isNotEmpty ? identity.cashierName : null,
         autoAccepted: autoFallback,
+        acceptedBy: AdminAuthService.instance.auditUserId,
+        acceptedByName: AdminAuthService.instance.auditUserName,
       );
 
       await _printOnce(

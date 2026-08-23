@@ -2,7 +2,6 @@ import 'dart:convert';
 
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../models/admin_role.dart';
 import '../models/restaurant.dart';
 import '../models/staff_user.dart';
 import 'api_service.dart';
@@ -21,9 +20,31 @@ class AdminAuthService {
   bool get isSuperAdmin => _session?.isSuperAdmin ?? false;
   bool get isRestaurantAdmin => _session?.isRestaurantAdmin ?? false;
   bool get isCashier => _session?.isCashier ?? false;
+  bool get isKitchen => _session?.isKitchen ?? false;
   String? get restaurantId => _session?.restaurantId;
   String? get restaurantName => _session?.restaurantName;
+  String? get kitchenId => _session?.kitchenId;
+  String? get kitchenName => _session?.kitchenName;
   String? get token => _session?.token;
+  String get auditUserId {
+    final session = _session;
+    if (session == null) return '';
+    return (session.staffId ?? '').trim().isNotEmpty
+        ? session.staffId!.trim()
+        : session.role.storageKey;
+  }
+
+  String get auditUserName {
+    final session = _session;
+    if (session == null) return '';
+    if ((session.staffName ?? '').trim().isNotEmpty) {
+      return session.staffName!.trim();
+    }
+    if ((session.restaurantName ?? '').trim().isNotEmpty) {
+      return session.restaurantName!.trim();
+    }
+    return session.role.storageKey;
+  }
 
   Map<String, String> get authHeaders {
     if (_session == null) return const {};
@@ -80,10 +101,12 @@ class AdminAuthService {
       pin: password,
     );
     await _persist(result.session);
-    await persistCashierPermissions(
-      result.cashierSession.permissions,
-      roleId: result.cashierSession.roleId,
-    );
+    if (!result.session.isKitchen) {
+      await persistCashierPermissions(
+        result.cashierSession.permissions,
+        roleId: result.cashierSession.roleId,
+      );
+    }
     return result;
   }
 
@@ -143,6 +166,8 @@ class AdminAuthService {
         'restaurantName': session.restaurantName,
         'staffId': session.staffId,
         'staffName': session.staffName,
+        'kitchenId': session.kitchenId,
+        'kitchenName': session.kitchenName,
       }),
     );
   }

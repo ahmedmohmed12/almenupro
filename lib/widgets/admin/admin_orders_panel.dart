@@ -1,11 +1,15 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../../models/order.dart';
 import '../../models/sales_platform_config.dart';
+import '../../services/admin_order_focus_service.dart';
 import '../../services/orders_service.dart';
 import '../../services/incoming_order_auto_accept_service.dart';
 import '../../services/restaurant_settings_service.dart';
+import '../../utils/admin_deep_link.dart';
 import '../../utils/order_sound.dart';
 import 'admin_order_details_dialog.dart';
 import 'incoming_order_countdown_badge.dart';
@@ -30,17 +34,78 @@ class AdminOrdersPanelState extends State<AdminOrdersPanel>
   var _initialized = false;
 
   late final TabController _tabController;
+  var _openingFocusedOrder = false;
+  String? _openedFocusRef;
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
+    AdminOrderFocusService.instance.addListener(_onOrderFocusChanged);
   }
 
   @override
   void dispose() {
+    AdminOrderFocusService.instance.removeListener(_onOrderFocusChanged);
     _tabController.dispose();
     super.dispose();
+  }
+
+  void _onOrderFocusChanged() {
+    // Orders stream callback supplies the list; this just schedules a retry.
+    if (!mounted) return;
+    setState(() {});
+  }
+
+  void _tryOpenFocusedOrder(List<Order> orders) {
+    if (!mounted || _openingFocusedOrder || orders.isEmpty) return;
+    final ref = AdminOrderFocusService.instance.pendingOrderRef;
+    if (ref == null || ref.isEmpty) return;
+    if (_openedFocusRef == ref) return;
+
+    Order? match;
+    for (final order in orders) {
+      if (AdminDeepLink.matchesOrder(
+        ref,
+        id: order.id,
+        invoiceNumber: order.invoiceNumber,
+      )) {
+        match = order;
+        break;
+      }
+    }
+    if (match == null) return;
+
+    _openedFocusRef = ref;
+    AdminOrderFocusService.instance.consumeOrder();
+    selectNewOrdersTab();
+    _openingFocusedOrder = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) {
+        _openingFocusedOrder = false;
+        return;
+      }
+      try {
+        await _openOrderDialog(match!);
+      } finally {
+        _openingFocusedOrder = false;
+      }
+    });
+  }
+
+  Future<void> _openOrderDialog(Order order) async {
+    var platforms = SalesPlatformConfig.defaults();
+    try {
+      final settings = await RestaurantSettingsService.instance.load();
+      platforms = settings.resolvedSalesPlatforms;
+    } catch (_) {}
+    if (!mounted) return;
+    await showAdminOrderDetailsDialog(
+      context,
+      order: order,
+      platforms: platforms,
+      onStatusChanged: (orderId, status) => _handleStatus(order, status),
+    );
   }
 
   void selectNewOrdersTab() {
@@ -162,6 +227,7 @@ class AdminOrdersPanelState extends State<AdminOrdersPanel>
         final orders = snapshot.data ?? [];
         WidgetsBinding.instance.addPostFrameCallback((_) {
           _handleOrdersUpdate(orders);
+          _tryOpenFocusedOrder(orders);
         });
 
         final activeOrders = _activeOrders(orders);

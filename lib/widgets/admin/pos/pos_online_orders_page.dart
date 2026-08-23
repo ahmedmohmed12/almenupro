@@ -7,11 +7,13 @@ import '../../../models/order.dart';
 import '../../../models/pos_role.dart';
 import '../../../models/sales_platform_config.dart';
 import '../../../services/admin_auth_service.dart';
+import '../../../services/admin_order_focus_service.dart';
 import '../../../services/admin_order_monitor_service.dart';
 import '../../../services/incoming_order_auto_accept_service.dart';
 import '../../../services/orders_service.dart';
 import '../../../services/pos_operations_service.dart';
 import '../../../services/restaurant_settings_service.dart';
+import '../../../utils/admin_deep_link.dart';
 import '../../../utils/order_channel_utils.dart';
 import '../admin_corner_toast.dart';
 import '../admin_order_details_dialog.dart';
@@ -35,19 +37,69 @@ class _PosOnlineOrdersPageState extends State<PosOnlineOrdersPage>
   List<SalesPlatformConfig> _platforms = SalesPlatformConfig.defaults();
   var _processingId = '';
   late final TabController _tabController;
+  var _openingFocusedOrder = false;
+  String? _openedFocusRef;
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
+    AdminOrderFocusService.instance.addListener(_onOrderFocusChanged);
     unawaited(_loadPlatforms());
     unawaited(_ordersService.refreshOrders());
   }
 
   @override
   void dispose() {
+    AdminOrderFocusService.instance.removeListener(_onOrderFocusChanged);
     _tabController.dispose();
     super.dispose();
+  }
+
+  void _onOrderFocusChanged() {
+    if (mounted) setState(() {});
+  }
+
+  void _tryOpenFocusedOrder(List<Order> orders) {
+    if (!mounted || _openingFocusedOrder || orders.isEmpty) return;
+    final ref = AdminOrderFocusService.instance.pendingOrderRef;
+    if (ref == null || ref.isEmpty) return;
+    if (_openedFocusRef == ref) return;
+
+    Order? match;
+    for (final order in orders) {
+      if (AdminDeepLink.matchesOrder(
+        ref,
+        id: order.id,
+        invoiceNumber: order.invoiceNumber,
+      )) {
+        match = order;
+        break;
+      }
+    }
+    if (match == null) return;
+
+    _openedFocusRef = ref;
+    AdminOrderFocusService.instance.consumeOrder();
+    if (match.status == OrderStatus.pending) {
+      _tabController.animateTo(0);
+    } else if (match.status.isInProgressForCashier) {
+      _tabController.animateTo(1);
+    } else {
+      _tabController.animateTo(2);
+    }
+    _openingFocusedOrder = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) {
+        _openingFocusedOrder = false;
+        return;
+      }
+      try {
+        await _openDetails(match!);
+      } finally {
+        _openingFocusedOrder = false;
+      }
+    });
   }
 
   Future<void> _loadPlatforms() async {
@@ -263,6 +315,9 @@ class _PosOnlineOrdersPageState extends State<PosOnlineOrdersPage>
         initialData: const [],
         builder: (context, snapshot) {
           final orders = snapshot.data ?? [];
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            _tryOpenFocusedOrder(orders);
+          });
           final pendingOnline = orders
               .where(
                 (order) =>

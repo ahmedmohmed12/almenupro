@@ -20,6 +20,9 @@ enum PosRoute {
 
   static PosRoute fromPath(String? raw) {
     final normalized = (raw ?? '').trim();
+    if (normalized.startsWith('/admin/orders')) {
+      return PosRoute.orders;
+    }
     if (normalized.isEmpty || normalized == '/admin/pos') {
       return PosRoute.home;
     }

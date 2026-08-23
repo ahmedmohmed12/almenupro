@@ -78,7 +78,7 @@ class MyApp extends StatelessWidget {
       ...uri.queryParameters,
     };
 
-    if (path == '/admin' || path.startsWith('/admin/')) {
+    if (path == '/login' || path == '/admin' || path.startsWith('/admin/')) {
       return MaterialPageRoute(
         settings: settings,
         builder: (_) => const AdminDashboard(),
@@ -98,7 +98,14 @@ class MyApp extends StatelessWidget {
         );
     }
 
-    final slug = RestaurantRoute.parseSlug(path, query: query);
+    final slug = RestaurantRoute.parseSlug(path, query: query) ??
+        RestaurantRoute.slugFromBrowserLocation();
+    if (slug == null || slug.isEmpty) {
+      return MaterialPageRoute(
+        settings: settings,
+        builder: (_) => const RestaurantDirectoryScreen(),
+      );
+    }
     return MaterialPageRoute(
       settings: settings,
       builder: (_) => MenuScreen(slug: slug),
@@ -106,8 +113,11 @@ class MyApp extends StatelessWidget {
   }
 
   static List<Route<dynamic>> onGenerateInitialRoutes(String initialRoute) {
+    final fromBrowser = kIsWeb ? Uri.base.path : '';
     final route = normalizeRoute(
-      initialRoute.isNotEmpty ? initialRoute : Uri.base.path,
+      fromBrowser.isNotEmpty && fromBrowser != '/'
+          ? fromBrowser
+          : (initialRoute.isNotEmpty ? initialRoute : fromBrowser),
     );
     return [onGenerateRoute(RouteSettings(name: route))];
   }

@@ -33,6 +33,8 @@ class OrdersService {
     String? cashierId,
     String? cashierName,
     bool autoAccepted = false,
+    String? acceptedBy,
+    String? acceptedByName,
   }) async {
     if (usesFirebase) {
       await _firebase.updateOrderStatus(
@@ -42,6 +44,8 @@ class OrdersService {
         cashierId: cashierId,
         cashierName: cashierName,
         autoAccepted: autoAccepted,
+        acceptedBy: acceptedBy,
+        acceptedByName: acceptedByName,
       );
       return;
     }
@@ -52,6 +56,8 @@ class OrdersService {
       cashierId: cashierId,
       cashierName: cashierName,
       autoAccepted: autoAccepted,
+      acceptedBy: acceptedBy,
+      acceptedByName: acceptedByName,
     );
   }
 

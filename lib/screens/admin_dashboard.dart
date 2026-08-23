@@ -7,12 +7,15 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/order.dart';
 import '../models/restaurant_settings.dart';
 import '../models/staff_user.dart';
+import '../utils/admin_deep_link.dart';
+import '../utils/admin_route_nav.dart';
 import '../utils/admin_settings_url.dart';
 import '../utils/firebase_config.dart';
 import '../utils/food_cost_utils.dart';
 import '../utils/image_url.dart';
 import '../utils/whatsapp_phone.dart';
 import '../services/admin_auth_service.dart';
+import '../services/admin_order_focus_service.dart';
 import '../services/admin_order_monitor_service.dart';
 import '../services/api_service.dart';
 import '../services/menu_storage_service.dart';
@@ -163,6 +166,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
             ? AdminSidebar.superRestaurantsIndex
             : AdminSidebar.posIndex;
       });
+      _applyAuthenticatedDeepLink();
       await _restoreCashierSessionIfNeeded();
       await _initSuperAdminScope();
       await _loadSettings();
@@ -172,8 +176,51 @@ class _AdminDashboardState extends State<AdminDashboard> {
         await _startAdminMonitoring();
       }
     } else {
+      _captureGuestDeepLink();
       await _loadSettings();
     }
+  }
+
+  Uri get _locationUri => kIsWeb ? Uri.base : Uri(path: '/admin');
+
+  void _captureGuestDeepLink() {
+    final uri = _locationUri;
+    final orderRef = AdminDeepLink.parseOrderRef(uri);
+    final redirect = AdminDeepLink.parseRedirect(uri) ??
+        (orderRef != null ? AdminDeepLink.orderPath(orderRef) : null) ??
+        AdminDeepLink.sanitizeRedirect(readStoredAdminRedirect());
+    if (redirect == null) return;
+
+    AdminOrderFocusService.instance.rememberRedirect(redirect);
+    storeAdminRedirect(redirect);
+    final focused = AdminDeepLink.parseOrderRef(Uri.parse(redirect));
+    if (focused != null) {
+      AdminOrderFocusService.instance.requestOrder(focused);
+    }
+    replaceAdminPath(AdminDeepLink.loginWithRedirect(redirect));
+  }
+
+  void _applyAuthenticatedDeepLink() {
+    final uri = _locationUri;
+    final redirect = AdminDeepLink.parseRedirect(uri) ??
+        AdminOrderFocusService.instance.consumeRedirect() ??
+        AdminDeepLink.sanitizeRedirect(readStoredAdminRedirect());
+    clearStoredAdminRedirect();
+
+    final orderRef = AdminDeepLink.parseOrderRef(uri) ??
+        (redirect == null
+            ? null
+            : AdminDeepLink.parseOrderRef(Uri.parse(redirect)));
+    if (orderRef == null) return;
+
+    replaceAdminPath(AdminDeepLink.orderPath(orderRef));
+    AdminOrderFocusService.instance.requestOrder(orderRef);
+    if (_isCashierSession || _isKitchenSession || _isSuperAdmin) {
+      if (mounted) setState(() {});
+      return;
+    }
+    _selectedIndex = AdminSidebar.ordersIndex;
+    if (mounted) setState(() {});
   }
 
   @override
@@ -294,6 +341,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
             ? AdminSidebar.superRestaurantsIndex
             : AdminSidebar.posIndex;
       });
+      _applyAuthenticatedDeepLink();
 
       OrderAlertSoundService.instance.unlockFromUserGesture();
       await _initSuperAdminScope();
@@ -347,6 +395,9 @@ class _AdminDashboardState extends State<AdminDashboard> {
     await SuperAdminScopeService.instance.clearSelection();
     PosOperationsService.instance.clearCashierSession();
     await AdminAuthService.instance.logout();
+    AdminOrderFocusService.instance.clear();
+    clearStoredAdminRedirect();
+    replaceAdminPath('/admin');
     if (!mounted) return;
     setState(() {
       _isAuthenticated = false;

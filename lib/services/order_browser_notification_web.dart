@@ -1,6 +1,8 @@
 import 'dart:html' as html;
 
 import '../models/order.dart';
+import '../utils/admin_deep_link.dart';
+import 'admin_order_focus_service.dart';
 
 bool get browserNotificationsSupported => html.Notification.supported;
 
@@ -23,7 +25,7 @@ Future<void> showNewOrderBrowserNotification(Order order) async {
   final body = '${order.customerName}\n${order.phone}\n'
       '${order.totalPrice.toStringAsFixed(3)} د.ك';
 
-  html.Notification(
+  final notification = html.Notification(
     '🔔 طلب جديد #$invoice',
     body: body,
     icon: 'icons/Icon-192.png',
@@ -31,4 +33,9 @@ Future<void> showNewOrderBrowserNotification(Order order) async {
     dir: 'rtl',
     lang: 'ar',
   );
+  notification.onClick.listen((_) {
+    final ref = (order.invoiceNumber ?? order.id).trim();
+    html.window.history.pushState(null, '', AdminDeepLink.orderPath(ref));
+    AdminOrderFocusService.instance.requestOrder(ref);
+  });
 }

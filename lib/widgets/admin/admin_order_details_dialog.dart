@@ -11,6 +11,7 @@ Future<void> showAdminOrderDetailsDialog(
   required Order order,
   required List<SalesPlatformConfig> platforms,
   required Future<void> Function(String orderId, OrderStatus status) onStatusChanged,
+  bool showStatusActions = true,
 }) {
   return showDialog<void>(
     context: context,
@@ -18,6 +19,7 @@ Future<void> showAdminOrderDetailsDialog(
       order: order,
       platforms: platforms,
       onStatusChanged: onStatusChanged,
+      showStatusActions: showStatusActions,
     ),
   );
 }
@@ -28,11 +30,13 @@ class AdminOrderDetailsDialog extends StatelessWidget {
     required this.order,
     required this.platforms,
     required this.onStatusChanged,
+    this.showStatusActions = true,
   });
 
   final Order order;
   final List<SalesPlatformConfig> platforms;
   final Future<void> Function(String orderId, OrderStatus status) onStatusChanged;
+  final bool showStatusActions;
 
   SalesPlatformConfig get _platform =>
       PlatformCatalog.resolve(order.orderSource, platforms);
@@ -147,6 +151,13 @@ class AdminOrderDetailsDialog extends StatelessWidget {
                           : 'لم يُستلم بعد من كاشير',
                       highlight: order.receivedByCashierLabel.isNotEmpty,
                     ),
+                    if (order.acceptedByLabel.isNotEmpty)
+                      _MetaTile(
+                        icon: Icons.verified_user_outlined,
+                        label: 'قَبِل الطلب',
+                        value: order.acceptedByLabel,
+                        highlight: true,
+                      ),
                     _MetaTile(
                       icon: Icons.local_shipping_outlined,
                       label: 'النوع',
@@ -243,7 +254,7 @@ class AdminOrderDetailsDialog extends StatelessWidget {
                       ),
                     ],
                   ),
-                  if (nextStatus != null && nextLabel != null) ...[
+                  if (showStatusActions && nextStatus != null && nextLabel != null) ...[
                     const SizedBox(height: 8),
                     FilledButton.icon(
                       style: FilledButton.styleFrom(

@@ -18,6 +18,7 @@ const {
   resolveRestaurantId,
   authError,
   DEFAULT_RESTAURANT_ID,
+  SUPER_ADMIN_USER,
 } = require('./lib/adminAuth');
 const {
   filterByRestaurant,
@@ -68,6 +69,7 @@ const {
   applyShiftBindingOnAccept,
   applyShiftAdjustmentOnCancel,
   attachReceivingCashier,
+  attachAcceptedBy,
 } = require('./lib/shiftOrderBinding');
 
 const PORT = Number(process.env.PORT || 3000);
@@ -510,7 +512,12 @@ async function routeRequest(req, res, url, pathname) {
         sendJson(res, 401, { error: 'Invalid credentials' });
         return true;
       }
-      sendJson(res, 200, { token, role: 'super_admin' });
+      sendJson(res, 200, {
+        token,
+        role: 'super_admin',
+        staffId: 'super_admin',
+        staffName: SUPER_ADMIN_USER,
+      });
       return true;
     }
 
@@ -528,6 +535,8 @@ async function routeRequest(req, res, url, pathname) {
       role: 'restaurant_admin',
       restaurantId: restaurant?.id || null,
       restaurantName: restaurant?.name || null,
+      staffId: restaurant?.id ? `admin:${restaurant.id}` : 'restaurant_admin',
+      staffName: restaurant?.name || null,
     });
     return true;
   }
@@ -1105,6 +1114,7 @@ async function routeRequest(req, res, url, pathname) {
       ...body,
       status: persistedStatus,
     });
+    next = attachAcceptedBy(next, previous, auth, body, persistedStatus);
     const nextStatus = String(persistedStatus || '').toLowerCase();
     const prevStatus = String(previousStatus || '').toLowerCase();
     const needsShiftIo =

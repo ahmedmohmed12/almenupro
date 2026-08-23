@@ -181,6 +181,8 @@ class Order {
     this.shiftId,
     this.cashierId,
     this.cashierName,
+    this.acceptedBy,
+    this.acceptedByName,
     this.externalOrderId,
     this.platformCommission,
     this.walletRedeemAmount,
@@ -212,6 +214,8 @@ class Order {
   final String? shiftId;
   final String? cashierId;
   final String? cashierName;
+  final String? acceptedBy;
+  final String? acceptedByName;
   final String? externalOrderId;
   final double? platformCommission;
   final double? walletRedeemAmount;
@@ -224,7 +228,13 @@ class Order {
   String get receivedByCashierLabel {
     final name = cashierName?.trim() ?? '';
     if (name.isNotEmpty) return name;
-    return '';
+    return acceptedByName?.trim() ?? '';
+  }
+
+  String get acceptedByLabel {
+    final name = acceptedByName?.trim() ?? '';
+    if (name.isNotEmpty) return name;
+    return acceptedBy?.trim() ?? '';
   }
 
   double get netRevenue =>
@@ -265,6 +275,10 @@ class Order {
       cashierId: map['cashierId']?.toString() ?? map['cashier_id']?.toString(),
       cashierName:
           map['cashierName']?.toString() ?? map['cashier_name']?.toString(),
+      acceptedBy: map['acceptedBy']?.toString() ??
+          map['accepted_by']?.toString(),
+      acceptedByName: map['acceptedByName']?.toString() ??
+          map['accepted_by_name']?.toString(),
       externalOrderId: map['externalOrderId']?.toString() ??
           map['external_order_id']?.toString(),
       platformCommission: (map['platformCommission'] as num?)?.toDouble() ??
@@ -293,6 +307,8 @@ class Order {
     String? shiftId,
     String? cashierId,
     String? cashierName,
+    String? acceptedBy,
+    String? acceptedByName,
     String? externalOrderId,
     double? platformCommission,
     String? orderSource,
@@ -325,6 +341,8 @@ class Order {
       shiftId: shiftId ?? this.shiftId,
       cashierId: cashierId ?? this.cashierId,
       cashierName: cashierName ?? this.cashierName,
+      acceptedBy: acceptedBy ?? this.acceptedBy,
+      acceptedByName: acceptedByName ?? this.acceptedByName,
       externalOrderId: externalOrderId ?? this.externalOrderId,
       platformCommission: platformCommission ?? this.platformCommission,
       walletRedeemAmount: walletRedeemAmount ?? this.walletRedeemAmount,
@@ -361,6 +379,9 @@ class Order {
       if (shiftId != null && shiftId!.isNotEmpty) 'shiftId': shiftId,
       if (cashierId != null && cashierId!.isNotEmpty) 'cashierId': cashierId,
       if (cashierName != null && cashierName!.isNotEmpty) 'cashierName': cashierName,
+      if (acceptedBy != null && acceptedBy!.isNotEmpty) 'acceptedBy': acceptedBy,
+      if (acceptedByName != null && acceptedByName!.isNotEmpty)
+        'acceptedByName': acceptedByName,
       if (externalOrderId != null && externalOrderId!.isNotEmpty)
         'externalOrderId': externalOrderId,
       if (platformCommission != null) 'platformCommission': platformCommission,

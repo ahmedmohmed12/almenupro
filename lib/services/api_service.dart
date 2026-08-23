@@ -625,6 +625,8 @@ class ApiService {
     String? cashierId,
     String? cashierName,
     bool autoAccepted = false,
+    String? acceptedBy,
+    String? acceptedByName,
   }) async {
     try {
       final response = await http
@@ -634,6 +636,10 @@ class ApiService {
             body: jsonEncode({
               'status': autoAccepted ? 'auto_accepted' : status.name,
               if (autoAccepted) 'autoAccepted': true,
+              if (acceptedBy != null && acceptedBy.isNotEmpty)
+                'accepted_by': acceptedBy,
+              if (acceptedByName != null && acceptedByName.isNotEmpty)
+                'acceptedByName': acceptedByName,
               if (shiftId != null && shiftId.isNotEmpty) 'shiftId': shiftId,
               if (cashierId != null && cashierId.isNotEmpty) 'cashierId': cashierId,
               if (cashierName != null && cashierName.isNotEmpty)

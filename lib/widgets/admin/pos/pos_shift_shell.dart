@@ -9,6 +9,7 @@ import '../../../models/shift_session.dart';
 import '../../../models/staff_user.dart';
 import '../../../utils/admin_route_nav.dart';
 import '../../../services/admin_auth_service.dart';
+import '../../../services/admin_order_focus_service.dart';
 import '../../../services/admin_order_monitor_service.dart';
 import '../../../services/pos_operations_service.dart';
 import '../../../services/pos_security_service.dart';
@@ -72,10 +73,13 @@ class _PosShiftShellState extends State<PosShiftShell> {
       _restaurantController.text = restaurantName.trim();
     }
     _bootstrap();
+    AdminOrderFocusService.instance.addListener(_onOrderFocusChanged);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _onOrderFocusChanged());
   }
 
   @override
   void dispose() {
+    AdminOrderFocusService.instance.removeListener(_onOrderFocusChanged);
     _restaurantController.dispose();
     _cashierNameController.dispose();
     _pinController.dispose();
@@ -221,6 +225,14 @@ class _PosShiftShellState extends State<PosShiftShell> {
 
   void _onRouteSelected(PosRoute route) {
     setState(() => _selectedRoute = route);
+  }
+
+  void _onOrderFocusChanged() {
+    final ref = AdminOrderFocusService.instance.pendingOrderRef;
+    if (ref == null || ref.isEmpty) return;
+    if (_selectedRoute == PosRoute.orders) return;
+    if (!mounted) return;
+    setState(() => _selectedRoute = PosRoute.orders);
   }
 
   void _openOnlineOrders() {
