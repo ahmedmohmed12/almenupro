@@ -59,6 +59,27 @@ class IncomingOrderAutoAcceptService extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Resume the 10s window from [Order.createdAt], or auto-accept if it already expired.
+  void focusDeepLinkedOrder(Order order) {
+    if (AdminAuthService.instance.isKitchen) return;
+    if (order.status != OrderStatus.pending) return;
+    if (!isOnlineMenuOrder(order)) return;
+    if (_inFlight.contains(order.id)) return;
+
+    final existing = _tracked[order.id];
+    final deadline = existing?.deadline ?? order.createdAt.add(countdownDuration);
+    _tracked[order.id] = _TrackedIncomingOrder(
+      order: order,
+      deadline: deadline,
+    );
+    _ensureTicker();
+    notifyListeners();
+
+    if (!DateTime.now().isBefore(deadline)) {
+      unawaited(_accept(order, autoFallback: true));
+    }
+  }
+
   void cancel(String orderId) {
     if (_tracked.remove(orderId) != null) {
       notifyListeners();

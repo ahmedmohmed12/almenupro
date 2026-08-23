@@ -5,6 +5,7 @@ import '../../models/order.dart';
 import '../../models/sales_platform_config.dart';
 import '../../services/pos_print_helper.dart';
 import '../../utils/pos_receipt_html.dart';
+import 'incoming_order_countdown_badge.dart';
 
 Future<void> showAdminOrderDetailsDialog(
   BuildContext context, {
@@ -89,6 +90,10 @@ class AdminOrderDetailsDialog extends StatelessWidget {
                       ],
                     ),
                   ),
+                  if (order.status == OrderStatus.pending) ...[
+                    IncomingOrderCountdownBadge(orderId: order.id),
+                    const SizedBox(width: 8),
+                  ],
                   SalesPlatformBadge(platform: _platform),
                   IconButton(
                     onPressed: () => Navigator.of(context).pop(),

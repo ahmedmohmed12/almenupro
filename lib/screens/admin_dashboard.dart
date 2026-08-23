@@ -215,6 +215,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
 
     replaceAdminPath(AdminDeepLink.orderPath(orderRef));
     AdminOrderFocusService.instance.requestOrder(orderRef);
+    unawaited(OrdersService.instance.refreshOrders());
     if (_isCashierSession || _isKitchenSession || _isSuperAdmin) {
       if (mounted) setState(() {});
       return;

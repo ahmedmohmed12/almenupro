@@ -81,6 +81,7 @@ class _PosOnlineOrdersPageState extends State<PosOnlineOrdersPage>
 
     _openedFocusRef = ref;
     AdminOrderFocusService.instance.consumeOrder();
+    IncomingOrderAutoAcceptService.instance.focusDeepLinkedOrder(match);
     if (match.status == OrderStatus.pending) {
       _tabController.animateTo(0);
     } else if (match.status.isInProgressForCashier) {

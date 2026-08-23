@@ -9,12 +9,20 @@ class AdminDeepLink {
     return '$orderPrefix/$ref';
   }
 
+  static const redirectQueryKeys = {
+    'redirect',
+    'redirectUrl',
+    'returnUrl',
+    'redirect_url',
+    'return_url',
+  };
+
   static String loginWithRedirect(String redirectPath) {
     final safe = sanitizeRedirect(redirectPath) ?? orderPrefix;
     return '$loginPath?redirect=${Uri.encodeQueryComponent(safe)}';
   }
 
-  /// Only same-origin admin paths. Blocks open redirects.
+  /// Only admin-relative paths. Hosts on absolute URLs are ignored (no open redirect).
   static String? sanitizeRedirect(String? raw) {
     final value = (raw ?? '').trim();
     if (value.isEmpty) return null;
@@ -25,8 +33,6 @@ class AdminDeepLink {
     } catch (_) {
       return null;
     }
-
-    if (uri.hasScheme || uri.host.isNotEmpty) return null;
 
     var path = uri.path.trim();
     if (path.isEmpty) return null;
@@ -40,8 +46,10 @@ class AdminDeepLink {
     if (path == loginPath) return '/admin';
 
     if (uri.hasQuery) {
-      final filtered = Map<String, String>.from(uri.queryParameters)
-        ..remove('redirect');
+      final filtered = Map<String, String>.from(uri.queryParameters);
+      for (final key in redirectQueryKeys) {
+        filtered.remove(key);
+      }
       if (filtered.isNotEmpty) {
         return Uri(path: path, queryParameters: filtered).toString();
       }
@@ -69,7 +77,11 @@ class AdminDeepLink {
   }
 
   static String? parseRedirect(Uri uri) {
-    return sanitizeRedirect(uri.queryParameters['redirect']);
+    for (final key in redirectQueryKeys) {
+      final safe = sanitizeRedirect(uri.queryParameters[key]);
+      if (safe != null) return safe;
+    }
+    return null;
   }
 
   static bool isLoginPath(String path) {

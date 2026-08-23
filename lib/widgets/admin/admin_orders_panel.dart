@@ -78,6 +78,7 @@ class AdminOrdersPanelState extends State<AdminOrdersPanel>
 
     _openedFocusRef = ref;
     AdminOrderFocusService.instance.consumeOrder();
+    IncomingOrderAutoAcceptService.instance.focusDeepLinkedOrder(match);
     selectNewOrdersTab();
     _openingFocusedOrder = true;
     WidgetsBinding.instance.addPostFrameCallback((_) async {
