@@ -88,7 +88,11 @@ class OrderAlertSoundService {
     if (_ringingOrderIds.isEmpty) {
       await stopAlertLoop();
     } else {
-      await startAlertLoop();
+      await startAlertLoop(
+        type: (newlyDetected != null && newlyDetected.isNotEmpty)
+            ? OrderAlertSoundType.alarm
+            : null,
+      );
     }
   }
 
@@ -106,14 +110,14 @@ class OrderAlertSoundService {
     await stopAlertLoop();
   }
 
-  Future<void> startAlertLoop() async {
+  Future<void> startAlertLoop({OrderAlertSoundType? type}) async {
     if (!_enabled || _ringingOrderIds.isEmpty) return;
 
     await unlockFromUserGesture();
     _isLoopPlaying = true;
 
     try {
-      await startLoopingOrderAlert(_selectedType);
+      await startLoopingOrderAlert(type ?? _selectedType);
     } catch (error, stackTrace) {
       _isLoopPlaying = false;
       if (kDebugMode) {

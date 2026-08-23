@@ -624,6 +624,7 @@ class ApiService {
     String? shiftId,
     String? cashierId,
     String? cashierName,
+    bool autoAccepted = false,
   }) async {
     try {
       final response = await http
@@ -631,7 +632,8 @@ class ApiService {
             _uri('/orders/$orderId/status'),
             headers: _jsonHeaders,
             body: jsonEncode({
-              'status': status.name,
+              'status': autoAccepted ? 'auto_accepted' : status.name,
+              if (autoAccepted) 'autoAccepted': true,
               if (shiftId != null && shiftId.isNotEmpty) 'shiftId': shiftId,
               if (cashierId != null && cashierId.isNotEmpty) 'cashierId': cashierId,
               if (cashierName != null && cashierName.isNotEmpty)

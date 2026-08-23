@@ -110,9 +110,11 @@ class FirebaseService {
     String? shiftId,
     String? cashierId,
     String? cashierName,
+    bool autoAccepted = false,
   }) async {
     await _ordersRef.doc(orderId).update({
       'status': status.name,
+      if (autoAccepted) 'autoAccepted': true,
       if (shiftId != null && shiftId.isNotEmpty) 'shiftId': shiftId,
       if (cashierId != null && cashierId.isNotEmpty) 'cashierId': cashierId,
       if (cashierName != null && cashierName.isNotEmpty) 'cashierName': cashierName,

@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 
 import '../models/order.dart';
+import 'incoming_order_auto_accept_service.dart';
 import 'order_alert_sound_service.dart';
 import 'order_browser_notification_service.dart';
 import 'orders_service.dart';
@@ -51,6 +52,7 @@ class AdminOrderMonitorService {
     _initializedSnapshot = false;
     _knownOrderIds.clear();
     await OrderAlertSoundService.instance.stopAllAlerts();
+    IncomingOrderAutoAcceptService.instance.syncPendingIds({});
     _syncAlertLoopFlag();
     pendingCount.value = 0;
   }
@@ -87,6 +89,7 @@ class AdminOrderMonitorService {
       newlyDetected.add(order.id);
       _knownOrderIds.add(order.id);
       onNewPendingOrder?.call(order);
+      IncomingOrderAutoAcceptService.instance.trackNewOrder(order);
       await OrderBrowserNotificationService.instance.notifyNewOrder(order);
     }
 
@@ -94,6 +97,7 @@ class AdminOrderMonitorService {
       pendingIds,
       newlyDetected: newlyDetected,
     );
+    IncomingOrderAutoAcceptService.instance.syncPendingIds(pendingIds);
     _syncAlertLoopFlag();
 
     _knownOrderIds

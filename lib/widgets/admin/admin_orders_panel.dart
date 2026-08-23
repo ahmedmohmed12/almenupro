@@ -4,9 +4,11 @@ import 'package:intl/intl.dart';
 import '../../models/order.dart';
 import '../../models/sales_platform_config.dart';
 import '../../services/orders_service.dart';
+import '../../services/incoming_order_auto_accept_service.dart';
 import '../../services/restaurant_settings_service.dart';
 import '../../utils/order_sound.dart';
 import 'admin_order_details_dialog.dart';
+import 'incoming_order_countdown_badge.dart';
 import 'order_status_chip.dart';
 
 class AdminOrdersPanel extends StatefulWidget {
@@ -58,6 +60,26 @@ class AdminOrdersPanelState extends State<AdminOrdersPanel>
         SnackBar(content: Text('تعذر تحديث الطلب: $error')),
       );
     }
+  }
+
+  Future<void> _handleStatus(Order order, OrderStatus status) async {
+    if (order.status == OrderStatus.pending &&
+        status == OrderStatus.confirmed) {
+      try {
+        await IncomingOrderAutoAcceptService.instance.acceptManually(order);
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('تم تحديث الحالة: ${status.arabicLabel}')),
+        );
+      } catch (error) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('تعذر تحديث الطلب: $error')),
+        );
+      }
+      return;
+    }
+    await _updateStatus(order.id, status);
   }
 
   void _handleOrdersUpdate(List<Order> orders) {
@@ -198,7 +220,7 @@ class AdminOrdersPanelState extends State<AdminOrdersPanel>
                     emptyTitle: 'لا توجد طلبات جديدة',
                     emptySubtitle:
                         'ستظهر الطلبات الواردة هنا فور إرسال العميل عبر المنيو أو الواتساب.',
-                    onStatusChanged: _updateStatus,
+                    onStatusChanged: _handleStatus,
                   ),
                   _OrdersList(
                     orders: archivedOrders,
@@ -206,7 +228,7 @@ class AdminOrdersPanelState extends State<AdminOrdersPanel>
                     emptyTitle: 'لا توجد طلبات سابقة',
                     emptySubtitle:
                         'عند إتمام التوصيل أو إلغاء الطلب، يُحفظ هنا للمراجعة.',
-                    onStatusChanged: _updateStatus,
+                    onStatusChanged: _handleStatus,
                     readOnly: true,
                   ),
                 ],
@@ -341,7 +363,7 @@ class _OrdersList extends StatelessWidget {
   final DateFormat dateFormat;
   final String emptyTitle;
   final String emptySubtitle;
-  final Future<void> Function(String orderId, OrderStatus status) onStatusChanged;
+  final Future<void> Function(Order order, OrderStatus status) onStatusChanged;
   final bool readOnly;
 
   @override
@@ -455,7 +477,7 @@ class _AdminOrderCard extends StatelessWidget {
 
   final Order order;
   final DateFormat dateFormat;
-  final Future<void> Function(String orderId, OrderStatus status) onStatusChanged;
+  final Future<void> Function(Order order, OrderStatus status) onStatusChanged;
   final bool readOnly;
 
   @override
@@ -509,6 +531,10 @@ class _AdminOrderCard extends StatelessWidget {
                   ),
                 ),
                 OrderStatusChip(status: order.status),
+                if (order.status == OrderStatus.pending) ...[
+                  const SizedBox(width: 8),
+                  IncomingOrderCountdownBadge(orderId: order.id),
+                ],
               ],
             ),
             const SizedBox(height: 12),
@@ -519,6 +545,12 @@ class _AdminOrderCard extends StatelessWidget {
               _InfoRow(
                 icon: Icons.badge_outlined,
                 text: 'الكاشير المستلم: ${order.receivedByCashierLabel}',
+              ),
+            if (order.targetKitchenName != null &&
+                order.targetKitchenName!.trim().isNotEmpty)
+              _InfoRow(
+                icon: Icons.soup_kitchen_outlined,
+                text: 'المطبخ: ${order.targetKitchenName}',
               ),
             const SizedBox(height: 10),
             Text(
@@ -552,7 +584,7 @@ class _AdminOrderCard extends StatelessWidget {
                   style: ElevatedButton.styleFrom(
                     backgroundColor: _actionColor(order.status),
                   ),
-                  onPressed: () => onStatusChanged(order.id, nextStatus),
+                  onPressed: () => onStatusChanged(order, nextStatus),
                   icon: const Icon(Icons.check_circle, color: Colors.white),
                   label: Text(
                     nextLabel,
@@ -583,7 +615,7 @@ class _AdminOrderCard extends StatelessWidget {
       context,
       order: order,
       platforms: platforms,
-      onStatusChanged: onStatusChanged,
+      onStatusChanged: (orderId, status) => onStatusChanged(order, status),
     );
   }
 

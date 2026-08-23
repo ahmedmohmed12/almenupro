@@ -8,15 +8,15 @@ import '../../../models/pos_role.dart';
 import '../../../models/sales_platform_config.dart';
 import '../../../services/admin_auth_service.dart';
 import '../../../services/admin_order_monitor_service.dart';
+import '../../../services/incoming_order_auto_accept_service.dart';
 import '../../../services/orders_service.dart';
 import '../../../services/pos_operations_service.dart';
-import '../../../services/pos_print_helper.dart';
 import '../../../services/restaurant_settings_service.dart';
 import '../../../utils/order_channel_utils.dart';
 import '../admin_corner_toast.dart';
 import '../admin_order_details_dialog.dart';
+import '../incoming_order_countdown_badge.dart';
 import '../order_status_chip.dart';
-import '../../../utils/pos_receipt_html.dart';
 
 /// Incoming online / QR menu orders for the active cashier shift.
 class PosOnlineOrdersPage extends StatefulWidget {
@@ -158,7 +158,14 @@ class _PosOnlineOrdersPageState extends State<PosOnlineOrdersPage>
       context,
       order: order,
       platforms: _platforms,
-      onStatusChanged: (orderId, status) => _updateMineStatus(order, status),
+      onStatusChanged: (orderId, status) async {
+        if (order.status == OrderStatus.pending &&
+            status == OrderStatus.confirmed) {
+          await _acceptOrder(order);
+          return;
+        }
+        await _updateMineStatus(order, status);
+      },
     );
   }
 
@@ -175,29 +182,13 @@ class _PosOnlineOrdersPageState extends State<PosOnlineOrdersPage>
     }
 
     setState(() => _processingId = order.id);
-    await _monitor.acknowledgeOrder(order.id);
 
     try {
-      final identity = _receivingIdentity;
-      await _ordersService.updateOrderStatus(
-        order.id,
-        OrderStatus.confirmed,
-        shiftId: identity.shiftId,
-        cashierId: identity.cashierId,
-        cashierName: identity.cashierName,
-      );
+      await IncomingOrderAutoAcceptService.instance.acceptManually(order);
 
       if (!mounted) return;
 
-      if (PosOperationsService.instance.allows(PosPermissionKeys.printInvoice)) {
-        await PosPrintHelper.printIfAuto(
-          order: order.copyWith(status: OrderStatus.confirmed),
-          kind: PosReceiptKind.kitchen,
-        );
-      }
-
-      if (!mounted) return;
-      AdminCornerToast.success(context, 'تم قبول الطلب — نفّذه من تبويب الحالية');
+      AdminCornerToast.success(context, 'تم قبول الطلب — يظهر الآن في شاشة المطبخ ويُحسب في ورديتك');
       _tabController.animateTo(1);
     } catch (error) {
       if (!mounted) return;
@@ -240,6 +231,7 @@ class _PosOnlineOrdersPageState extends State<PosOnlineOrdersPage>
     if (confirmed != true || !mounted) return;
 
     setState(() => _processingId = order.id);
+    IncomingOrderAutoAcceptService.instance.cancel(order.id);
     await _monitor.acknowledgeOrder(order.id);
 
     try {
@@ -669,6 +661,10 @@ class _PosOnlineOrderCard extends StatelessWidget {
                   ),
                 ),
                 OrderStatusChip(status: order.status),
+                if (order.status == OrderStatus.pending) ...[
+                  const SizedBox(width: 8),
+                  IncomingOrderCountdownBadge(orderId: order.id),
+                ],
               ],
             ),
             const SizedBox(height: 8),
@@ -760,7 +756,7 @@ class _PosOnlineOrderCard extends StatelessWidget {
                               ),
                             )
                           : const Icon(Icons.check_circle_outline),
-                      label: const Text('قبول → مطبخ'),
+                      label: const Text('قبول الأوردر'),
                     ),
                   ),
                 ],

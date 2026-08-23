@@ -117,6 +117,20 @@ function parseJson(raw) {
 
 const ACTIVE_ORDER_STATUSES = new Set(['pending', 'confirmed', 'preparing', 'ready']);
 
+function isAutoAcceptedStatus(raw) {
+  const value = String(raw || '')
+    .trim()
+    .toLowerCase()
+    .replace(/-/g, '_');
+  return value === 'auto_accepted' || value === 'autoaccepted';
+}
+
+function persistOrderStatus(raw, fallback) {
+  if (isAutoAcceptedStatus(raw)) return 'confirmed';
+  const value = String(raw || '').trim();
+  return value || fallback || 'pending';
+}
+
 function selectRecentOrders(orders, limit = 250) {
   const list = Array.isArray(orders) ? [...orders] : [];
   list.sort(
@@ -1075,13 +1089,23 @@ async function routeRequest(req, res, url, pathname) {
     const body = parseJson(await readBody(req));
     const previous = orders[index];
     const previousStatus = previous.status;
+    const requestedStatus = body.status || previous.status;
+    const persistedStatus = persistOrderStatus(requestedStatus, previous.status);
     let next = {
       ...previous,
-      status: body.status || previous.status,
+      status: persistedStatus,
       updatedAt: new Date().toISOString(),
     };
-    next = attachReceivingCashier(next, previous, body);
-    const nextStatus = String(body.status || next.status || '').toLowerCase();
+    if (isAutoAcceptedStatus(requestedStatus)) {
+      next.autoAccepted = true;
+      next.auto_accepted = true;
+      next.acceptedAt = next.acceptedAt || new Date().toISOString();
+    }
+    next = attachReceivingCashier(next, previous, {
+      ...body,
+      status: persistedStatus,
+    });
+    const nextStatus = String(persistedStatus || '').toLowerCase();
     const prevStatus = String(previousStatus || '').toLowerCase();
     const needsShiftIo =
       prevStatus === 'pending' ||
@@ -1093,7 +1117,7 @@ async function routeRequest(req, res, url, pathname) {
         order: next,
         previousOrder: previous,
         previousStatus,
-        nextStatus: body.status,
+        nextStatus: persistedStatus,
         shifts,
         restaurantId,
         auth,
@@ -1365,16 +1389,22 @@ async function routeRequest(req, res, url, pathname) {
     if (!auth) return true;
     const restaurantId = resolveReportRestaurantId(req, url, auth);
     if (!restaurantId || !assertRestaurantAccess(auth, restaurantId, authError, res)) return true;
-    sendJson(
-      res,
-      200,
-      computeProfitAndLoss(
-        await dataStore.readOrders(),
-        await dataStore.readExpenses(),
-        restaurantId,
-        { days: Number(url.searchParams.get('days') || 30) },
-      ),
-    );
+    try {
+      const expenses =
+        typeof dataStore.readExpenses === 'function'
+          ? await dataStore.readExpenses()
+          : [];
+      sendJson(
+        res,
+        200,
+        computeProfitAndLoss(await dataStore.readOrders(), expenses, restaurantId, {
+          days: Number(url.searchParams.get('days') || 30),
+        }),
+      );
+    } catch (error) {
+      console.error('[analytics/pnl]', error?.message || error);
+      sendJson(res, 500, { error: 'PNL_COMPUTE_FAILED', message: error?.message || 'pnl failed' });
+    }
     return true;
   }
 

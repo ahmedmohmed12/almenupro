@@ -26,6 +26,7 @@ abstract final class PosPrintHelper {
       PosPrintSettingsService.instance.settings;
 
   static bool get canPrint =>
+      AdminAuthService.instance.isKitchen ||
       PosOperationsService.instance.allows(PosPermissionKeys.printInvoice);
 
   static String get restaurantName {
@@ -97,11 +98,30 @@ abstract final class PosPrintHelper {
 
     final copies = cfg.copies.clamp(1, 5);
     for (var i = 0; i < copies; i++) {
-      await printPosReceiptHtml(html);
+      await printPosReceiptHtml(html, zeroClick: false);
       if (i < copies - 1) {
         await Future<void>.delayed(const Duration(milliseconds: 650));
       }
     }
+  }
+
+  /// Always prints a kitchen 80mm ticket via hidden iframe (no extra clicks).
+  static Future<void> printIncomingAcceptance({
+    required Order order,
+    required PosReceiptKind kind,
+  }) async {
+    await ensureReady();
+    final cfg = settings.copyWith(
+      paperPreset: PosPrintPaperPreset.mm80,
+      copies: 1,
+    );
+    final html = buildHtml(
+      order: order,
+      kind: kind,
+      overrideSettings: cfg,
+    );
+    if (html.trim().isEmpty) return;
+    await printPosReceiptHtml(html, zeroClick: true);
   }
 
   static Future<void> printIfAuto({

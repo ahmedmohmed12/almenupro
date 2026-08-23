@@ -3,22 +3,36 @@ import 'dart:html' as html;
 
 /// Prints a full HTML thermal receipt on Flutter web.
 ///
-/// Prefer a hidden same-origin iframe (`srcdoc` / blob URL) so markup is
-/// actually painted before `window.print()`. Avoids blank `about:blank`
-/// popups that browsers often leave empty when `document.write` is blocked.
-Future<void> printPosReceiptHtml(String htmlContent) async {
+/// Zero-click path uses a hidden same-origin iframe (80mm thermal layout)
+/// plus an invisible print-only host. The OS print dialog can still appear
+/// unless the workstation enables silent/kiosk printing.
+Future<void> printPosReceiptHtml(
+  String htmlContent, {
+  bool zeroClick = false,
+}) async {
   final baseHtml = _normalizeDocument(htmlContent);
   if (baseHtml.trim().isEmpty) return;
 
-  final viaIframe = await _printViaHiddenIframe(baseHtml);
+  final printable = _withAutoPrintScript(baseHtml);
+
+  final viaIframe = await _printViaHiddenIframe(
+    printable,
+    sizedForThermal: zeroClick,
+  );
   if (viaIframe) return;
 
-  // Popup path includes an in-document auto-print script because opener
-  // access to the new window is often blocked (COOP / noopener).
-  await _printViaBlobPopup(_withAutoPrintScript(baseHtml));
+  if (zeroClick) {
+    final viaHost = await _printViaInvisibleHost(printable);
+    if (viaHost) return;
+  }
+
+  await _printViaBlobPopup(printable);
 }
 
-Future<bool> _printViaHiddenIframe(String documentHtml) async {
+Future<bool> _printViaHiddenIframe(
+  String documentHtml, {
+  bool sizedForThermal = false,
+}) async {
   final body = html.document.body;
   if (body == null) return false;
 
@@ -26,9 +40,11 @@ Future<bool> _printViaHiddenIframe(String documentHtml) async {
   final iframe = html.IFrameElement()
     ..setAttribute('aria-hidden', 'true')
     ..setAttribute('title', 'POS receipt print')
-    ..style.cssText =
-        'position:fixed;right:0;bottom:0;width:0;height:0;border:0;'
-        'opacity:0;pointer-events:none;visibility:hidden;';
+    ..style.cssText = sizedForThermal
+        ? 'position:fixed;left:-10000px;top:0;width:80mm;height:200mm;'
+            'border:0;opacity:0;pointer-events:none;'
+        : 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;'
+            'opacity:0;pointer-events:none;visibility:hidden;';
 
   StreamSubscription<html.Event>? loadSub;
   Timer? safety;
@@ -55,7 +71,7 @@ Future<bool> _printViaHiddenIframe(String documentHtml) async {
   body.append(iframe);
 
   loadSub = iframe.onLoad.listen((_) async {
-    await Future<void>.delayed(const Duration(milliseconds: 300));
+    await Future<void>.delayed(const Duration(milliseconds: 280));
     try {
       final dynamic frame = iframe;
       final dynamic win = frame.contentWindow;
@@ -103,6 +119,60 @@ Future<bool> _printViaHiddenIframe(String documentHtml) async {
   }
 
   return completer.future;
+}
+
+Future<bool> _printViaInvisibleHost(String documentHtml) async {
+  final body = html.document.body;
+  if (body == null) return false;
+
+  html.Element? host;
+  html.StyleElement? style;
+  try {
+    style = html.StyleElement()
+      ..id = 'almenupro-thermal-print-style'
+      ..text = '''
+@media print {
+  body * { visibility: hidden !important; }
+  #almenupro-thermal-print-host,
+  #almenupro-thermal-print-host * {
+    visibility: visible !important;
+  }
+  #almenupro-thermal-print-host {
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 80mm !important;
+    background: #fff !important;
+  }
+}
+''';
+    html.document.head?.append(style);
+
+    host = html.DivElement()
+      ..id = 'almenupro-thermal-print-host'
+      ..style.cssText =
+          'position:fixed;left:-10000px;top:0;width:80mm;background:#fff;';
+    host.append(
+      html.IFrameElement()
+        ..style.cssText = 'width:80mm;min-height:120mm;border:0;'
+        ..srcdoc = documentHtml,
+    );
+    body.append(host);
+
+    await Future<void>.delayed(const Duration(milliseconds: 220));
+    html.window.print();
+    await Future<void>.delayed(const Duration(milliseconds: 700));
+    return true;
+  } catch (_) {
+    return false;
+  } finally {
+    try {
+      host?.remove();
+    } catch (_) {}
+    try {
+      style?.remove();
+    } catch (_) {}
+  }
 }
 
 String _readBodyHtml(dynamic doc) {
@@ -161,7 +231,7 @@ String _withAutoPrintScript(String htmlContent) {
     } catch (e) {}
   }
   function schedule() {
-    setTimeout(triggerPrint, 200);
+    setTimeout(triggerPrint, 180);
   }
   if (document.readyState === 'complete') schedule();
   else window.addEventListener('load', schedule);

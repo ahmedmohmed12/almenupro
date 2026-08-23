@@ -31,8 +31,12 @@ enum OrderStatus {
   cancelled;
 
   static OrderStatus fromString(String? value) {
+    final raw = (value ?? '').trim().toLowerCase().replaceAll('-', '_');
+    if (raw == 'auto_accepted' || raw == 'autoaccepted') {
+      return OrderStatus.confirmed;
+    }
     return OrderStatus.values.firstWhere(
-      (status) => status.name == value,
+      (status) => status.name == raw,
       orElse: () => OrderStatus.pending,
     );
   }
@@ -47,7 +51,7 @@ enum OrderStatus {
       };
 
   String? get nextActionLabel => switch (this) {
-        OrderStatus.pending => 'قبول',
+        OrderStatus.pending => 'قبول الأوردر',
         OrderStatus.confirmed => 'في الطريق',
         OrderStatus.preparing => 'تم التوصيل',
         OrderStatus.ready => 'تم التوصيل',
@@ -88,6 +92,7 @@ class OrderLineItem {
     required this.selectedOptions,
     this.specialNotes,
     this.offerId,
+    this.originalPrice,
   });
 
   final String menuItemId;
@@ -97,6 +102,7 @@ class OrderLineItem {
   final List<SelectedOption> selectedOptions;
   final String? specialNotes;
   final String? offerId;
+  final double? originalPrice;
 
   double get lineTotal => unitPrice * quantity;
 
@@ -118,6 +124,8 @@ class OrderLineItem {
           .toList(),
       specialNotes: map['specialNotes']?.toString(),
       offerId: map['offerId']?.toString() ?? map['offer_id']?.toString(),
+      originalPrice: (map['originalPrice'] as num?)?.toDouble() ??
+          (map['original_price'] as num?)?.toDouble(),
     );
   }
 
@@ -131,6 +139,7 @@ class OrderLineItem {
       if (specialNotes != null && specialNotes!.isNotEmpty)
         'specialNotes': specialNotes,
       if (offerId != null && offerId!.isNotEmpty) 'offerId': offerId,
+      if (originalPrice != null) 'originalPrice': originalPrice,
       'lineTotal': lineTotal,
     };
   }
@@ -144,6 +153,7 @@ class OrderLineItem {
       selectedOptions: cartItem.selectedOptions,
       specialNotes: cartItem.specialNotes,
       offerId: cartItem.offerId,
+      originalPrice: cartItem.originalUnitPrice,
     );
   }
 }
@@ -177,6 +187,8 @@ class Order {
     this.discountAmount,
     this.offerId,
     this.offerTitle,
+    this.targetKitchenId,
+    this.targetKitchenName,
   });
 
   final String id;
@@ -206,6 +218,8 @@ class Order {
   final double? discountAmount;
   final String? offerId;
   final String? offerTitle;
+  final String? targetKitchenId;
+  final String? targetKitchenName;
 
   String get receivedByCashierLabel {
     final name = cashierName?.trim() ?? '';
@@ -262,6 +276,10 @@ class Order {
           (map['discount_amount'] as num?)?.toDouble(),
       offerId: map['offerId']?.toString() ?? map['offer_id']?.toString(),
       offerTitle: map['offerTitle']?.toString() ?? map['offer_title']?.toString(),
+      targetKitchenId: map['targetKitchenId']?.toString() ??
+          map['target_kitchen_id']?.toString(),
+      targetKitchenName: map['targetKitchenName']?.toString() ??
+          map['target_kitchen_name']?.toString(),
     );
   }
 
@@ -282,6 +300,8 @@ class Order {
     double? discountAmount,
     String? offerId,
     String? offerTitle,
+    String? targetKitchenId,
+    String? targetKitchenName,
   }) {
     return Order(
       id: id,
@@ -311,6 +331,8 @@ class Order {
       discountAmount: discountAmount ?? this.discountAmount,
       offerId: offerId ?? this.offerId,
       offerTitle: offerTitle ?? this.offerTitle,
+      targetKitchenId: targetKitchenId ?? this.targetKitchenId,
+      targetKitchenName: targetKitchenName ?? this.targetKitchenName,
     );
   }
 
@@ -347,6 +369,10 @@ class Order {
       if (discountAmount != null && discountAmount! > 0) 'discountAmount': discountAmount,
       if (offerId != null && offerId!.isNotEmpty) 'offerId': offerId,
       if (offerTitle != null && offerTitle!.isNotEmpty) 'offerTitle': offerTitle,
+      if (targetKitchenId != null && targetKitchenId!.isNotEmpty)
+        'targetKitchenId': targetKitchenId,
+      if (targetKitchenName != null && targetKitchenName!.isNotEmpty)
+        'targetKitchenName': targetKitchenName,
     };
   }
 

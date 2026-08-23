@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 
 import '../models/cart_item.dart';
@@ -30,6 +32,7 @@ class OrdersService {
     String? shiftId,
     String? cashierId,
     String? cashierName,
+    bool autoAccepted = false,
   }) async {
     if (usesFirebase) {
       await _firebase.updateOrderStatus(
@@ -38,6 +41,7 @@ class OrdersService {
         shiftId: shiftId,
         cashierId: cashierId,
         cashierName: cashierName,
+        autoAccepted: autoAccepted,
       );
       return;
     }
@@ -47,6 +51,7 @@ class OrdersService {
       shiftId: shiftId,
       cashierId: cashierId,
       cashierName: cashierName,
+      autoAccepted: autoAccepted,
     );
   }
 
@@ -58,7 +63,7 @@ class OrdersService {
     await OrdersDemoService.refreshFromApi();
   }
 
-  Future<void> submitOrderFromCart({
+  Future<Order> submitOrderFromCart({
     required List<CartItem> cartItems,
     required String customerName,
     required String phone,
@@ -79,6 +84,9 @@ class OrdersService {
     double? discountAmount,
     String? offerId,
     String? offerTitle,
+    String? targetKitchenId,
+    String? targetKitchenName,
+    bool refreshList = true,
   }) async {
     final order = OrdersDemoService.orderFromCart(
       cartItems: cartItems,
@@ -101,6 +109,8 @@ class OrdersService {
       discountAmount: discountAmount,
       offerId: offerId,
       offerTitle: offerTitle,
+      targetKitchenId: targetKitchenId,
+      targetKitchenName: targetKitchenName,
     );
 
     final created = await ApiService.instance.createOrder(
@@ -108,14 +118,27 @@ class OrdersService {
       restaurantId: restaurantId ?? ApiService.defaultRestaurantId,
     );
     await OrdersDemoService.registerOrder(created);
-    await OrdersDemoService.refreshFromApi();
+    if (refreshList) {
+      unawaited(OrdersDemoService.refreshFromApi());
+    }
 
     if (usesFirebase) {
       try {
-        await _firebase.addOrder(created);
+        if (refreshList) {
+          await _firebase.addOrder(created);
+        } else {
+          unawaited(() async {
+            try {
+              await _firebase.addOrder(created);
+            } catch (error) {
+              debugPrint('Firebase order mirror skipped: $error');
+            }
+          }());
+        }
       } catch (error) {
         debugPrint('Firebase order mirror skipped: $error');
       }
     }
+    return created;
   }
 }

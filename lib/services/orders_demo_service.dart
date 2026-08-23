@@ -18,6 +18,7 @@ class OrdersDemoService {
   static Timer? _simulationTimer;
   static Future<void>? _refreshInFlight;
   static String _ordersFingerprint = '';
+  static final Map<String, OrderStatus> _statusInFlight = {};
 
   static Stream<List<Order>> watchOrders() {
     unawaited(_ensureInitialized());
@@ -69,7 +70,7 @@ class OrdersDemoService {
     return orders
         .map(
           (order) =>
-              '${order.id}:${order.status.name}:${order.cashierId}:${order.shiftId}:${order.totalPrice}',
+              '${order.id}:${order.status.name}:${order.cashierId}:${order.shiftId}:${order.totalPrice}:${order.targetKitchenId}',
         )
         .join('|');
   }
@@ -104,10 +105,30 @@ class OrdersDemoService {
       }
 
       isDemoData = false;
-      _orders = apiOrders;
-      _ordersFingerprint = fingerprint;
+      _orders = _overlayInFlightStatus(apiOrders);
+      _ordersFingerprint = _fingerprint(_orders);
       _emit();
     } catch (_) {}
+  }
+
+  static List<Order> _overlayInFlightStatus(List<Order> orders) {
+    if (_statusInFlight.isEmpty) return orders;
+    return orders.map((order) {
+      final pending = _statusInFlight[order.id];
+      if (pending == null || pending == order.status) return order;
+      return order.copyWith(status: pending);
+    }).toList();
+  }
+
+  static void _replaceOrder(String orderId, Order next) {
+    final index = _orders.indexWhere((order) => order.id == orderId);
+    if (index == -1) {
+      _orders = [next, ..._orders];
+    } else {
+      _orders[index] = next;
+    }
+    _ordersFingerprint = _fingerprint(_orders);
+    _emit();
   }
 
   static Future<void> updateOrderStatus(
@@ -116,39 +137,54 @@ class OrdersDemoService {
     String? shiftId,
     String? cashierId,
     String? cashierName,
+    bool autoAccepted = false,
   }) async {
     await _ensureInitialized();
 
     final index = _orders.indexWhere((order) => order.id == orderId);
     if (index == -1) return;
 
-    if (!orderId.startsWith('demo-')) {
+    final previous = _orders[index];
+    final optimistic = previous.copyWith(
+      status: status,
+      shiftId: shiftId,
+      cashierId: cashierId,
+      cashierName: cashierName,
+    );
+
+    if (orderId.startsWith('demo-')) {
+      _replaceOrder(orderId, optimistic);
+      return;
+    }
+
+    _statusInFlight[orderId] = status;
+    _replaceOrder(orderId, optimistic);
+
+    try {
       final updated = await ApiService.instance.updateOrderStatus(
         orderId,
         status,
         shiftId: shiftId,
         cashierId: cashierId,
         cashierName: cashierName,
+        autoAccepted: autoAccepted,
       );
+      _statusInFlight.remove(orderId);
       if (updated != null) {
-        _orders[index] = updated;
-        _ordersFingerprint = _fingerprint(_orders);
-        _emit();
-        return;
+        _replaceOrder(orderId, updated);
       }
+    } catch (error) {
+      _statusInFlight.remove(orderId);
+      _replaceOrder(orderId, previous);
+      rethrow;
     }
-
-    _orders[index] = _orders[index].copyWith(
-      status: status,
-      shiftId: shiftId,
-      cashierId: cashierId,
-      cashierName: cashierName,
-    );
-    _emit();
   }
 
   static Future<void> registerOrder(Order order) async {
-    await _ensureInitialized();
+    _initialized = true;
+    _pollTimer ??= Timer.periodic(const Duration(seconds: 8), (_) {
+      unawaited(_refreshFromApi());
+    });
 
     if (!order.id.startsWith('demo-')) {
       _orders = [order, ..._orders.where((item) => item.id != order.id)];
@@ -156,6 +192,7 @@ class OrdersDemoService {
     } else {
       _orders = [order, ..._orders];
     }
+    _ordersFingerprint = _fingerprint(_orders);
     _emit();
   }
 
@@ -313,6 +350,8 @@ class OrdersDemoService {
     double? discountAmount,
     String? offerId,
     String? offerTitle,
+    String? targetKitchenId,
+    String? targetKitchenName,
   }) {
     final items = cartItems.map(OrderLineItem.fromCartItem).toList();
     final charged =
@@ -355,6 +394,8 @@ class OrdersDemoService {
       walletRedeemAmount: walletRedeemAmount,
       externalOrderId: externalOrderId,
       platformCommission: platformCommission,
+      targetKitchenId: targetKitchenId,
+      targetKitchenName: targetKitchenName,
     );
   }
 }
