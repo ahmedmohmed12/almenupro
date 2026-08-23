@@ -51,6 +51,7 @@ class PosPrintSettings {
     this.autoPrintCustomer = true,
     this.autoPrintKitchen = true,
     this.fontSize = PosPrintFontSize.medium,
+    this.qzPrinterName = '',
   });
 
   final PosPrintPaperPreset paperPreset;
@@ -59,6 +60,7 @@ class PosPrintSettings {
   final bool autoPrintCustomer;
   final bool autoPrintKitchen;
   final PosPrintFontSize fontSize;
+  final String qzPrinterName;
 
   double get widthMm => switch (paperPreset) {
         PosPrintPaperPreset.mm58 => 58,
@@ -73,6 +75,7 @@ class PosPrintSettings {
     bool? autoPrintCustomer,
     bool? autoPrintKitchen,
     PosPrintFontSize? fontSize,
+    String? qzPrinterName,
   }) {
     return PosPrintSettings(
       paperPreset: paperPreset ?? this.paperPreset,
@@ -81,6 +84,7 @@ class PosPrintSettings {
       autoPrintCustomer: autoPrintCustomer ?? this.autoPrintCustomer,
       autoPrintKitchen: autoPrintKitchen ?? this.autoPrintKitchen,
       fontSize: fontSize ?? this.fontSize,
+      qzPrinterName: qzPrinterName ?? this.qzPrinterName,
     );
   }
 }
@@ -96,6 +100,7 @@ class PosPrintSettingsService extends ChangeNotifier {
   static const _keyAutoCustomer = 'pos_auto_print_customer';
   static const _keyAutoKitchen = 'pos_auto_print_kitchen';
   static const _keyFontSize = 'pos_print_font_size';
+  static const _keyQzPrinter = 'pos_qz_printer_name';
 
   PosPrintSettings _settings = const PosPrintSettings();
   var _initialized = false;
@@ -114,6 +119,7 @@ class PosPrintSettingsService extends ChangeNotifier {
         autoPrintCustomer: prefs.getBool(_keyAutoCustomer) ?? true,
         autoPrintKitchen: prefs.getBool(_keyAutoKitchen) ?? true,
         fontSize: PosPrintFontSize.fromStorage(prefs.getString(_keyFontSize)),
+        qzPrinterName: prefs.getString(_keyQzPrinter) ?? '',
       );
     } catch (error) {
       if (kDebugMode) {
@@ -137,5 +143,6 @@ class PosPrintSettingsService extends ChangeNotifier {
     await prefs.setBool(_keyAutoCustomer, _settings.autoPrintCustomer);
     await prefs.setBool(_keyAutoKitchen, _settings.autoPrintKitchen);
     await prefs.setString(_keyFontSize, _settings.fontSize.name);
+    await prefs.setString(_keyQzPrinter, _settings.qzPrinterName);
   }
 }

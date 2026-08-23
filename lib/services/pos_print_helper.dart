@@ -7,6 +7,7 @@ import 'admin_auth_service.dart';
 import 'pos_operations_service.dart';
 import 'pos_print_service.dart';
 import 'pos_print_settings_service.dart';
+import 'qz_tray_print_service.dart';
 import 'restaurant_settings_service.dart';
 
 /// Central POS print entry — applies workstation printer settings.
@@ -97,6 +98,15 @@ abstract final class PosPrintHelper {
     if (html.trim().isEmpty) return;
 
     final copies = cfg.copies.clamp(1, 5);
+    final silent = await _tryQzSilentPrint(
+      html: html,
+      orderId: order.id,
+      copies: copies,
+      widthMm: cfg.widthMm,
+      printerName: cfg.qzPrinterName,
+    );
+    if (silent) return;
+
     for (var i = 0; i < copies; i++) {
       await printPosReceiptHtml(html, zeroClick: false);
       if (i < copies - 1) {
@@ -105,7 +115,7 @@ abstract final class PosPrintHelper {
     }
   }
 
-  /// Always prints a kitchen 80mm ticket via hidden iframe (no extra clicks).
+  /// Always prints a kitchen 80mm ticket: QZ Tray first, browser print fallback.
   static Future<void> printIncomingAcceptance({
     required Order order,
     required PosReceiptKind kind,
@@ -121,7 +131,37 @@ abstract final class PosPrintHelper {
       overrideSettings: cfg,
     );
     if (html.trim().isEmpty) return;
+
+    final silent = await _tryQzSilentPrint(
+      html: html,
+      orderId: order.id,
+      copies: 1,
+      widthMm: 80,
+      printerName: cfg.qzPrinterName,
+    );
+    if (silent) return;
+
     await printPosReceiptHtml(html, zeroClick: true);
+  }
+
+  static Future<bool> _tryQzSilentPrint({
+    required String html,
+    required String orderId,
+    required int copies,
+    required double widthMm,
+    String? printerName,
+  }) async {
+    try {
+      return await printReceiptSilently({
+        'html': html,
+        'printerName': printerName ?? settings.qzPrinterName,
+        'widthMm': widthMm,
+        'copies': copies,
+        'orderId': orderId,
+      });
+    } catch (_) {
+      return false;
+    }
   }
 
   static Future<void> printIfAuto({

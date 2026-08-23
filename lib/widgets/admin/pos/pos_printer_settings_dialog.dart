@@ -74,6 +74,7 @@ class _PosPrinterSettingsFormState extends State<PosPrinterSettingsForm> {
   late PosPrintSettings _draft;
   var _invoiceLanguage = InvoiceLanguage.arabic;
   final _widthController = TextEditingController();
+  final _qzPrinterController = TextEditingController();
 
   @override
   void initState() {
@@ -91,6 +92,7 @@ class _PosPrinterSettingsFormState extends State<PosPrinterSettingsForm> {
       _widthController.text = _draft.customWidthMm.toStringAsFixed(
         _draft.customWidthMm == _draft.customWidthMm.roundToDouble() ? 0 : 2,
       );
+      _qzPrinterController.text = _draft.qzPrinterName;
       _loading = false;
     });
   }
@@ -98,6 +100,7 @@ class _PosPrinterSettingsFormState extends State<PosPrinterSettingsForm> {
   @override
   void dispose() {
     _widthController.dispose();
+    _qzPrinterController.dispose();
     super.dispose();
   }
 
@@ -111,7 +114,10 @@ class _PosPrinterSettingsFormState extends State<PosPrinterSettingsForm> {
   }
 
   Future<void> _save() async {
-    final next = _draft.copyWith(customWidthMm: _effectiveWidth);
+    final next = _draft.copyWith(
+      customWidthMm: _effectiveWidth,
+      qzPrinterName: _qzPrinterController.text.trim(),
+    );
     await PosPrintSettingsService.instance.save(next);
     await RestaurantSettingsService.instance.saveInvoiceLanguage(
       invoiceLanguage: _invoiceLanguage,
@@ -289,6 +295,25 @@ class _PosPrinterSettingsFormState extends State<PosPrinterSettingsForm> {
               () => _draft = _draft.copyWith(autoPrintKitchen: value),
             );
           },
+        ),
+        const SizedBox(height: 8),
+        const Text(
+          'طابعة QZ Tray (طباعة صامتة)',
+          style: TextStyle(fontWeight: FontWeight.w700),
+        ),
+        const SizedBox(height: 6),
+        TextField(
+          controller: _qzPrinterController,
+          decoration: const InputDecoration(
+            hintText: 'اسم الطابعة — اتركه فارغاً للافتراضي',
+            border: OutlineInputBorder(),
+            isDense: true,
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          'إن كان QZ Tray شغال على الجهاز تُطبع الفاتورة صامتة. وإلا تُستخدم طباعة المتصفح 80مم تلقائياً.',
+          style: TextStyle(color: Colors.grey.shade700, fontSize: 12, height: 1.35),
         ),
         const SizedBox(height: 8),
         Text(
