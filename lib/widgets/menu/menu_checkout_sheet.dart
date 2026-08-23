@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -7,6 +8,7 @@ import '../../data/kuwait_governorates.dart';
 import '../../l10n/app_strings.dart';
 import '../../models/customer_restaurant_context.dart';
 import '../../models/delivery_address_details.dart';
+import '../../models/invoice_language.dart';
 import '../../models/delivery_zone.dart';
 import '../../models/menu_item.dart';
 import '../../models/payment_method_config.dart';
@@ -17,6 +19,7 @@ import '../../providers/customer_session_provider.dart';
 import '../../providers/locale_provider.dart';
 import '../../services/api_service.dart';
 import '../../services/orders_service.dart';
+import '../../services/pending_review_service.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/upsell_item_resolver.dart';
 import '../../utils/whatsapp_launcher.dart';
@@ -328,39 +331,29 @@ class _MenuCheckoutSheetState extends State<MenuCheckoutSheet> {
 
     setState(() => _submitting = true);
 
-    final subtotal = cart.totalPrice;
-    final walletRedeem = _walletRedeemable(subtotal);
-    final grandTotal = _grandTotal(subtotal);
-    final invoiceNumber =
-        DateTime.now().millisecondsSinceEpoch.toString().substring(5);
-    final now = DateTime.now();
-    final orderTime =
-        '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
-
-    final addressArabic = _formattedAddressArabic();
-    final addressEnglish = _formattedAddressEnglish();
-
     try {
-      final offerId = cart.appliedOffer?.id ??
+      var offerId = cart.appliedOffer?.id ??
           cart.items
               .map((item) => item.offerId)
               .whereType<String>()
               .where((id) => id.isNotEmpty)
               .fold<String?>(null, (prev, id) => prev ?? id);
-      if (offerId != null && offerId.isNotEmpty) {
-        final allowed = await ApiService.instance.isOfferUsableForCustomer(
-          offerId: offerId,
-          phone: _phoneController.text.trim(),
-          restaurantId: _restaurantId,
-        );
-        if (!allowed) {
-          if (!mounted) return;
-          setState(() => _submitting = false);
-          await showOfferUsageLimitAlert(context);
-          return;
-        }
-      }
-      await OrdersService.instance.submitOrderFromCart(
+
+      final subtotal = cart.totalPrice;
+      final walletRedeem = _walletRedeemable(subtotal);
+      final grandTotal = _grandTotal(subtotal);
+      final invoiceNumber =
+          DateTime.now().millisecondsSinceEpoch.toString().substring(5);
+      final now = DateTime.now();
+      final invoiceLanguage = _settings?.invoiceLanguage ??
+          widget.restaurantContext?.settings.invoiceLanguage ??
+          InvoiceLanguage.arabic;
+      final addressArabic = _formattedAddressArabic();
+      final addressEnglish = _formattedAddressEnglish();
+      final invoiceAddress =
+          invoiceLanguage.isArabic ? addressArabic : addressEnglish;
+
+      final created = await OrdersService.instance.submitOrderFromCart(
         cartItems: List.from(cart.items),
         customerName: _nameController.text.trim(),
         phone: _phoneController.text.trim(),
@@ -380,61 +373,94 @@ class _MenuCheckoutSheetState extends State<MenuCheckoutSheet> {
             cart.offerDiscountTotal > 0 ? cart.offerDiscountTotal : null,
         offerId: offerId,
         offerTitle: cart.appliedOffer?.title,
+        refreshList: false,
+      );
+
+      final slug = _restaurantSlug;
+      if (slug != null && slug.isNotEmpty && created.id.isNotEmpty) {
+        unawaited(
+          PendingReviewService.instance.enqueue(
+            PendingReviewRequest(
+              orderId: created.id,
+              restaurantId: _restaurantId,
+              restaurantSlug: slug,
+              restaurantName: _restaurantName,
+            ),
+          ),
+        );
+      }
+
+      if (!mounted) return;
+      if (walletRedeem > 0) {
+        context.read<CustomerSessionProvider>().applyWalletDebit(walletRedeem);
+      }
+
+      final message = WhatsAppOrderMessage.build(
+        language: invoiceLanguage,
+        restaurantName: _restaurantName,
+        invoiceNumber: invoiceNumber,
+        customerName: _nameController.text.trim(),
+        phone: _phoneController.text.trim(),
+        paymentMethod: _paymentMethod,
+        orderedAt: now,
+        cartItems: cart.items,
+        subtotal: subtotal,
+        deliveryFee: _deliveryFeeFor(subtotal),
+        grandTotal: grandTotal,
+        address: invoiceAddress,
+        discountAmount: cart.offerDiscountTotal,
+        walletRedeemAmount: walletRedeem,
+        orderId: created.id,
+        frontendUrl: kIsWeb
+            ? Uri.base.origin
+            : 'https://frontend-six-lime-13.vercel.app',
+      );
+      unawaited(openWhatsAppChat(phone: _whatsappNumber, message: message));
+
+      if (!mounted) return;
+
+      setState(() => _submitting = false);
+      cart.clear();
+      Navigator.pop(context);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(strings.orderSentViaWhatsapp)),
       );
     } on ApiRequestException catch (error) {
       if (!mounted) return;
       setState(() => _submitting = false);
       if (error.isOfferUsageLimit) {
-        await showOfferUsageLimitAlert(context, error.message);
+        cart.revertExhaustedOffers();
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'انتهى حد استخدام العرض، سيتم احتساب الطلب بالسعر العادي. أعد الإرسال',
+            ),
+          ),
+        );
         return;
       }
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(error.message)),
       );
-      return;
     } catch (error) {
       if (!mounted) return;
       setState(() => _submitting = false);
       final text = error.toString().replaceFirst('Exception: ', '');
       if (text.contains(kOfferUsageLimitMessage)) {
-        await showOfferUsageLimitAlert(context, kOfferUsageLimitMessage);
+        cart.revertExhaustedOffers();
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'انتهى حد استخدام العرض، سيتم احتساب الطلب بالسعر العادي. أعد الإرسال',
+            ),
+          ),
+        );
         return;
       }
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('تعذر حفظ الطلب: $text')),
       );
-      return;
     }
-
-    if (!mounted) return;
-    if (walletRedeem > 0) {
-      context.read<CustomerSessionProvider>().applyWalletDebit(walletRedeem);
-    }
-
-    final message = WhatsAppOrderMessage.build(
-      restaurantName: _restaurantName,
-      invoiceNumber: invoiceNumber,
-      customerName: _nameController.text.trim(),
-      phone: _phoneController.text.trim(),
-      paymentMethod: _paymentMethod,
-      orderTime: orderTime,
-      cartItems: cart.items,
-      subtotal: subtotal,
-      deliveryFee: _deliveryFeeFor(subtotal),
-      grandTotal: grandTotal,
-      addressArabic: addressArabic,
-      addressEnglish: addressEnglish,
-    );
-    unawaited(openWhatsAppChat(phone: _whatsappNumber, message: message));
-
-    if (!mounted) return;
-
-    setState(() => _submitting = false);
-    cart.clear();
-    Navigator.pop(context);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(strings.orderSentViaWhatsapp)),
-    );
   }
 
   Widget _buildTotals(CartProvider cart, AppStrings strings) {

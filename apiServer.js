@@ -59,6 +59,7 @@ const {
   identifyCustomerByPhone,
 } = require('./lib/customersStore');
 const { normalizeWhatsappSettings } = require('./lib/whatsappPhone');
+const { sendWhatsAppNotification } = require('./lib/whatsappNotification');
 const {
   buildRestaurantOgData,
   buildOgMenuHtml,
@@ -1062,6 +1063,33 @@ async function routeRequest(req, res, url, pathname) {
     if (created.phone) {
       customers = upsertCustomerFromSource(customers, created, restaurantId);
       await extraStore.customers.write(customers);
+    }
+    try {
+      const settingsMap = await dataStore.readSettingsMap();
+      const restaurantSettings =
+        settingsMap.byRestaurant?.[restaurantId] || {};
+      const restaurant = restaurants.find(
+        (entry) => String(entry.id) === String(restaurantId),
+      );
+      const whatsapp = normalizeWhatsappSettings(restaurantSettings);
+      const staffPhone =
+        whatsapp.whatsappNumber ||
+        restaurant?.whatsappNumber ||
+        restaurant?.whatsapp_number ||
+        '';
+      const invoice = created.invoiceNumber || created.id;
+      const messageBody =
+        `طلب جديد #${invoice}\n${created.customerName || ''}\n` +
+        `${Number(created.totalPrice || 0).toFixed(3)} د.ك`;
+      sendWhatsAppNotification({
+        to: staffPhone,
+        messageBody,
+        order: created,
+      }).catch((error) => {
+        console.error('WhatsApp staff notification failed:', error);
+      });
+    } catch (error) {
+      console.error('WhatsApp staff notification failed:', error);
     }
     sendJson(res, 201, created);
     return true;
