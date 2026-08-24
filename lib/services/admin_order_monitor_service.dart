@@ -45,6 +45,18 @@ class AdminOrderMonitorService {
     unawaited(OrdersService.instance.refreshOrders());
   }
 
+  Future<void> resumeRealtime() async {
+    if (!_isRunning) {
+      await start();
+      return;
+    }
+    unawaited(OrdersService.instance.refreshOrders());
+    if (OrderAlertSoundService.instance.isAlertLoopActive) {
+      unawaited(OrderAlertSoundService.instance.startAlertLoop());
+    }
+    _syncAlertLoopFlag();
+  }
+
   Future<void> stop() async {
     _isRunning = false;
     await _ordersSubscription?.cancel();

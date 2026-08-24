@@ -17,7 +17,9 @@ import '../utils/whatsapp_phone.dart';
 import '../services/admin_auth_service.dart';
 import '../services/admin_order_focus_service.dart';
 import '../services/admin_order_monitor_service.dart';
+import '../services/admin_runtime_keepalive.dart';
 import '../services/api_service.dart';
+import '../services/incoming_order_auto_accept_service.dart';
 import '../services/menu_storage_service.dart';
 import '../services/orders_service.dart';
 import '../services/order_alert_sound_service.dart';
@@ -60,7 +62,8 @@ class AdminDashboard extends StatefulWidget {
   State<AdminDashboard> createState() => _AdminDashboardState();
 }
 
-class _AdminDashboardState extends State<AdminDashboard> {
+class _AdminDashboardState extends State<AdminDashboard>
+    with WidgetsBindingObserver {
   final _ordersPanelKey = GlobalKey<AdminOrdersPanelState>();
   final _shellScaffoldKey = GlobalKey<ScaffoldState>();
 
@@ -82,6 +85,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
   String _whatsappCountryCode = WhatsAppPhone.defaultCountryCode;
   bool _isSavingSettings = false;
   RestaurantSettings? _loadedSettings;
+  DateTime? _lastRuntimeResumeAt;
 
   bool get _whatsappConfigured => _loadedSettings?.hasWhatsappNumber ?? false;
 
@@ -134,8 +138,38 @@ class _AdminDashboardState extends State<AdminDashboard> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    attachAdminRuntimeKeepAlive(_onRuntimeResume);
     _bootstrapAuth();
     OrderAlertSoundService.instance.initialize();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _onRuntimeResume();
+    }
+  }
+
+  void _onRuntimeResume() {
+    if (!_isAuthenticated) return;
+    final now = DateTime.now();
+    if (_lastRuntimeResumeAt != null &&
+        now.difference(_lastRuntimeResumeAt!) <
+            const Duration(milliseconds: 400)) {
+      return;
+    }
+    _lastRuntimeResumeAt = now;
+    unawaited(_resumeBackgroundOperations());
+  }
+
+  Future<void> _resumeBackgroundOperations() async {
+    await OrdersService.instance.resumeRealtime();
+    IncomingOrderAutoAcceptService.instance.resumeFromBackground();
+    await OrderAlertSoundService.instance.resumeAfterForeground();
+    if (AdminOrderMonitorService.instance.isRunning) {
+      await AdminOrderMonitorService.instance.resumeRealtime();
+    }
   }
 
   Future<void> _initSuperAdminScope() async {
@@ -226,6 +260,8 @@ class _AdminDashboardState extends State<AdminDashboard> {
 
   @override
   void dispose() {
+    detachAdminRuntimeKeepAlive();
+    WidgetsBinding.instance.removeObserver(this);
     SuperAdminScopeService.instance.removeListener(_onSuperAdminScopeChanged);
     AdminOrderMonitorService.instance.stop();
     _usernameController.dispose();

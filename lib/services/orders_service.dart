@@ -26,6 +26,8 @@ class OrdersService {
     return OrdersDemoService.watchOrders();
   }
 
+  Future<void> resumeRealtime() => OrdersDemoService.resumeRealtime();
+
   Future<void> updateOrderStatus(
     String orderId,
     OrderStatus status, {

@@ -136,6 +136,11 @@ class OrderAlertSoundService {
     await stopOrderAlertLoop();
   }
 
+  Future<void> resumeAfterForeground() async {
+    if (!_enabled || _ringingOrderIds.isEmpty) return;
+    await startAlertLoop();
+  }
+
   @Deprecated('Use syncPendingAlerts for looping alerts')
   Future<void> playNewOrderAlert() async {
     if (!_enabled) return;

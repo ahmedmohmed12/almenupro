@@ -64,6 +64,14 @@ class OrdersDemoService {
     });
   }
 
+  static Future<void> resumeRealtime() async {
+    _pollTimer?.cancel();
+    _pollTimer = Timer.periodic(const Duration(seconds: 8), (_) {
+      unawaited(_refreshFromApi());
+    });
+    await _refreshFromApi();
+  }
+
   static Future<void> refreshFromApi() => _refreshFromApi();
 
   static String _fingerprint(List<Order> orders) {

@@ -102,6 +102,11 @@ class IncomingOrderAutoAcceptService extends ChangeNotifier {
     });
   }
 
+  void resumeFromBackground() {
+    _ensureTicker();
+    _onTick();
+  }
+
   void _onTick() {
     if (_tracked.isEmpty) {
       _ensureTicker();
