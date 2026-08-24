@@ -11,27 +11,27 @@
     },
     {
       "source": "/login",
-      "destination": "/index.html"
+      "destination": "/app.html"
     },
     {
       "source": "/admin",
-      "destination": "/index.html"
+      "destination": "/app.html"
     },
     {
       "source": "/menu/:path*",
-      "destination": "/index.html"
+      "destination": "/app.html"
     },
     {
       "source": "/restaurant/:path*",
-      "destination": "/index.html"
+      "destination": "/app.html"
     },
     {
       "source": "/legacy-menu",
-      "destination": "/index.html"
+      "destination": "/app.html"
     },
     {
       "source": "/:slug",
-      "destination": "/index.html"
+      "destination": "/app.html"
     }
   ],
   "headers": [

@@ -41,6 +41,10 @@ cp -R "$PROJECT_ROOT/build/web/." "$DIST_DIR/"
 
 if [ -f "$FRONTEND_DIR/landing/index.html" ]; then
   cp "$FRONTEND_DIR/landing/index.html" "$DIST_DIR/landing.html"
+  if [ -f "$DIST_DIR/index.html" ]; then
+    mv "$DIST_DIR/index.html" "$DIST_DIR/app.html"
+  fi
+  cp "$FRONTEND_DIR/landing/index.html" "$DIST_DIR/index.html"
 fi
 
 echo "Flutter web build complete: $DIST_DIR"

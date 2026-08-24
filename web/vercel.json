@@ -21,20 +21,20 @@
   ],
   "rewrites": [
     {
-      "source": "/",
-      "destination": "/landing.html"
-    },
-    {
       "source": "/login",
-      "destination": "/index.html"
+      "destination": "/app.html"
     },
     {
       "source": "/admin",
-      "destination": "/index.html"
+      "destination": "/app.html"
     },
     {
       "source": "/admin/:path*",
-      "destination": "/index.html"
+      "destination": "/app.html"
+    },
+    {
+      "source": "/restaurants",
+      "destination": "/app.html"
     },
     {
       "source": "/og/:slug*",
@@ -52,8 +52,20 @@
       "destination": "https://backend-henna-chi-76.vercel.app/og/:slug"
     },
     {
+      "source": "/menu/:path*",
+      "destination": "/app.html"
+    },
+    {
+      "source": "/restaurant/:path*",
+      "destination": "/app.html"
+    },
+    {
+      "source": "/legacy-menu",
+      "destination": "/app.html"
+    },
+    {
       "source": "/(.*)",
-      "destination": "/index.html"
+      "destination": "/app.html"
     }
   ]
 }
