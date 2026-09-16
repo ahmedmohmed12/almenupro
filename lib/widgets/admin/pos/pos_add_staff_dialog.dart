@@ -3,12 +3,14 @@ import 'package:flutter/services.dart';
 
 import '../../../models/pos_role.dart';
 import '../../../models/staff_user.dart';
+import '../../../services/admin_auth_service.dart';
 import '../../../services/pos_operations_service.dart';
 
 /// Simplified staff roles shown in the add-cashier form.
 enum PosStaffFormRole {
   cashier('cashier', 'كاشير عادي'),
-  branchManager('shift_supervisor', 'مدير فرع');
+  branchManager('shift_supervisor', 'مدير فرع'),
+  driver('driver', 'سائق توصيل');
 
   const PosStaffFormRole(this.roleId, this.labelAr);
 
@@ -134,6 +136,11 @@ class _PosAddStaffDialogState extends State<PosAddStaffDialog> {
                 border: OutlineInputBorder(),
               ),
               items: PosStaffFormRole.values
+                  .where(
+                    (entry) =>
+                        entry != PosStaffFormRole.driver ||
+                        AdminAuthService.instance.isSuperAdmin,
+                  )
                   .map(
                     (entry) => DropdownMenuItem(
                       value: entry,

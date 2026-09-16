@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../../l10n/app_strings.dart';
 import '../../../utils/admin_route_nav.dart';
+import '../../language_toggle_button.dart';
 import 'pos_menu_catalog.dart';
 
 /// Collapsible right-side navigation for the cashier POS experience.
@@ -11,6 +13,8 @@ class PosSidebar extends StatefulWidget {
     required this.selectedRoute,
     required this.onRouteSelected,
     required this.onShiftCloseRequested,
+    this.onPrinterSettings,
+    this.onLogout,
     this.width = expandedWidth,
     this.enableCollapse = true,
     this.tableManagementEnabled = false,
@@ -28,6 +32,8 @@ class PosSidebar extends StatefulWidget {
   final PosRoute selectedRoute;
   final ValueChanged<PosRoute> onRouteSelected;
   final VoidCallback onShiftCloseRequested;
+  final VoidCallback? onPrinterSettings;
+  final VoidCallback? onLogout;
   final double width;
   final bool enableCollapse;
   final bool tableManagementEnabled;
@@ -71,12 +77,38 @@ class _PosSidebarState extends State<PosSidebar> {
       _isCollapsed ? PosSidebar.collapsedWidth : widget.width;
 
   void _handleTap(PosSidebarMenuItem item) {
-    if (item.action == PosSidebarAction.openShiftCloseModal) {
-      widget.onShiftCloseRequested();
-      return;
+    switch (item.action) {
+      case PosSidebarAction.openShiftCloseModal:
+        widget.onShiftCloseRequested();
+        return;
+      case PosSidebarAction.openPrinterSettings:
+        widget.onPrinterSettings?.call();
+        return;
+      case PosSidebarAction.logout:
+        widget.onLogout?.call();
+        return;
+      case PosSidebarAction.navigate:
+        widget.onRouteSelected(item.route);
+        navigateToAdminPath(item.route.path);
     }
-    widget.onRouteSelected(item.route);
-    navigateToAdminPath(item.route.path);
+  }
+
+  String _label(BuildContext context, PosSidebarMenuItem item) {
+    final s = AppStrings.of(context);
+    const labels = <String, String>{
+      'pos_home': 'Point of Sale / Orders',
+      'dine_in': 'Dining Tables',
+      'online_orders': 'Online / Customer Orders',
+      'driver_handoff': 'Driver Handoff / Delivery Payment',
+      'printer_settings': 'Printer Settings',
+      'close_shift': 'Close Shift',
+      'logout': 'Log out',
+      'shift_reports': 'Shift Reports',
+      'void_orders': 'Void Orders',
+      'manage_staff': 'Staff / Add Cashier',
+      'manage_menu': 'Menu & Items',
+    };
+    return s.tr(item.label, labels[item.id] ?? item.label);
   }
 
   @override
@@ -102,14 +134,13 @@ class _PosSidebarState extends State<PosSidebar> {
 
     final items = PosMenuCatalog.visibleItems(
       tableManagementEnabled: widget.tableManagementEnabled,
+      showLogout: widget.onLogout != null,
     );
 
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 260),
-      curve: Curves.easeInOutCubic,
+    return SizedBox(
       width: _effectiveWidth,
+      child: ColoredBox(
       color: PosSidebar.sidebarBg,
-      clipBehavior: Clip.hardEdge,
       child: SafeArea(
         child: Column(
           children: [
@@ -122,8 +153,16 @@ class _PosSidebarState extends State<PosSidebar> {
                       child: Padding(
                         padding: const EdgeInsets.all(12),
                         child: Text(
-                          _isCollapsed ? '' : 'لا توجد أدوات متاحة',
-                          style: const TextStyle(color: Colors.white54, fontSize: 12),
+                          _isCollapsed
+                              ? ''
+                              : AppStrings.of(context).tr(
+                                  'لا توجد أدوات متاحة',
+                                  'No tools available',
+                                ),
+                          style: const TextStyle(
+                            color: Colors.white54,
+                            fontSize: 12,
+                          ),
                           textAlign: TextAlign.center,
                         ),
                       ),
@@ -133,19 +172,24 @@ class _PosSidebarState extends State<PosSidebar> {
                         horizontal: _isCollapsed ? 8 : 10,
                       ),
                       itemCount: items.length,
-                      itemBuilder: (context, index) => _buildNavItem(items[index]),
+                      itemBuilder: (context, index) =>
+                          _buildNavItem(items[index]),
                     ),
+            ),
+            LanguageToggleButton(
+              compact: _isCollapsed,
+              foregroundColor: Colors.white,
             ),
             if (widget.enableCollapse) _buildCollapseToggle(),
           ],
         ),
       ),
+      ),
     );
   }
 
   Widget _buildHeader() {
-    return AnimatedPadding(
-      duration: const Duration(milliseconds: 260),
+    return Padding(
       padding: EdgeInsets.symmetric(
         vertical: 20,
         horizontal: _isCollapsed ? 10 : 16,
@@ -165,30 +209,27 @@ class _PosSidebarState extends State<PosSidebar> {
               size: 24,
             ),
           ),
-          AnimatedSwitcher(
-            duration: const Duration(milliseconds: 220),
-            child: _isCollapsed
-                ? const SizedBox.shrink(key: ValueKey('pos-logo-collapsed'))
-                : const Padding(
-                    key: ValueKey('pos-logo-expanded'),
-                    padding: EdgeInsetsDirectional.only(start: 10),
-                    child: Text(
-                      'POS',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-          ),
+          if (!_isCollapsed)
+            const Padding(
+              padding: EdgeInsetsDirectional.only(start: 10),
+              child: Text(
+                'POS',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
         ],
       ),
     );
   }
 
   Widget _buildNavItem(PosSidebarMenuItem item) {
-    final isActive = item.action == PosSidebarAction.navigate &&
+    final label = _label(context, item);
+    final isActive =
+        item.action == PosSidebarAction.navigate &&
         widget.selectedRoute == item.route;
 
     return Padding(
@@ -200,7 +241,7 @@ class _PosSidebarState extends State<PosSidebar> {
           borderRadius: BorderRadius.circular(12),
           onTap: () => _handleTap(item),
           child: Tooltip(
-            message: _isCollapsed ? item.label : '',
+            message: _isCollapsed ? label : '',
             preferBelow: false,
             child: Padding(
               padding: EdgeInsets.symmetric(
@@ -211,7 +252,9 @@ class _PosSidebarState extends State<PosSidebar> {
                   ? Center(
                       child: Icon(
                         item.icon,
-                        color: isActive ? PosSidebar.activeGold : Colors.white70,
+                        color: isActive
+                            ? PosSidebar.activeGold
+                            : Colors.white70,
                         size: 22,
                       ),
                     )
@@ -219,19 +262,22 @@ class _PosSidebarState extends State<PosSidebar> {
                       children: [
                         Icon(
                           item.icon,
-                          color: isActive ? PosSidebar.activeGold : Colors.white70,
+                          color: isActive
+                              ? PosSidebar.activeGold
+                              : Colors.white70,
                           size: 20,
                         ),
                         const SizedBox(width: 10),
                         Expanded(
                           child: Text(
-                            item.label,
+                            label,
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
                               color: isActive ? Colors.white : Colors.white70,
-                              fontWeight:
-                                  isActive ? FontWeight.bold : FontWeight.w500,
+                              fontWeight: isActive
+                                  ? FontWeight.bold
+                                  : FontWeight.w500,
                               fontSize: 13,
                               height: 1.25,
                             ),
@@ -256,6 +302,7 @@ class _PosSidebarState extends State<PosSidebar> {
   }
 
   Widget _buildCollapseToggle() {
+    final s = AppStrings.of(context);
     return Padding(
       padding: EdgeInsets.fromLTRB(
         _isCollapsed ? 8 : 10,
@@ -274,28 +321,25 @@ class _PosSidebarState extends State<PosSidebar> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                AnimatedRotation(
-                  turns: _isCollapsed ? 0.5 : 0,
-                  duration: const Duration(milliseconds: 260),
+                Transform.rotate(
+                  angle: _isCollapsed ? 3.14159 : 0,
                   child: const Icon(
                     Icons.chevron_left,
                     color: Colors.white70,
                     size: 22,
                   ),
                 ),
-                AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 200),
-                  child: _isCollapsed
-                      ? const SizedBox.shrink(key: ValueKey('pos-collapse-off'))
-                      : const Padding(
-                          key: ValueKey('pos-collapse-on'),
-                          padding: EdgeInsetsDirectional.only(start: 6),
-                          child: Text(
-                            'تصغير',
-                            style: TextStyle(color: Colors.white70, fontSize: 12),
-                          ),
-                        ),
-                ),
+                if (!_isCollapsed)
+                  Padding(
+                    padding: const EdgeInsetsDirectional.only(start: 6),
+                    child: Text(
+                      s.tr('تصغير', 'Collapse'),
+                      style: const TextStyle(
+                        color: Colors.white70,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
               ],
             ),
           ),

@@ -45,3 +45,51 @@ class PosOnlineOrdersAlertBar extends StatelessWidget {
     );
   }
 }
+
+/// Compact alert when a driver is at the till waiting for cash in/out.
+class PosDriverHandoffAlertBar extends StatelessWidget {
+  const PosDriverHandoffAlertBar({
+    super.key,
+    required this.pendingCount,
+    required this.onOpen,
+  });
+
+  final int pendingCount;
+  final VoidCallback onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    if (pendingCount <= 0) return const SizedBox.shrink();
+
+    return Material(
+      color: const Color(0xFFE8F5E9),
+      child: InkWell(
+        onTap: onOpen,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          child: Row(
+            children: [
+              const Icon(Icons.payments_outlined, color: Color(0xFF1B5E20)),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  pendingCount == 1
+                      ? 'سائق واحد بانتظار استلام/دفع النقدية عند الصندوق'
+                      : '$pendingCount سائقين بانتظار استلام/دفع النقدية عند الصندوق',
+                  style: const TextStyle(
+                    color: Color(0xFF1B5E20),
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+              TextButton(
+                onPressed: onOpen,
+                child: const Text('افتح الصندوق'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}

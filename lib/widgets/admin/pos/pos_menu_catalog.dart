@@ -8,6 +8,7 @@ enum PosRoute {
   home('/admin/pos'),
   dineIn('/admin/pos/dine-in'),
   orders('/admin/pos/orders'),
+  handoff('/admin/pos/driver-handoff'),
   shiftClose('/admin/pos/shift-close'),
   reports('/admin/pos/reports'),
   voidOrders('/admin/pos/void-orders'),
@@ -36,6 +37,8 @@ enum PosRoute {
 enum PosSidebarAction {
   navigate,
   openShiftCloseModal,
+  openPrinterSettings,
+  logout,
 }
 
 class PosSidebarMenuItem {
@@ -81,12 +84,35 @@ abstract final class PosMenuCatalog {
       route: PosRoute.orders,
     ),
     PosSidebarMenuItem(
+      id: 'driver_handoff',
+      icon: Icons.payments_outlined,
+      label: 'استلام من السائق / دفع التوصيل',
+      requiredPermission: PosPermissionKeys.receiveOnlineOrders,
+      route: PosRoute.handoff,
+    ),
+    PosSidebarMenuItem(
+      id: 'printer_settings',
+      icon: Icons.print_outlined,
+      label: 'إعدادات الطابعة',
+      requiredPermission: PosPermissionKeys.posAccess,
+      route: PosRoute.home,
+      action: PosSidebarAction.openPrinterSettings,
+    ),
+    PosSidebarMenuItem(
       id: 'close_shift',
       icon: Icons.lock_clock,
       label: 'إغلاق الوردية',
       requiredPermission: PosPermissionKeys.closeShift,
       route: PosRoute.shiftClose,
       action: PosSidebarAction.openShiftCloseModal,
+    ),
+    PosSidebarMenuItem(
+      id: 'logout',
+      icon: Icons.logout,
+      label: 'تسجيل الخروج',
+      requiredPermission: PosPermissionKeys.posAccess,
+      route: PosRoute.home,
+      action: PosSidebarAction.logout,
     ),
     PosSidebarMenuItem(
       id: 'shift_reports',
@@ -120,11 +146,19 @@ abstract final class PosMenuCatalog {
 
   static List<PosSidebarMenuItem> visibleItems({
     bool tableManagementEnabled = false,
+    bool showLogout = false,
   }) {
     final pos = PosOperationsService.instance;
     return allItems.where((item) {
+      if (item.action == PosSidebarAction.logout && !showLogout) {
+        return false;
+      }
       if (item.route == PosRoute.dineIn && !tableManagementEnabled) {
         return false;
+      }
+      if (item.action == PosSidebarAction.openPrinterSettings) {
+        return pos.allows(PosPermissionKeys.posAccess) ||
+            pos.allows(PosPermissionKeys.processOrders);
       }
       if (item.requiredPermission == PosPermissionKeys.posAccess) {
         return pos.allows(PosPermissionKeys.posAccess) ||

@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 
+import '../../../l10n/app_strings.dart';
+import '../../language_toggle_button.dart';
 import 'pos_menu_catalog.dart';
 import 'pos_sidebar.dart';
+import 'pos_theme.dart';
 
 /// POS shell: main content + collapsible permission-based sidebar (RTL right edge).
 class PosLayout extends StatelessWidget {
@@ -11,6 +14,8 @@ class PosLayout extends StatelessWidget {
     required this.onRouteSelected,
     required this.onShiftCloseRequested,
     required this.child,
+    this.onPrinterSettings,
+    this.onLogout,
     this.showSidebar = true,
     this.tableManagementEnabled = false,
   });
@@ -18,20 +23,30 @@ class PosLayout extends StatelessWidget {
   final PosRoute selectedRoute;
   final ValueChanged<PosRoute> onRouteSelected;
   final VoidCallback onShiftCloseRequested;
+  final VoidCallback? onPrinterSettings;
+  final VoidCallback? onLogout;
   final Widget child;
   final bool showSidebar;
   final bool tableManagementEnabled;
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(
+    return Theme(
+      data: Theme.of(context).copyWith(
+        pageTransitionsTheme: PosTheme.pageTransitions,
+        splashFactory: NoSplash.splashFactory,
+        highlightColor: Colors.transparent,
+      ),
+      child: LayoutBuilder(
       builder: (context, constraints) {
-        final compact = constraints.maxWidth < 900;
+        final compact = constraints.maxWidth < 1100;
 
-        if (!showSidebar ||
-            PosMenuCatalog.visibleItems(
-              tableManagementEnabled: tableManagementEnabled,
-            ).isEmpty) {
+        final hasSidebarItems = PosMenuCatalog.visibleItems(
+          tableManagementEnabled: tableManagementEnabled,
+          showLogout: onLogout != null,
+        ).isNotEmpty;
+
+        if (!showSidebar || !hasSidebarItems) {
           return child;
         }
 
@@ -46,6 +61,8 @@ class PosLayout extends StatelessWidget {
                   selectedRoute: selectedRoute,
                   onRouteSelected: onRouteSelected,
                   onShiftCloseRequested: onShiftCloseRequested,
+                  onPrinterSettings: onPrinterSettings,
+                  onLogout: onLogout,
                   enableCollapse: false,
                   tableManagementEnabled: tableManagementEnabled,
                 ),
@@ -56,12 +73,23 @@ class PosLayout extends StatelessWidget {
               children: [
                 Material(
                   color: const Color(0xFF6B1124),
-                  child: Builder(
-                    builder: (context) => IconButton(
-                      onPressed: () => Scaffold.of(context).openDrawer(),
-                      icon: const Icon(Icons.menu, color: Colors.white),
-                      tooltip: 'أدوات POS',
-                    ),
+                  child: Row(
+                    children: [
+                      Builder(
+                        builder: (context) => IconButton(
+                          onPressed: () => Scaffold.of(context).openDrawer(),
+                          icon: const Icon(Icons.menu, color: Colors.white),
+                          tooltip: AppStrings.of(
+                            context,
+                          ).tr('أدوات POS', 'POS tools'),
+                        ),
+                      ),
+                      const Spacer(),
+                      const LanguageToggleButton(
+                        compact: true,
+                        foregroundColor: Colors.white,
+                      ),
+                    ],
                   ),
                 ),
                 Expanded(child: child),
@@ -77,12 +105,15 @@ class PosLayout extends StatelessWidget {
               selectedRoute: selectedRoute,
               onRouteSelected: onRouteSelected,
               onShiftCloseRequested: onShiftCloseRequested,
+              onPrinterSettings: onPrinterSettings,
+              onLogout: onLogout,
               tableManagementEnabled: tableManagementEnabled,
             ),
             Expanded(child: child),
           ],
         );
       },
+    ),
     );
   }
 }

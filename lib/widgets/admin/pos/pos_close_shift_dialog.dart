@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../models/delivery_dispatch.dart';
 import '../../../models/order.dart';
 import '../../../models/shift_session.dart';
 import '../../../services/api_service.dart';
@@ -17,7 +18,15 @@ Future<ShiftSession?> showPosCloseShiftDialog(
   );
 }
 
-ShiftSummary _summarizeOrders(List<Order> orders, ShiftSession shift) {
+ShiftSummary _summarizeOrders(
+  List<Order> orders,
+  ShiftSession shift, [
+  List<DeliveryDispatchRequest> requests = const [],
+]) {
+  final byOrderId = <String, DeliveryDispatchRequest>{
+    for (final request in requests)
+      if ((request.orderId ?? '').trim().isNotEmpty) request.orderId!.trim(): request,
+  };
   final scoped = orders.where((order) => order.shiftId == shift.id);
   var orderCount = 0;
   var voidCount = 0;
@@ -25,6 +34,7 @@ ShiftSummary _summarizeOrders(List<Order> orders, ShiftSession shift) {
   var knetSales = 0.0;
   var electronicSales = 0.0;
   var refundTotal = 0.0;
+  var deliveryExpenses = 0.0;
 
   for (final order in scoped) {
     if (order.status == OrderStatus.cancelled) {
@@ -40,9 +50,20 @@ ShiftSummary _summarizeOrders(List<Order> orders, ShiftSession shift) {
     } else if ((order.paymentMethod ?? '').trim().isNotEmpty) {
       electronicSales += total;
     }
+
+    final request = byOrderId[order.id];
+    final assigned = (order.assignedDriverId ?? request?.assignedDriverId ?? '').trim();
+    final delivered = order.status == OrderStatus.delivered ||
+        (order.deliveryStatus ?? '').toLowerCase() == 'delivered' ||
+        request?.status == 'delivered';
+    if (assigned.isNotEmpty && delivered) {
+      final fee = order.driverFee ?? request?.driverFee ?? 0;
+      if (fee > 0) deliveryExpenses += fee;
+    }
   }
 
-  final expectedCash = shift.openingFloat + cashSales - refundTotal;
+  final expectedCash =
+      shift.openingFloat + cashSales - refundTotal - deliveryExpenses;
   return ShiftSummary(
     orderCount: orderCount,
     voidCount: voidCount,
@@ -50,6 +71,7 @@ ShiftSummary _summarizeOrders(List<Order> orders, ShiftSession shift) {
     knetSales: knetSales,
     electronicSales: electronicSales,
     refundTotal: refundTotal,
+    deliveryExpenses: deliveryExpenses,
     expectedCash: expectedCash,
     grossSales: cashSales + knetSales + electronicSales,
   );
@@ -90,19 +112,22 @@ class _PosCloseShiftDialogState extends State<_PosCloseShiftDialog> {
 
   Future<void> _refreshSummary() async {
     try {
-      final results = await Future.wait([
-        PosOperationsService.instance.fetchCurrentShift(
-          cashierId: widget.shift.cashierId,
-        ),
-        ApiService.instance.fetchOrders(),
-      ]);
+      final liveFuture = PosOperationsService.instance.fetchCurrentShift(
+        cashierId: widget.shift.cashierId,
+      );
+      final ordersFuture = ApiService.instance.fetchOrders();
+      final requestsFuture = ApiService.instance.fetchDeliveryRequests().catchError(
+        (_) => <DeliveryDispatchRequest>[],
+      );
+      final results = await Future.wait([liveFuture, ordersFuture, requestsFuture]);
       if (!mounted) return;
       final live = results[0] as ShiftSession?;
       final orders = results[1] as List<Order>;
+      final requests = results[2] as List<DeliveryDispatchRequest>;
       final shift = live ?? widget.shift;
       setState(() {
         _shift = shift;
-        _summary = _summarizeOrders(orders, shift);
+        _summary = _summarizeOrders(orders, shift, requests);
         _loadingSummary = false;
       });
     } catch (_) {
@@ -151,7 +176,9 @@ class _PosCloseShiftDialogState extends State<_PosCloseShiftDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final summary = _summary.orderCount > 0 || _summary.cashSales > 0
+    final summary = _summary.orderCount > 0 ||
+            _summary.cashSales > 0 ||
+            _summary.deliveryExpenses > 0
         ? _summary
         : ShiftSummary(
             orderCount: _shift.summary.orderCount,
@@ -160,12 +187,17 @@ class _PosCloseShiftDialogState extends State<_PosCloseShiftDialog> {
             knetSales: _shift.summary.knetSales,
             electronicSales: _shift.summary.electronicSales,
             refundTotal: _shift.summary.refundTotal,
+            deliveryExpenses: _shift.summary.deliveryExpenses,
             expectedCash: _shift.openingFloat +
                 _shift.summary.cashSales -
-                _shift.summary.refundTotal,
+                _shift.summary.refundTotal -
+                _shift.summary.deliveryExpenses,
             grossSales: _shift.summary.grossSales,
           );
-    final expectedCash = _shift.openingFloat + summary.cashSales - summary.refundTotal;
+    final expectedCash = _shift.openingFloat +
+        summary.cashSales -
+        summary.refundTotal -
+        summary.deliveryExpenses;
 
     return AlertDialog(
       title: const Text('إغلاق الوردية — جرد مالي'),
@@ -205,6 +237,10 @@ class _PosCloseShiftDialogState extends State<_PosCloseShiftDialog> {
                   '${summary.refundTotal.toStringAsFixed(3)} د.ك',
                 ),
                 _summaryRow('إلغاءات', '${summary.voidCount}'),
+                _summaryRow(
+                  'مصاريف التوصيل (أجرة السائق)',
+                  '- ${summary.deliveryExpenses.toStringAsFixed(3)} د.ك',
+                ),
                 const Divider(),
                 _summaryRow(
                   'النقد المتوقع',
@@ -271,6 +307,10 @@ Future<void> showShiftSummaryDialog(BuildContext context, ShiftSession shift) {
           _summaryRow('مبيعات إلكترونية', '${summary.electronicSales.toStringAsFixed(3)} د.ك'),
           _summaryRow('مرتجعات', '${summary.refundTotal.toStringAsFixed(3)} د.ك'),
           _summaryRow('إلغاءات', '${summary.voidCount}'),
+          _summaryRow(
+            'مصاريف التوصيل (أجرة السائق)',
+            '- ${summary.deliveryExpenses.toStringAsFixed(3)} د.ك',
+          ),
           const Divider(),
           _summaryRow('النقد المتوقع', '${summary.expectedCash.toStringAsFixed(3)} د.ك'),
           _summaryRow('النقد الفعلي', '${summary.actualCash.toStringAsFixed(3)} د.ك'),

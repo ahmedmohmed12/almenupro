@@ -8,7 +8,9 @@ import '../../network_menu_image.dart';
 import '../../menu/product_sale_price.dart';
 import 'pos_theme.dart';
 
-class PosMenuItemCard extends StatefulWidget {
+export '../../../services/pos/pos_catalog_match.dart';
+
+class PosMenuItemCard extends StatelessWidget {
   const PosMenuItemCard({
     super.key,
     required this.item,
@@ -20,101 +22,108 @@ class PosMenuItemCard extends StatefulWidget {
   final VoidCallback onTap;
   final bool compact;
 
-  @override
-  State<PosMenuItemCard> createState() => _PosMenuItemCardState();
-}
-
-class _PosMenuItemCardState extends State<PosMenuItemCard> {
-  var _pressed = false;
+  bool get _hasRequiredMods =>
+      item.options.any((o) => o.isAvailable && o.isGroupRequired);
 
   @override
   Widget build(BuildContext context) {
-    final item = widget.item;
-    return GestureDetector(
-      onTapDown: (_) => setState(() => _pressed = true),
-      onTapUp: (_) {
-        setState(() => _pressed = false);
-        widget.onTap();
-      },
-      onTapCancel: () => setState(() => _pressed = false),
-      child: AnimatedScale(
-        scale: _pressed ? 0.96 : 1,
-        duration: const Duration(milliseconds: 90),
-        child: Container(
-          decoration: PosTheme.card(),
-          clipBehavior: Clip.antiAlias,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Expanded(
-                child: Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    NetworkMenuImage(imageUrl: item.imageUrl, fit: BoxFit.cover),
-                    if (item.hasDiscount && item.discountPercent != null)
-                      Positioned(
-                        top: 6,
-                        left: 6,
-                        child: ProductDiscountBadge(
-                          percent: item.discountPercent!,
-                          compact: true,
-                        ),
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        child: RepaintBoundary(
+          child: Container(
+            decoration: PosTheme.card(radius: 10),
+            clipBehavior: Clip.antiAlias,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Expanded(
+                  flex: 58,
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      NetworkMenuImage(
+                        imageUrl: item.imageUrl,
+                        fit: BoxFit.cover,
                       ),
-                    if (item.hasCustomizations)
-                      Positioned(
-                        top: 6,
-                        right: 6,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 6,
-                            vertical: 2,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.black54,
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: const Icon(
-                            Icons.tune,
-                            size: 12,
-                            color: Colors.white,
+                      if (item.hasDiscount && item.discountPercent != null)
+                        Positioned(
+                          top: 4,
+                          left: 4,
+                          child: ProductDiscountBadge(
+                            percent: item.discountPercent!,
+                            compact: true,
                           ),
                         ),
-                      ),
-                  ],
+                      if (item.hasCustomizations)
+                        Positioned(
+                          top: 4,
+                          right: 4,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 5,
+                              vertical: 2,
+                            ),
+                            decoration: BoxDecoration(
+                              color: _hasRequiredMods
+                                  ? PosTheme.orange
+                                  : Colors.black54,
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: const Icon(
+                              Icons.tune_rounded,
+                              size: 11,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
                 ),
-              ),
-              Container(
-                color: PosTheme.surfaceAlt,
-                padding: EdgeInsets.all(widget.compact ? 6 : 10),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      item.name,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontWeight: FontWeight.w700,
-                        fontSize: widget.compact ? 11 : 13,
-                        height: 1.2,
-                      ),
+                Expanded(
+                  flex: 42,
+                  child: Container(
+                    color: PosTheme.surface,
+                    padding: EdgeInsets.fromLTRB(
+                      compact ? 5 : 6,
+                      compact ? 4 : 5,
+                      compact ? 5 : 6,
+                      compact ? 4 : 5,
                     ),
-                    const SizedBox(height: 4),
-                    if (item.hasDiscount)
-                      ProductSalePrice(item: item, compact: widget.compact)
-                    else
-                      Text(
-                        '${item.price.toStringAsFixed(3)} د.ك',
-                        style: const TextStyle(
-                          color: PosTheme.accent,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 12,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: Text(
+                            item.name,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontWeight: FontWeight.w800,
+                              fontSize: compact ? 11 : 12,
+                              height: 1.15,
+                              color: PosTheme.textPrimary,
+                            ),
+                          ),
                         ),
-                      ),
-                  ],
+                        if (item.hasDiscount)
+                          ProductSalePrice(item: item, compact: true)
+                        else
+                          Text(
+                            '${item.price.toStringAsFixed(3)} د.ك',
+                            style: TextStyle(
+                              color: PosTheme.orange,
+                              fontWeight: FontWeight.w800,
+                              fontSize: compact ? 11.5 : 12.5,
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -122,7 +131,7 @@ class _PosMenuItemCardState extends State<PosMenuItemCard> {
   }
 }
 
-class PosQuickItemChip extends StatefulWidget {
+class PosQuickItemChip extends StatelessWidget {
   const PosQuickItemChip({
     super.key,
     required this.item,
@@ -133,25 +142,10 @@ class PosQuickItemChip extends StatefulWidget {
   final VoidCallback onTap;
 
   @override
-  State<PosQuickItemChip> createState() => _PosQuickItemChipState();
-}
-
-class _PosQuickItemChipState extends State<PosQuickItemChip> {
-  var _pressed = false;
-
-  @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTapDown: (_) => setState(() => _pressed = true),
-      onTapUp: (_) {
-        setState(() => _pressed = false);
-        widget.onTap();
-      },
-      onTapCancel: () => setState(() => _pressed = false),
-      child: AnimatedScale(
-        scale: _pressed ? 0.95 : 1,
-        duration: const Duration(milliseconds: 80),
-        child: Container(
+      onTap: onTap,
+      child: Container(
           width: 108,
           decoration: PosTheme.card(color: PosTheme.quickStrip),
           clipBehavior: Clip.antiAlias,
@@ -161,7 +155,7 @@ class _PosQuickItemChipState extends State<PosQuickItemChip> {
               SizedBox(
                 height: 56,
                 child: NetworkMenuImage(
-                  imageUrl: widget.item.imageUrl,
+                  imageUrl: item.imageUrl,
                   fit: BoxFit.cover,
                 ),
               ),
@@ -171,7 +165,7 @@ class _PosQuickItemChipState extends State<PosQuickItemChip> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      widget.item.name,
+                      item.name,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
@@ -180,7 +174,7 @@ class _PosQuickItemChipState extends State<PosQuickItemChip> {
                       ),
                     ),
                     Text(
-                      widget.item.price.toStringAsFixed(3),
+                      item.price.toStringAsFixed(3),
                       style: const TextStyle(
                         fontSize: 10,
                         color: PosTheme.accent,
@@ -193,7 +187,6 @@ class _PosQuickItemChipState extends State<PosQuickItemChip> {
             ],
           ),
         ),
-      ),
     );
   }
 }
@@ -205,28 +198,33 @@ class PosCategoryTile extends StatelessWidget {
     required this.icon,
     required this.selected,
     required this.onTap,
+    this.compact = false,
   });
 
   final String label;
   final IconData icon;
   final bool selected;
   final VoidCallback onTap;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 6),
+      padding: EdgeInsets.only(bottom: compact ? 4 : 6),
       child: Material(
         color: selected ? PosTheme.accentSoft : PosTheme.surface,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(compact ? 10 : 12),
         child: InkWell(
           onTap: onTap,
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(compact ? 10 : 12),
           child: Container(
             width: double.infinity,
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+            padding: EdgeInsets.symmetric(
+              horizontal: compact ? 8 : 10,
+              vertical: compact ? 8 : 12,
+            ),
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(compact ? 10 : 12),
               border: Border.all(
                 color: selected ? PosTheme.accent : PosTheme.border,
                 width: selected ? 1.5 : 1,
@@ -236,7 +234,7 @@ class PosCategoryTile extends StatelessWidget {
               children: [
                 Icon(
                   icon,
-                  size: 18,
+                  size: compact ? 16 : 18,
                   color: selected ? PosTheme.accent : PosTheme.textMuted,
                 ),
                 const SizedBox(width: 8),
@@ -296,14 +294,13 @@ class PosCartLine extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final addons = item.selectedOptions
-        .map((o) => '${o.name} (+${o.price.toStringAsFixed(3)})')
-        .join(' · ');
+    final variant = item.menuItem.categoryName.trim();
+    final modifiers = item.selectedOptions;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.all(10),
-      decoration: PosTheme.card(color: PosTheme.surfaceAlt),
+      padding: const EdgeInsets.fromLTRB(12, 10, 8, 10),
+      decoration: PosTheme.card(color: PosTheme.surface, radius: 12),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -314,32 +311,58 @@ class PosCartLine extends StatelessWidget {
                 Text(
                   item.menuItem.name,
                   style: const TextStyle(
-                    fontWeight: FontWeight.w700,
-                    fontSize: 14,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 14.5,
+                    color: PosTheme.textPrimary,
                   ),
                 ),
-                if (addons.isNotEmpty)
+                if (variant.isNotEmpty) ...[
+                  const SizedBox(height: 2),
                   Text(
-                    addons,
+                    variant,
                     style: const TextStyle(
-                      fontSize: 11,
+                      fontSize: 11.5,
                       color: PosTheme.textMuted,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
-                if (item.specialNotes?.trim().isNotEmpty ?? false)
+                ],
+                if (modifiers.isNotEmpty) ...[
+                  const SizedBox(height: 6),
+                  ...modifiers.map(
+                    (option) => Padding(
+                      padding: const EdgeInsets.only(bottom: 2),
+                      child: Text(
+                        option.price > 0
+                            ? '+ ${option.name}  (${option.price.toStringAsFixed(3)})'
+                            : '+ ${option.name}',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: PosTheme.textMuted,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+                if (item.specialNotes?.trim().isNotEmpty ?? false) ...[
+                  const SizedBox(height: 4),
                   Text(
                     'ملاحظة: ${item.specialNotes!.trim()}',
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: Colors.orange.shade800,
+                    style: const TextStyle(
+                      fontSize: 11.5,
+                      color: PosTheme.orange,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
-                const SizedBox(height: 4),
+                ],
+                const SizedBox(height: 6),
                 Text(
-                  '${item.unitPrice.toStringAsFixed(3)} × ${item.quantity}',
+                  '${item.totalPrice.toStringAsFixed(3)} د.ك',
                   style: const TextStyle(
-                    fontWeight: FontWeight.w600,
-                    color: PosTheme.accent,
+                    fontWeight: FontWeight.w800,
+                    color: PosTheme.orange,
+                    fontSize: 13.5,
                   ),
                 ),
               ],
@@ -428,16 +451,8 @@ class _QtyCircle extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTapDown: (_) => onPressChange(true),
-      onTapUp: (_) {
-        onPressChange(false);
-        onTap();
-      },
-      onTapCancel: () => onPressChange(false),
-      child: AnimatedScale(
-        scale: pressed ? 0.88 : 1,
-        duration: const Duration(milliseconds: 80),
-        child: Container(
+      onTap: onTap,
+      child: Container(
           width: 36,
           height: 36,
           decoration: BoxDecoration(
@@ -454,7 +469,6 @@ class _QtyCircle extends StatelessWidget {
             color: filled ? Colors.white : PosTheme.accent,
           ),
         ),
-      ),
     );
   }
 }
@@ -512,7 +526,9 @@ class PosStyleChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ChoiceChip(
-      visualDensity: VisualDensity.compact,
+      visualDensity: const VisualDensity(horizontal: -2, vertical: -2),
+      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 0),
       avatar: Icon(
         icon,
         size: 16,
@@ -521,8 +537,8 @@ class PosStyleChip extends StatelessWidget {
       label: Text(
         label,
         style: TextStyle(
-          fontSize: 11,
-          fontWeight: FontWeight.w600,
+          fontSize: 12,
+          fontWeight: FontWeight.w700,
           color: selected ? Colors.white : const Color(0xFF1A1A1A),
         ),
       ),
@@ -601,10 +617,12 @@ class PosShortcutHint extends StatelessWidget {
       spacing: 8,
       runSpacing: 4,
       children: const [
+        _HintBadge('Enter', 'فاتورة'),
+        _HintBadge('Shift+Enter', 'مطبخ'),
         _HintBadge('F2', 'فاتورة'),
         _HintBadge('F4', 'بحث'),
         _HintBadge('F8', 'تفريغ'),
-        _HintBadge('Esc', 'إلغاء'),
+        _HintBadge('Esc', 'تفريغ'),
       ],
     );
   }
@@ -642,6 +660,10 @@ class PosSubmitIntent extends Intent {
   const PosSubmitIntent();
 }
 
+class PosKitchenIntent extends Intent {
+  const PosKitchenIntent();
+}
+
 class PosClearCartIntent extends Intent {
   const PosClearCartIntent();
 }
@@ -650,40 +672,11 @@ class PosClearSearchIntent extends Intent {
   const PosClearSearchIntent();
 }
 
-/// Matches menu item by name prefix, initials, or barcode/id.
-bool posMatchesSearch(MenuItem item, String query) {
-  final q = query.trim().toLowerCase();
-  if (q.isEmpty) return true;
-
-  if (item.talabatId?.toString() == q || item.id.toString() == q) {
-    return true;
-  }
-
-  final names = [
-    item.name.toLowerCase(),
-    item.nameAr.toLowerCase(),
-    item.nameEn.toLowerCase(),
-  ];
-
-  for (final name in names) {
-    if (name.startsWith(q) || name.contains(q)) return true;
-    final initials = name
-        .split(RegExp(r'\s+'))
-        .where((w) => w.isNotEmpty)
-        .map((w) => w.characters.first)
-        .join();
-    if (initials.startsWith(q)) return true;
-  }
-  return false;
-}
-
-MenuItem? posFindBarcodeMatch(List<MenuItem> items, String query) {
-  final q = query.trim();
-  if (q.isEmpty) return null;
-  for (final item in items) {
-    if (item.talabatId?.toString() == q || item.id.toString() == q) {
-      return item;
-    }
-  }
-  return null;
+/// True when the primary focus is inside a text editing control.
+bool posIsEditingText() {
+  final primary = FocusManager.instance.primaryFocus;
+  if (primary == null) return false;
+  final context = primary.context;
+  if (context == null) return false;
+  return context.findAncestorWidgetOfExactType<EditableText>() != null;
 }

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../../l10n/app_strings.dart';
 import '../../../models/invoice_language.dart';
 import '../../../services/pos_print_helper.dart';
 import '../../../services/pos_print_settings_service.dart';
@@ -22,6 +23,7 @@ class PosPrinterSettingsDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final s = AppStrings.of(context);
     final maxH = MediaQuery.sizeOf(context).height * 0.88;
     final maxW = MediaQuery.sizeOf(context).width;
 
@@ -33,10 +35,13 @@ class PosPrinterSettingsDialog extends StatelessWidget {
         children: [
           const Icon(Icons.print_outlined, color: burgundy),
           const SizedBox(width: 8),
-          const Expanded(
+          Expanded(
             child: Text(
-              'إعدادات الطابعة الحرارية',
-              style: TextStyle(fontWeight: FontWeight.w800, color: burgundy),
+              s.tr('إعدادات الطابعة الحرارية', 'Thermal Printer Settings'),
+              style: const TextStyle(
+                fontWeight: FontWeight.w800,
+                color: burgundy,
+              ),
             ),
           ),
           IconButton(
@@ -124,7 +129,13 @@ class _PosPrinterSettingsFormState extends State<PosPrinterSettingsForm> {
     );
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('تم حفظ إعدادات الطابعة')),
+      SnackBar(
+        content: Text(
+          AppStrings.read(
+            context,
+          ).tr('تم حفظ إعدادات الطابعة', 'Printer settings saved'),
+        ),
+      ),
     );
     if (widget.embedded) Navigator.pop(context);
   }
@@ -143,6 +154,7 @@ class _PosPrinterSettingsFormState extends State<PosPrinterSettingsForm> {
 
   @override
   Widget build(BuildContext context) {
+    final s = AppStrings.of(context);
     if (_loading) {
       return const SizedBox(
         height: 160,
@@ -154,23 +166,29 @@ class _PosPrinterSettingsFormState extends State<PosPrinterSettingsForm> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Text(
-          'لغة الطباعة تُحفظ للمطعم. مقاس الورق والنسخ تُحفظ على هذا الجهاز.',
+          s.tr(
+            'لغة الطباعة تُحفظ للمطعم. مقاس الورق والنسخ تُحفظ على هذا الجهاز.',
+            'Receipt language is saved for the restaurant. Paper size and copies are saved on this device.',
+          ),
           style: TextStyle(color: Colors.grey.shade700, height: 1.35),
         ),
         const SizedBox(height: 16),
-        const Text('لغة الفاتورة', style: TextStyle(fontWeight: FontWeight.w700)),
+        Text(
+          s.tr('لغة الفاتورة', 'Invoice language'),
+          style: const TextStyle(fontWeight: FontWeight.w700),
+        ),
         const SizedBox(height: 8),
         SegmentedButton<InvoiceLanguage>(
-          segments: const [
+          segments: [
             ButtonSegment(
               value: InvoiceLanguage.arabic,
-              label: Text('العربية'),
-              icon: Icon(Icons.language),
+              label: Text(s.tr('العربية', 'Arabic')),
+              icon: const Icon(Icons.language),
             ),
             ButtonSegment(
               value: InvoiceLanguage.english,
-              label: Text('English'),
-              icon: Icon(Icons.translate),
+              label: Text(s.tr('الإنجليزية', 'English')),
+              icon: const Icon(Icons.translate),
             ),
           ],
           selected: {_invoiceLanguage},
@@ -182,26 +200,35 @@ class _PosPrinterSettingsFormState extends State<PosPrinterSettingsForm> {
         const SizedBox(height: 8),
         Text(
           _invoiceLanguage.isArabic
-              ? 'فواتير الكاشير والمطبخ ستُطبع بالعربية.'
-              : 'Cashier and kitchen receipts will print in English.',
+              ? s.tr(
+                  'فواتير الكاشير والمطبخ ستُطبع بالعربية.',
+                  'Cashier and kitchen receipts will print in Arabic.',
+                )
+              : s.tr(
+                  'فواتير الكاشير والمطبخ ستُطبع بالإنجليزية.',
+                  'Cashier and kitchen receipts will print in English.',
+                ),
           style: TextStyle(color: Colors.grey.shade700, fontSize: 13),
         ),
         const SizedBox(height: 16),
-        const Text('مقاس الورق', style: TextStyle(fontWeight: FontWeight.w700)),
+        Text(
+          s.tr('مقاس الورق', 'Paper size'),
+          style: const TextStyle(fontWeight: FontWeight.w700),
+        ),
         const SizedBox(height: 8),
         SegmentedButton<PosPrintPaperPreset>(
-          segments: const [
-            ButtonSegment(
+          segments: [
+            const ButtonSegment(
               value: PosPrintPaperPreset.mm58,
               label: Text('58mm'),
             ),
-            ButtonSegment(
+            const ButtonSegment(
               value: PosPrintPaperPreset.mm80,
               label: Text('80mm'),
             ),
             ButtonSegment(
               value: PosPrintPaperPreset.custom,
-              label: Text('مخصص'),
+              label: Text(s.tr('مخصص', 'Custom')),
             ),
           ],
           selected: {_draft.paperPreset},
@@ -218,17 +245,20 @@ class _PosPrinterSettingsFormState extends State<PosPrinterSettingsForm> {
             inputFormatters: [
               FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
             ],
-            decoration: const InputDecoration(
-              labelText: 'العرض بالمليمتر',
+            decoration: InputDecoration(
+              labelText: s.tr('العرض بالمليمتر', 'Width in millimeters'),
               hintText: '80',
-              border: OutlineInputBorder(),
+              border: const OutlineInputBorder(),
               suffixText: 'mm',
             ),
             onChanged: (_) => setState(() {}),
           ),
         ],
         const SizedBox(height: 16),
-        const Text('عدد النسخ', style: TextStyle(fontWeight: FontWeight.w700)),
+        Text(
+          s.tr('عدد النسخ', 'Number of copies'),
+          style: const TextStyle(fontWeight: FontWeight.w700),
+        ),
         Row(
           children: [
             Expanded(
@@ -260,12 +290,24 @@ class _PosPrinterSettingsFormState extends State<PosPrinterSettingsForm> {
           ],
         ),
         const SizedBox(height: 8),
-        const Text('حجم الخط', style: TextStyle(fontWeight: FontWeight.w700)),
+        Text(
+          s.tr('حجم الخط', 'Font size'),
+          style: const TextStyle(fontWeight: FontWeight.w700),
+        ),
         const SizedBox(height: 8),
         SegmentedButton<PosPrintFontSize>(
           segments: [
             for (final size in PosPrintFontSize.values)
-              ButtonSegment(value: size, label: Text(size.labelAr)),
+              ButtonSegment(
+                value: size,
+                label: Text(
+                  s.tr(size.labelAr, switch (size) {
+                    PosPrintFontSize.small => 'Small',
+                    PosPrintFontSize.medium => 'Medium',
+                    PosPrintFontSize.large => 'Large',
+                  }),
+                ),
+              ),
           ],
           selected: {_draft.fontSize},
           onSelectionChanged: (value) {
@@ -276,48 +318,64 @@ class _PosPrinterSettingsFormState extends State<PosPrinterSettingsForm> {
         const SizedBox(height: 12),
         SwitchListTile.adaptive(
           contentPadding: EdgeInsets.zero,
-          title: const Text('طباعة فاتورة العميل تلقائياً بعد الدفع'),
+          title: Text(
+            s.tr(
+              'طباعة فاتورة العميل تلقائياً بعد الدفع',
+              'Automatically print customer receipt after payment',
+            ),
+          ),
           value: _draft.autoPrintCustomer,
           activeThumbColor: _burgundy,
           onChanged: (value) {
-            setState(
-              () => _draft = _draft.copyWith(autoPrintCustomer: value),
-            );
+            setState(() => _draft = _draft.copyWith(autoPrintCustomer: value));
           },
         ),
         SwitchListTile.adaptive(
           contentPadding: EdgeInsets.zero,
-          title: const Text('طباعة تذكرة المطبخ تلقائياً'),
+          title: Text(
+            s.tr(
+              'طباعة تذكرة المطبخ تلقائياً',
+              'Automatically print kitchen ticket',
+            ),
+          ),
           value: _draft.autoPrintKitchen,
           activeThumbColor: _burgundy,
           onChanged: (value) {
-            setState(
-              () => _draft = _draft.copyWith(autoPrintKitchen: value),
-            );
+            setState(() => _draft = _draft.copyWith(autoPrintKitchen: value));
           },
         ),
         const SizedBox(height: 8),
-        const Text(
-          'طابعة QZ Tray (طباعة صامتة)',
-          style: TextStyle(fontWeight: FontWeight.w700),
+        Text(
+          s.tr('طابعة QZ Tray (طباعة صامتة)', 'QZ Tray (silent printing)'),
+          style: const TextStyle(fontWeight: FontWeight.w700),
         ),
         const SizedBox(height: 6),
         TextField(
           controller: _qzPrinterController,
-          decoration: const InputDecoration(
-            hintText: 'اسم الطابعة — اتركه فارغاً للافتراضي',
-            border: OutlineInputBorder(),
+          decoration: InputDecoration(
+            hintText: s.tr(
+              'اسم الطابعة — اتركه فارغاً للافتراضي',
+              'Printer name — leave blank for default',
+            ),
+            border: const OutlineInputBorder(),
             isDense: true,
           ),
         ),
         const SizedBox(height: 6),
         Text(
-          'إن كان QZ Tray شغال على الجهاز تُطبع الفاتورة صامتة. وإلا تُستخدم طباعة المتصفح 80مم تلقائياً.',
-          style: TextStyle(color: Colors.grey.shade700, fontSize: 12, height: 1.35),
+          s.tr(
+            'إن كان QZ Tray شغال على الجهاز تُطبع الفاتورة صامتة. وإلا تُستخدم طباعة المتصفح 80مم تلقائياً.',
+            'When QZ Tray is running, receipts print silently. Otherwise, 80mm browser printing is used.',
+          ),
+          style: TextStyle(
+            color: Colors.grey.shade700,
+            fontSize: 12,
+            height: 1.35,
+          ),
         ),
         const SizedBox(height: 8),
         Text(
-          'العرض الفعّال: ${_effectiveWidth.toStringAsFixed(2)} mm',
+          '${s.tr('العرض الفعّال', 'Effective width')}: ${_effectiveWidth.toStringAsFixed(2)} mm',
           style: TextStyle(color: Colors.grey.shade700, fontSize: 12),
         ),
         const SizedBox(height: 16),
@@ -327,7 +385,7 @@ class _PosPrinterSettingsFormState extends State<PosPrinterSettingsForm> {
               child: OutlinedButton.icon(
                 onPressed: _printTest,
                 icon: const Icon(Icons.receipt_long),
-                label: const Text('تجربة طباعة'),
+                label: Text(s.tr('تجربة طباعة', 'Test print')),
               ),
             ),
             const SizedBox(width: 10),
@@ -335,7 +393,7 @@ class _PosPrinterSettingsFormState extends State<PosPrinterSettingsForm> {
               child: FilledButton(
                 style: FilledButton.styleFrom(backgroundColor: _burgundy),
                 onPressed: _save,
-                child: const Text('حفظ'),
+                child: Text(s.tr('حفظ', 'Save')),
               ),
             ),
           ],
