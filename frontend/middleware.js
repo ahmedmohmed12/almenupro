@@ -4,35 +4,51 @@ const SOCIAL_CRAWLER_PATTERN =
 const DEFAULT_BACKEND_ORIGIN = 'https://backend-henna-chi-76.vercel.app';
 
 export const config = {
-  matcher: ['/menu/:path*', '/restaurant/:path*', '/:slug'],
+  matcher: ['/menu/:path*', '/restaurant/:path*', '/r/:path*', '/:slug'],
 };
 
 function isSocialCrawler(userAgent) {
   return SOCIAL_CRAWLER_PATTERN.test(String(userAgent || ''));
 }
 
-function parseMenuSlugFromPath(pathname) {
+function parseRestaurantOgRequest(pathname) {
   const path = String(pathname || '').replace(/\/+$/, '') || '/';
   const segments = path.split('/').filter(Boolean);
   if (segments.length === 0) return null;
 
+  const reserved = new Set([
+    'admin',
+    'legacy-menu',
+    'menu',
+    'restaurant',
+    'api',
+    'og',
+    'r',
+    'links',
+    'login',
+    'create',
+    'customers',
+  ]);
+
   if (segments.length === 1) {
     const slug = segments[0].toLowerCase();
-    if (
-      ['admin', 'legacy-menu', 'menu', 'restaurant', 'api', 'og'].includes(slug) ||
-      slug.includes('.')
-    ) {
-      return null;
-    }
-    return slug;
+    if (reserved.has(slug) || slug.includes('.')) return null;
+    return { slug, kind: 'menu' };
   }
 
-  if (segments.length >= 2) {
-    const prefix = segments[0].toLowerCase();
-    if (prefix === 'menu' || prefix === 'restaurant') {
-      const slug = segments[1].toLowerCase();
-      return slug.includes('.') ? null : slug;
-    }
+  const prefix = segments[0].toLowerCase();
+  if (prefix === 'menu' || prefix === 'restaurant') {
+    const slug = segments[1]?.toLowerCase();
+    if (!slug || reserved.has(slug) || slug.includes('.')) return null;
+    return { slug, kind: 'menu' };
+  }
+
+  if (prefix === 'r') {
+    const slug = segments[1]?.toLowerCase();
+    if (!slug || reserved.has(slug) || slug.includes('.')) return null;
+    const isLinks =
+      segments.length >= 3 && segments[2].toLowerCase() === 'links';
+    return { slug, kind: isLinks ? 'links' : 'menu' };
   }
 
   return null;
@@ -51,15 +67,19 @@ export default async function middleware(request) {
       return passThrough();
     }
 
-    const slug = parseMenuSlugFromPath(url.pathname);
-    if (!slug) {
+    const parsed = parseRestaurantOgRequest(url.pathname);
+    if (!parsed?.slug) {
       return passThrough();
     }
 
     const backendOrigin = (
       process.env.BACKEND_ORIGIN || DEFAULT_BACKEND_ORIGIN
     ).replace(/\/+$/, '');
-    const ogEndpoint = `${backendOrigin}/og/menu/${encodeURIComponent(slug)}?site=${encodeURIComponent(url.origin)}`;
+    const ogPath =
+      parsed.kind === 'links'
+        ? `/og/r/${encodeURIComponent(parsed.slug)}/links`
+        : `/og/menu/${encodeURIComponent(parsed.slug)}`;
+    const ogEndpoint = `${backendOrigin}${ogPath}?site=${encodeURIComponent(url.origin)}`;
 
     const response = await fetch(ogEndpoint, {
       headers: { Accept: 'text/html' },

@@ -10,6 +10,26 @@
       "destination": "/landing.html"
     },
     {
+      "source": "/customers",
+      "destination": "/customers.html"
+    },
+    {
+      "source": "/ar/customers",
+      "destination": "/customers.html"
+    },
+    {
+      "source": "/smart-seller",
+      "destination": "/smart-seller.html"
+    },
+    {
+      "source": "/create",
+      "destination": "/create.html"
+    },
+    {
+      "source": "/ar/create",
+      "destination": "/create.html"
+    },
+    {
       "source": "/login",
       "destination": "/app.html"
     },
@@ -23,6 +43,21 @@
     },
     {
       "source": "/restaurant/:path*",
+      "destination": "/app.html"
+    },
+    {
+      "source": "/r/:slug/links",
+      "has": [
+        {
+          "type": "header",
+          "key": "user-agent",
+          "value": "(?i).*(whatsapp|facebookexternalhit|facebot|twitterbot|telegrambot|slackbot|discordbot|linkedinbot|preview).*"
+        }
+      ],
+      "destination": "https://backend-henna-chi-76.vercel.app/og/r/:slug/links"
+    },
+    {
+      "source": "/r/:path*",
       "destination": "/app.html"
     },
     {

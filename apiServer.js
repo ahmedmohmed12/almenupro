@@ -14,6 +14,7 @@ const {
   isSuperAdmin,
   isCashier,
   isKitchen,
+  isDriver,
   canAccessRestaurant,
   resolveRestaurantId,
   authError,
@@ -33,11 +34,25 @@ const {
   resolveReportRestaurantId,
 } = require('./lib/restaurantScopeUtils');
 const { handlePosRoutes } = require('./lib/posRoutes');
+const {
+  findDuplicateOrder,
+  stampOfflineTx,
+  preferNewerOrder,
+} = require('./lib/orderIdempotency');
 const { handleKitchenRoutes } = require('./lib/kitchenRoutes');
+const { handleMenuCategoryRoutes } = require('./lib/menuCategoryRoutes');
+const {
+  syncCategoriesFromItemNames,
+} = require('./lib/menuCategories');
 const { assignTargetKitchen, findKitchenByLogin, orderTargetKitchenId } = require('./lib/kitchenRouting');
-const { handleTableRoutes, normalizeFeatures, isKitchenManagementEnabled, isTableManagementEnabled } = require('./lib/tableRoutes');
+const { handleTableRoutes, normalizeFeatures, isKitchenManagementEnabled, isTableManagementEnabled, isDeliveryManagementEnabled } = require('./lib/tableRoutes');
+const { applyGuestOrderToTable } = require('./lib/diningTables');
 const { handleReviewRoutes } = require('./lib/reviewRoutes');
+const { handleOrderRatingRoutes, createRatingToken } = require('./lib/orderRating');
 const { handleExpenseRoutes } = require('./lib/expenseRoutes');
+const { handleSignupRoutes } = require('./lib/signupRoutes');
+const { handleDeliveryRoutes, enqueueDeliveryForAcceptedOrder } = require('./lib/deliveryRoutes');
+const { stampTimeline, stampFromOrderStatus } = require('./lib/orderTimeline');
 const { computeProfitAndLoss } = require('./lib/pnlAnalytics');
 const { ALL_PERMISSION_KEYS } = require('./lib/posPermissions');
 const { serveMenuImage, persistMenuItemsImages, proxyExternalImage, fetchUpstreamImage } = require('./lib/menuImageStorage');
@@ -59,12 +74,13 @@ const {
   identifyCustomerByPhone,
 } = require('./lib/customersStore');
 const { normalizeWhatsappSettings } = require('./lib/whatsappPhone');
+const { clampPaydayStartDay } = require('./lib/dynamicMenuSort');
 const { sendWhatsAppNotification } = require('./lib/whatsappNotification');
 const {
   buildRestaurantOgData,
   buildOgMenuHtml,
   isSocialCrawler,
-  parseMenuSlugFromPath,
+  parseRestaurantOgRequest,
 } = require('./lib/ogMenuMeta');
 const {
   applyShiftBindingOnAccept,
@@ -130,8 +146,47 @@ function isAutoAcceptedStatus(raw) {
 
 function persistOrderStatus(raw, fallback) {
   if (isAutoAcceptedStatus(raw)) return 'confirmed';
-  const value = String(raw || '').trim();
+  const value = String(raw || '')
+    .trim()
+    .toLowerCase()
+    .replace(/-/g, '_');
+  if (value === 'driver_pending') return 'confirmed';
+  if (value === 'driver_accepted' || value === 'on_the_way' || value === 'picked_up') {
+    return 'preparing';
+  }
   return value || fallback || 'pending';
+}
+
+function isOrderHeldByDriver(order) {
+  const status = String(order?.status || '').toLowerCase();
+  if (status === 'delivered' || status === 'cancelled' || status === 'canceled') {
+    return false;
+  }
+  const delivery = String(order?.delivery_status || order?.deliveryStatus || '')
+    .trim()
+    .toLowerCase()
+    .replace(/-/g, '_');
+  if (
+    delivery === 'driver_accepted' ||
+    delivery === 'picked_up' ||
+    delivery === 'on_the_way' ||
+    delivery === 'in_transit' ||
+    delivery === 'accepted'
+  ) {
+    return true;
+  }
+  const driverId = String(order?.assigned_driver_id || order?.assignedDriverId || '').trim();
+  const driverName = String(order?.assigned_driver_name || order?.assignedDriverName || '').trim();
+  const orderType = String(order?.orderType || order?.order_type || '').toLowerCase();
+  if (
+    (driverId || driverName) &&
+    orderType !== 'pickup' &&
+    orderType !== 'dinein' &&
+    (status === 'preparing' || status === 'ready')
+  ) {
+    return true;
+  }
+  return false;
 }
 
 function selectRecentOrders(orders, limit = 250) {
@@ -184,7 +239,23 @@ function publicRestaurant(entry) {
   return {
     ...rest,
     features: normalizeFeatures(entry.features),
+    location: parseRestaurantLocation(entry.location, null),
   };
+}
+
+function parseRestaurantLocation(raw, fallback = null) {
+  if (raw && typeof raw === 'object') {
+    const lat = Number(raw.lat ?? raw.latitude);
+    const lng = Number(raw.lng ?? raw.longitude);
+    if (Number.isFinite(lat) && Number.isFinite(lng)) {
+      return {
+        lat,
+        lng,
+        address: String(raw.address || raw.label || '').trim(),
+      };
+    }
+  }
+  return fallback;
 }
 
 function requireAuth(req, res) {
@@ -221,14 +292,73 @@ function parseOriginalPrice(body, existing, price) {
   return value;
 }
 
+function parseOptionalCostPrice(body) {
+  const raw = body?.costPrice ?? body?.cost_price;
+  if (raw == null || raw === '') return null;
+  const value = Number(raw);
+  return Number.isFinite(value) && value >= 0 ? value : null;
+}
+
+function applyCostPriceFields(target, body, existing = {}) {
+  if (body && (body.costPrice != null || body.cost_price != null)) {
+    const costPrice = parseOptionalCostPrice(body);
+    if (costPrice == null) {
+      delete target.costPrice;
+      delete target.cost_price;
+    } else {
+      target.costPrice = costPrice;
+      target.cost_price = costPrice;
+    }
+    return;
+  }
+  const existingCost = parseOptionalCostPrice(existing);
+  if (existingCost == null) {
+    delete target.costPrice;
+    delete target.cost_price;
+  } else {
+    target.costPrice = existingCost;
+    target.cost_price = existingCost;
+  }
+}
+
 function normalizeIncomingItem(body, restaurantId, existing = {}) {
   const isAvailable = body.isAvailable ?? body.is_available ?? existing.is_available ?? true;
+  const posOnly = body.posOnly ?? body.pos_only;
+  const showOnWebsiteRaw =
+    body.showOnWebsite ??
+    body.show_on_website ??
+    existing.showOnWebsite ??
+    existing.show_on_website;
+  const showOnWebsite =
+    posOnly === true || posOnly === 1
+      ? false
+      : showOnWebsiteRaw === false ||
+          showOnWebsiteRaw === 0 ||
+          showOnWebsiteRaw === '0' ||
+          showOnWebsiteRaw === 'false'
+        ? false
+        : true;
   const price = Number(body.price ?? existing.price ?? 0);
   const originalPrice = parseOriginalPrice(body, existing, price);
+  const displayOrderRaw =
+    body.display_order ?? body.displayOrder ?? existing.display_order ?? existing.displayOrder;
+  const displayOrder =
+    displayOrderRaw == null || displayOrderRaw === ''
+      ? 0
+      : Number(displayOrderRaw) || 0;
+  const talabatRaw =
+    body.talabat_id ?? body.talabatId ?? existing.talabat_id ?? existing.talabatId;
+  const talabatId =
+    talabatRaw == null || talabatRaw === ''
+      ? null
+      : Number.isFinite(Number(talabatRaw))
+        ? Number(talabatRaw)
+        : String(talabatRaw);
   const normalized = normalizeMenuItemForApi({
     ...existing,
     ...body,
     restaurant_id: restaurantId,
+    restaurantId,
     name: body.name ?? existing.name,
     name_ar: body.name_ar ?? body.nameAr ?? body.name ?? existing.name_ar,
     name_en: body.name_en ?? body.nameEn ?? existing.name_en ?? '',
@@ -240,9 +370,16 @@ function normalizeIncomingItem(body, restaurantId, existing = {}) {
     category_name: body.categoryName ?? body.category_name ?? existing.category_name ?? 'عام',
     image_url: body.imageUrl ?? body.image_url ?? existing.image_url ?? '',
     is_available: isAvailable === false || isAvailable === 0 ? 0 : 1,
+    showOnWebsite,
+    show_on_website: showOnWebsite,
     source: body.source ?? existing.source ?? 'Manual',
     options: body.options ?? existing.options ?? [],
     linkedItemIds: body.linkedItemIds ?? body.linked_item_ids ?? existing.linkedItemIds ?? [],
+    display_order: displayOrder,
+    displayOrder: displayOrder,
+    ...(talabatId != null
+      ? { talabat_id: talabatId, talabatId }
+      : {}),
   });
   if (originalPrice != null) {
     normalized.originalPrice = originalPrice;
@@ -251,6 +388,7 @@ function normalizeIncomingItem(body, restaurantId, existing = {}) {
     delete normalized.originalPrice;
     delete normalized.original_price;
   }
+  applyCostPriceFields(normalized, body, existing);
   return normalized;
 }
 
@@ -281,6 +419,7 @@ function posDeps() {
     writeShiftSessions: (value) => extraStore.shiftSessions.write(value),
     readOrders: () => dataStore.readOrders(),
     writeOrders: (value) => dataStore.writeOrders(value),
+    readDeliveryRequests: () => dataStore.readDeliveryRequests(),
     readItemsPage: (options) => dataStore.readItemsPage(options),
     appendAuditEvents: async (events) => {
       const current = await extraStore.auditEvents.read();
@@ -396,6 +535,49 @@ async function routeRequest(req, res, url, pathname) {
     return true;
   }
 
+  if (await handleMenuCategoryRoutes(req, res, url, {
+    readBody,
+    sendJson,
+    authError,
+    requireAuth,
+    assertRestaurantAccess,
+    resolveScopedRestaurantId,
+    filterByRestaurant,
+    readMenuCategories: () => dataStore.readMenuCategories(),
+    writeMenuCategories: (value) => dataStore.writeMenuCategories(value),
+    readItems: () => dataStore.readItems(),
+    renameItemCategory: (restaurantId, fromName, toName) =>
+      dataStore.renameItemCategory(restaurantId, fromName, toName),
+  })) {
+    return true;
+  }
+
+  if (await handleDeliveryRoutes(req, res, url, {
+    readBody,
+    sendJson,
+    parseJson,
+    requireAuth,
+    parseAuthHeader,
+    authError,
+    isDriver,
+    isKitchen,
+    isCashier,
+    isSuperAdmin,
+    resolveScopedRestaurantId,
+    assertRestaurantAccess,
+    filterByRestaurant,
+    readDrivers: () => dataStore.readDrivers(),
+    writeDrivers: (value) => dataStore.writeDrivers(value),
+    readDeliveryRequests: () => dataStore.readDeliveryRequests(),
+    writeDeliveryRequests: (value) => dataStore.writeDeliveryRequests(value),
+    readDeliveryZones: () => dataStore.readDeliveryZones(),
+    readRestaurants: () => dataStore.readRestaurants(),
+    readOrders: () => dataStore.readOrders(),
+    patchOrderById: (orderId, next, existing) => dataStore.patchOrderById(orderId, next, existing),
+  })) {
+    return true;
+  }
+
   if (await handleTableRoutes(req, res, url, {
     readBody,
     sendJson,
@@ -435,6 +617,22 @@ async function routeRequest(req, res, url, pathname) {
       }
       return false;
     },
+  })) {
+    return true;
+  }
+
+  if (await handleOrderRatingRoutes(req, res, url, {
+    readBody,
+    sendJson,
+    requireAuth,
+    parseJson,
+    assertRestaurantAccess,
+    authError,
+    readOrders: () => dataStore.readOrders(),
+    patchOrderById: (id, next, existing) => dataStore.patchOrderById(id, next, existing),
+    readRestaurants: () => dataStore.readRestaurants(),
+    readReviews: () => dataStore.readReviews(),
+    writeReviews: (value) => dataStore.writeReviews(value),
   })) {
     return true;
   }
@@ -594,8 +792,10 @@ async function routeRequest(req, res, url, pathname) {
     }
 
     const kitchenId = String(staff.kitchenId || staff.kitchen_id || kitchenFromLogin?.id || '').trim();
+    const isDriverRole = String(staff.roleId || staff.role_id || '').toLowerCase() === 'driver';
     const isKitchenRole =
-      String(staff.roleId || staff.role_id || '').toLowerCase() === 'kitchen' || Boolean(kitchenId);
+      !isDriverRole &&
+      (String(staff.roleId || staff.role_id || '').toLowerCase() === 'kitchen' || Boolean(kitchenId));
     if (isKitchenRole && !isKitchenManagementEnabled(restaurant)) {
       sendJson(res, 403, {
         error: 'شاشات المطابخ غير مفعّلة في اشتراك هذا المطعم',
@@ -624,10 +824,11 @@ async function routeRequest(req, res, url, pathname) {
       kitchenId: isKitchenRole ? kitchenId || null : null,
       kitchenName: isKitchenRole ? kitchenName : null,
       asKitchen: isKitchenRole,
+      asDriver: isDriverRole,
     });
     sendJson(res, 200, {
       token,
-      role: isKitchenRole ? 'kitchen' : 'cashier',
+      role: isDriverRole ? 'driver' : isKitchenRole ? 'kitchen' : 'cashier',
       restaurantId: restaurant.id,
       restaurantName: restaurant.name,
       staffId: staff.id,
@@ -635,8 +836,110 @@ async function routeRequest(req, res, url, pathname) {
       kitchenId: isKitchenRole ? kitchenId || null : null,
       kitchenName: isKitchenRole ? kitchenName : null,
       staff: sanitizeStaffPublic(staff),
-      permissions: isKitchenRole ? {} : resolveStaffPermissions(staff, posRoles),
-      posRole: isKitchenRole ? null : findRoleById(posRoles, staff.roleId || staff.role_id),
+      permissions: isKitchenRole || isDriverRole ? {} : resolveStaffPermissions(staff, posRoles),
+      posRole: isKitchenRole || isDriverRole ? null : findRoleById(posRoles, staff.roleId || staff.role_id),
+    });
+    return true;
+  }
+
+  if (pathname === '/api/auth/driver-login' && req.method === 'POST') {
+    const body = parseJson(await readBody(req));
+    const identifier = String(body.phone || body.name || body.login || '').trim();
+    const pin = String(body.pin || body.password || '').trim();
+    if (identifier.length < 2 || !/^\d{4}$/.test(pin)) {
+      sendJson(res, 400, { error: 'رقم الهاتف ورمز PIN المكون من 4 أرقام مطلوبان' });
+      return true;
+    }
+    const { verifyPin, sanitizeStaffPublic } = require('./lib/staffUsers');
+    const { normalizeDriver, publicDriver } = require('./lib/deliveryDispatch');
+    const digits = identifier.replace(/\D/g, '');
+    const nameKey = identifier.toLowerCase();
+    const drivers = await dataStore.readDrivers();
+    const matchesLogin = (row) => {
+      if (String(row.name || '').trim().toLowerCase() === nameKey) return true;
+      const phone = String(row.phone || '').replace(/\D/g, '');
+      return Boolean(
+        digits.length >= 7 &&
+          phone &&
+          (phone === digits || phone.endsWith(digits) || digits.endsWith(phone)),
+      );
+    };
+    let driver = (drivers || []).find(
+      (row) => verifyPin(pin, row.pin_hash || row.pinHash, 'fleet') && matchesLogin(row),
+    );
+    if (!driver) {
+      const staffUsers = await extraStore.staffUsers.read();
+      const restaurants = await dataStore.readRestaurants();
+      const staff = (staffUsers || []).find((entry) => {
+        if (String(entry.roleId || entry.role_id || '').toLowerCase() !== 'driver') return false;
+        if (String(entry.name || '').trim().toLowerCase() !== nameKey) return false;
+        return verifyPin(pin, entry.pinHash || entry.pin_hash, entry.restaurantId || entry.restaurant_id);
+      });
+      if (staff) {
+        driver = (drivers || []).find(
+          (row) =>
+            String(row.staff_id || '') === String(staff.id) ||
+            String(row.name || '').trim().toLowerCase() === nameKey,
+        );
+        if (!driver) {
+          driver = normalizeDriver({
+            name: staff.name,
+            staff_id: staff.id,
+            phone: identifier,
+            pin,
+            restaurant_id: staff.restaurantId || staff.restaurant_id,
+          });
+          drivers.push(driver);
+          await dataStore.writeDrivers(drivers);
+        }
+        const restaurant = restaurants.find(
+          (entry) => String(entry.id) === String(staff.restaurantId || staff.restaurant_id),
+        );
+        const token = loginCashierSession({
+          restaurantId: staff.restaurantId || staff.restaurant_id || 'fleet',
+          restaurantName: restaurant?.name || 'أسطول المنصة',
+          staffId: driver.id,
+          staffName: driver.name,
+          asDriver: true,
+        });
+        sendJson(res, 200, {
+          token,
+          role: 'driver',
+          restaurantId: staff.restaurantId || staff.restaurant_id || null,
+          restaurantName: restaurant?.name || 'أسطول المنصة',
+          staffId: driver.id,
+          staffName: driver.name,
+          staff: sanitizeStaffPublic({ ...staff, id: driver.id, roleId: 'driver' }),
+          driver: publicDriver(driver),
+        });
+        return true;
+      }
+      sendJson(res, 401, { error: 'رقم الهاتف أو رمز PIN غير صحيح' });
+      return true;
+    }
+    if (!driver.staff_id) {
+      const index = drivers.findIndex((row) => String(row.id) === String(driver.id));
+      if (index >= 0) {
+        drivers[index] = normalizeDriver({ ...driver, staff_id: driver.id });
+        driver = drivers[index];
+        await dataStore.writeDrivers(drivers);
+      }
+    }
+    const token = loginCashierSession({
+      restaurantId: driver.restaurant_id || driver.restaurantId || 'fleet',
+      restaurantName: 'أسطول المنصة',
+      staffId: driver.id,
+      staffName: driver.name,
+      asDriver: true,
+    });
+    sendJson(res, 200, {
+      token,
+      role: 'driver',
+      restaurantId: driver.restaurant_id || driver.restaurantId || null,
+      restaurantName: 'أسطول المنصة',
+      staffId: driver.id,
+      staffName: driver.name,
+      driver: publicDriver(driver),
     });
     return true;
   }
@@ -648,6 +951,21 @@ async function routeRequest(req, res, url, pathname) {
       roleId: isSuperAdmin(auth) ? 'super_admin' : 'restaurant_admin',
       permissions: fullAccessPermissions(),
     });
+    return true;
+  }
+
+  if (await handleSignupRoutes(req, res, url, {
+    readBody,
+    sendJson,
+    requireAuth,
+    isSuperAdmin,
+    authError,
+    parseJson,
+    readSignupRequests: () => dataStore.readSignupRequests(),
+    writeSignupRequests: (value) => dataStore.writeSignupRequests(value),
+    readSettingsMap: () => dataStore.readSettingsMap(),
+    writeSettingsMap: (value) => dataStore.writeSettingsMap(value),
+  })) {
     return true;
   }
 
@@ -715,8 +1033,10 @@ async function routeRequest(req, res, url, pathname) {
           body.features || {
             tableManagement: body.tableManagement,
             kitchenManagement: body.kitchenManagement,
+            deliveryManagement: body.deliveryManagement ?? body.deliveryManagementEnabled,
           },
         ),
+        location: parseRestaurantLocation(body.location, null),
         updatedAt: new Date().toISOString(),
       };
       const restaurants = await dataStore.readRestaurants();
@@ -776,10 +1096,16 @@ async function routeRequest(req, res, url, pathname) {
         body.kitchenManagementEnabled ??
         body.features?.kitchenManagement ??
         body.features?.kitchen_management;
+      const deliveryEnabled =
+        body.deliveryManagement ??
+        body.deliveryManagementEnabled ??
+        body.features?.deliveryManagement ??
+        body.features?.delivery_management;
       next.features = {
         ...normalizeFeatures(current.features),
         ...(tableEnabled !== undefined ? { tableManagement: tableEnabled === true } : {}),
         ...(kitchenEnabled !== undefined ? { kitchenManagement: kitchenEnabled === true } : {}),
+        ...(deliveryEnabled !== undefined ? { deliveryManagement: deliveryEnabled === true } : {}),
       };
     } else {
       next.subscriptionPlan = current.subscriptionPlan;
@@ -788,6 +1114,9 @@ async function routeRequest(req, res, url, pathname) {
       next.subscriptionNotes = current.subscriptionNotes;
       next.features = normalizeFeatures(current.features);
     }
+    if (body.location !== undefined || body.lat != null || body.lng != null) {
+      next.location = parseRestaurantLocation(body.location || body, current.location || null);
+    }
     restaurants[index] = next;
     await dataStore.writeRestaurants(restaurants);
     sendJson(res, 200, publicRestaurant(next));
@@ -795,10 +1124,9 @@ async function routeRequest(req, res, url, pathname) {
   }
 
   if (pathname === '/api/items' && req.method === 'GET') {
-    const restaurants = await dataStore.readRestaurants();
     const restaurantId =
       readRestaurantIdParam(req, url) ||
-      resolveRestaurantFromQuery(url, restaurants);
+      resolveRestaurantFromQuery(url, await dataStore.readRestaurants());
     const lite =
       url.searchParams.get('full') !== '1' &&
       url.searchParams.get('full') !== 'true';
@@ -807,11 +1135,17 @@ async function routeRequest(req, res, url, pathname) {
       250,
     );
     const offset = Math.max(Number(url.searchParams.get('offset')) || 0, 0);
+    const channel = String(url.searchParams.get('channel') || '').toLowerCase();
+    const websiteOnly =
+      channel === 'website' ||
+      channel === 'public' ||
+      url.searchParams.get('public') === '1';
     const page = await dataStore.readItemsPage({
       restaurantId,
       offset,
       limit,
       lite,
+      websiteOnly,
     });
     res.setHeader('Cache-Control', 'public, max-age=20');
     res.setHeader('X-Total-Count', String(page.total || 0));
@@ -827,13 +1161,11 @@ async function routeRequest(req, res, url, pathname) {
     const restaurantId = await resolveScopedRestaurantId(req, url, auth);
     if (!restaurantId || !assertRestaurantAccess(auth, restaurantId, authError, res)) return true;
     const body = parseJson(await readBody(req));
-    const items = await dataStore.readItems();
     const created = normalizeIncomingItem(
-      { ...body, id: nextNumericItemId(items) },
+      { ...body, id: body.id || (await dataStore.allocateItemId()) },
       restaurantId,
     );
-    items.push(created);
-    await dataStore.writeItems(items);
+    await dataStore.replaceItemDoc(created);
     sendJson(res, 201, created);
     return true;
   }
@@ -967,21 +1299,120 @@ async function routeRequest(req, res, url, pathname) {
           })
         : [];
     }
-    sendJson(res, 200, selectRecentOrders(orders, 250));
+    const fromRaw = String(url.searchParams.get('from') || '').trim();
+    const fromTs = fromRaw ? Date.parse(fromRaw) : NaN;
+    if (Number.isFinite(fromTs)) {
+      orders = orders.filter((order) => {
+        const ts = Date.parse(order.createdAt || order.created_at || 0);
+        return Number.isFinite(ts) && ts >= fromTs;
+      });
+    }
+    sendJson(res, 200, selectRecentOrders(orders, Number.isFinite(fromTs) ? 4000 : 250));
     return true;
   }
 
   if (pathname === '/api/orders' && req.method === 'POST') {
     const body = parseJson(await readBody(req));
-    const [restaurants, existingOrders, customersSeed] = await Promise.all([
+    const requestedDineInTableId = String(
+      body.tableId || body.table_id || '',
+    ).trim();
+    const [restaurants, existingOrders, customersSeed, tableRows] = await Promise.all([
       dataStore.readRestaurants(),
       dataStore.readOrders(),
       extraStore.customers.read(),
+      requestedDineInTableId
+        ? dataStore.readTables()
+        : Promise.resolve(null),
     ]);
     const restaurantId =
       body.restaurantId ||
       body.restaurant_id ||
       resolveRestaurantFromQuery(url, restaurants);
+    const duplicate = findDuplicateOrder(existingOrders, body);
+    if (duplicate) {
+      const incomingTs =
+        Date.parse(body.updatedAt || body.createdAt || 0) || 0;
+      const existingTs =
+        Date.parse(duplicate.updatedAt || duplicate.createdAt || 0) || 0;
+      if (incomingTs > existingTs) {
+        const merged = preferNewerOrder(duplicate, stampOfflineTx({ ...duplicate, ...body }, body));
+        const patched = await dataStore.patchOrderById(duplicate.id, merged, existingOrders);
+        sendJson(res, 200, patched || merged);
+        return true;
+      }
+      sendJson(res, 200, duplicate);
+      return true;
+    }
+    if (requestedDineInTableId && Array.isArray(tableRows)) {
+      const requestedTable = tableRows.find(
+        (table) =>
+          String(table.restaurant_id || table.restaurantId) ===
+            String(restaurantId) &&
+          (String(table.id) === requestedDineInTableId ||
+            String(table.number) === requestedDineInTableId),
+      );
+      if (
+        requestedTable &&
+        (requestedTable.status === 'awaiting_check' ||
+          requestedTable.activeSession?.checkRequested === true)
+      ) {
+        sendJson(res, 409, {
+          error: 'تم طلب حساب هذه الطاولة ولا يمكن إضافة أصناف جديدة',
+          code: 'TABLE_AWAITING_CHECK',
+        });
+        return true;
+      }
+    }
+
+    const deliveryZoneId = String(
+      body.deliveryZoneId || body.delivery_zone_id || '',
+    ).trim();
+    const orderSource = String(body.orderSource || body.order_source || '').toLowerCase();
+    const orderType = String(body.orderType || body.order_type || '').toLowerCase();
+    const isDineInOrder =
+      Boolean(requestedDineInTableId) ||
+      orderSource.includes('dine') ||
+      orderType.includes('dine');
+    if (deliveryZoneId && !isDineInOrder) {
+      const zones = filterByRestaurant(
+        await extraStore.deliveryZones.read(),
+        restaurantId,
+      );
+      const zone = zones.find((entry) => String(entry.id) === deliveryZoneId);
+      const minOrder = Math.max(
+        0,
+        Number(zone?.minOrder ?? zone?.min_order ?? zone?.minimumOrder ?? 0) || 0,
+      );
+      if (minOrder > 0) {
+        const subtotal = Number(
+          body.subtotal ??
+            body.subTotal ??
+            body.itemsSubtotal ??
+            body.items_subtotal ??
+            0,
+        );
+        let effectiveSubtotal = Number.isFinite(subtotal) ? subtotal : 0;
+        if (!(effectiveSubtotal > 0) && Array.isArray(body.items)) {
+          effectiveSubtotal = body.items.reduce((sum, item) => {
+            const line =
+              Number(item.totalPrice ?? item.total_price ?? item.lineTotal) ||
+              (Number(item.price ?? item.unitPrice ?? 0) || 0) *
+                (Number(item.quantity ?? item.qty ?? 1) || 1);
+            return sum + (Number(line) || 0);
+          }, 0);
+        }
+        if (effectiveSubtotal + 1e-9 < minOrder) {
+          sendJson(res, 400, {
+            error: `الحد الأدنى للطلب في هذه المنطقة هو ${minOrder.toFixed(3)} د.ك`,
+            code: 'MIN_ORDER_NOT_MET',
+            minOrder,
+            subtotal: effectiveSubtotal,
+          });
+          return true;
+        }
+      }
+    }
+
     const offerIds = collectOfferIdsFromOrder(body);
     let orderPayload = { ...body };
     if (offerIds.length > 0) {
@@ -1017,14 +1448,29 @@ async function routeRequest(req, res, url, pathname) {
         }
       }
     }
-    const created = {
-      ...orderPayload,
-      id: body.id || `ord_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
-      restaurant_id: restaurantId,
-      restaurantId,
-      status: body.status || 'pending',
-      createdAt: body.createdAt || new Date().toISOString(),
-    };
+    const createdAt = body.createdAt || new Date().toISOString();
+    const createdStatus = persistOrderStatus(body.status || 'pending', 'pending');
+    const ratingToken = createRatingToken();
+    let created = stampFromOrderStatus(
+      stampOfflineTx(
+        {
+          ...orderPayload,
+          id: body.id || `ord_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+          restaurant_id: restaurantId,
+          restaurantId,
+          status: createdStatus,
+          createdAt,
+          created_at: createdAt,
+          ratingToken,
+          rating_token: ratingToken,
+          isRated: false,
+          is_rated: false,
+        },
+        body,
+      ),
+      createdStatus,
+      createdAt,
+    );
     try {
       const assignment = await assignTargetKitchen({
         body: created,
@@ -1060,6 +1506,25 @@ async function routeRequest(req, res, url, pathname) {
       created.totalPrice = Math.max(0, Number((currentTotal - redemption.redeemed).toFixed(3)));
     }
     await dataStore.prependOrder(created, existingOrders);
+    const dineInTableId = String(created.tableId || created.table_id || '').trim();
+    if (dineInTableId && restaurantId) {
+      try {
+        const currentTableRows = tableRows || await dataStore.readTables();
+        const attached = applyGuestOrderToTable(currentTableRows, {
+          restaurantId,
+          tableId: dineInTableId,
+          items: created.items || [],
+          customerName: created.customerName,
+          phone: created.phone,
+          orderId: created.id,
+        });
+        if (attached.changed) {
+          await dataStore.writeTables(attached.tables);
+        }
+      } catch (error) {
+        console.error('QR dine-in table attach failed:', error);
+      }
+    }
     if (created.phone) {
       customers = upsertCustomerFromSource(customers, created, restaurantId);
       await extraStore.customers.write(customers);
@@ -1128,6 +1593,17 @@ async function routeRequest(req, res, url, pathname) {
     const previousStatus = previous.status;
     const requestedStatus = body.status || previous.status;
     const persistedStatus = persistOrderStatus(requestedStatus, previous.status);
+    if (
+      !isSuperAdmin(auth) &&
+      isOrderHeldByDriver(previous) &&
+      String(persistedStatus || '').toLowerCase() !== String(previousStatus || '').toLowerCase()
+    ) {
+      sendJson(res, 403, {
+        error: 'الطلب بحوزة السائق - التحديث عبر تطبيق السائق فقط',
+        code: 'DRIVER_CUSTODY',
+      });
+      return true;
+    }
     let next = {
       ...previous,
       status: persistedStatus,
@@ -1143,7 +1619,28 @@ async function routeRequest(req, res, url, pathname) {
       status: persistedStatus,
     });
     next = attachAcceptedBy(next, previous, auth, body, persistedStatus);
+    next = stampFromOrderStatus(next, persistedStatus);
     const nextStatus = String(persistedStatus || '').toLowerCase();
+    if (
+      String(previousStatus || '').toLowerCase() === 'pending' &&
+      nextStatus === 'confirmed'
+    ) {
+      try {
+        const dispatched = await enqueueDeliveryForAcceptedOrder(next, {
+          readRestaurants: () => dataStore.readRestaurants(),
+          readDeliveryZones: () => dataStore.readDeliveryZones(),
+          readDeliveryRequests: () => dataStore.readDeliveryRequests(),
+          writeDeliveryRequests: (value) => dataStore.writeDeliveryRequests(value),
+          readDrivers: () => dataStore.readDrivers(),
+        });
+        if (dispatched) {
+          next.delivery_status = 'driver_pending';
+          next.delivery_request_id = dispatched.id;
+          next.driver_fee = Number(dispatched.driver_fee ?? 0) || 0;
+          next.assigned_driver_fee = next.driver_fee;
+        }
+      } catch (_) {}
+    }
     const prevStatus = String(previousStatus || '').toLowerCase();
     const needsShiftIo =
       prevStatus === 'pending' ||
@@ -1236,6 +1733,47 @@ async function routeRequest(req, res, url, pathname) {
     const auth = requireAuth(req, res);
     if (!auth) return true;
     const body = parseJson(await readBody(req));
+    const driverId = String(body.driverId || body.driver_id || '').trim();
+    const requestedKind = String(body.kind || 'hero').trim().toLowerCase();
+    if (driverId) {
+      if (!isSuperAdmin(auth)) {
+        sendJson(res, 403, { error: 'رفع مستندات السائق للسوبر أدمن فقط' });
+        return true;
+      }
+      const kind = requestedKind === 'license' || requestedKind === 'driver_license' ? 'license' : 'civil_id';
+      const contentType = String(body.contentType || body.content_type || 'image/jpeg')
+        .split(';')[0]
+        .trim()
+        .toLowerCase();
+      if (!contentType.startsWith('image/')) {
+        sendJson(res, 400, { error: 'Expected an image file' });
+        return true;
+      }
+      const raw = String(body.data || body.base64 || '').replace(/^data:image\/[a-zA-Z0-9.+-]+;base64,/, '');
+      let buffer;
+      try {
+        buffer = Buffer.from(raw, 'base64');
+      } catch {
+        sendJson(res, 400, { error: 'Invalid image data' });
+        return true;
+      }
+      if (!buffer.length || buffer.length > 2 * 1024 * 1024) {
+        sendJson(res, 413, { error: 'Image too large. Use a smaller photo (max 2MB).' });
+        return true;
+      }
+      const id = `drv_${String(driverId).replace(/[^\w.-]/g, '_')}_${kind}`;
+      const assets = await dataStore.readStoreAssets();
+      assets[id] = {
+        driverId,
+        kind,
+        contentType,
+        data: buffer.toString('base64'),
+        updatedAt: new Date().toISOString(),
+      };
+      await dataStore.writeStoreAssets(assets);
+      sendJson(res, 200, { ok: true, id, url: `/api/store-assets/${id}` });
+      return true;
+    }
     const restaurantId =
       body.restaurantId ||
       body.restaurant_id ||
@@ -1311,16 +1849,19 @@ async function routeRequest(req, res, url, pathname) {
       readRestaurantIdParam(req, url) ||
       resolveRestaurantFromQuery(url, restaurants);
     const map = await dataStore.readSettingsMap();
-    const payload = map.byRestaurant?.[restaurantId] || defaultSettingsPayload();
+    const stored = map.byRestaurant?.[restaurantId] || {};
+    const payload = { ...defaultSettingsPayload(), ...stored };
     const restaurant = restaurants.find((entry) => String(entry.id) === String(restaurantId));
     sendJson(res, 200, {
       ...payload,
       ...normalizeWhatsappSettings(payload),
       tableManagementEnabled: isTableManagementEnabled(restaurant),
       kitchenManagementEnabled: isKitchenManagementEnabled(restaurant),
+      deliveryManagementEnabled: isDeliveryManagementEnabled(restaurant),
       features: {
         tableManagement: isTableManagementEnabled(restaurant),
         kitchenManagement: isKitchenManagementEnabled(restaurant),
+        deliveryManagement: isDeliveryManagementEnabled(restaurant),
       },
     });
     return true;
@@ -1343,12 +1884,25 @@ async function routeRequest(req, res, url, pathname) {
       ...normalizeWhatsappSettings({ ...current, ...body }),
       updatedAt: new Date().toISOString(),
     };
+    next.dynamicMenuSortingEnabled =
+      next.dynamicMenuSortingEnabled === true ||
+      next.dynamic_menu_sorting_enabled === true ||
+      next.enable_dynamic_menu === true ||
+      next.enableDynamicMenu === true;
+    next.enable_dynamic_menu = next.dynamicMenuSortingEnabled;
+    next.paydayStartDay = clampPaydayStartDay(
+      next.paydayStartDay ?? next.payday_start_day ?? 1,
+    );
+    delete next.dynamic_menu_sorting_enabled;
+    delete next.payday_start_day;
     delete next.restaurantId;
     delete next.restaurant_id;
     delete next.tableManagementEnabled;
     delete next.tableManagement;
     delete next.kitchenManagementEnabled;
     delete next.kitchenManagement;
+    delete next.deliveryManagementEnabled;
+    delete next.deliveryManagement;
     delete next.features;
     map.byRestaurant = map.byRestaurant || {};
     map.byRestaurant[restaurantId] = next;
@@ -1517,10 +2071,18 @@ async function routeRequest(req, res, url, pathname) {
     if (!auth) return true;
     const body = parseJson(await readBody(req));
     const restaurantId =
-      body.restaurantId || (await resolveScopedRestaurantId(req, url, auth));
+      body.restaurantId ||
+      body.restaurant_id ||
+      (await resolveScopedRestaurantId(req, url, auth));
     if (!restaurantId || !assertRestaurantAccess(auth, restaurantId, authError, res)) return true;
+    const sourceUrl = String(body.url || body.menuUrl || '').trim();
+    if (!sourceUrl) {
+      sendJson(res, 400, { error: 'رابط Talabat مطلوب' });
+      return true;
+    }
     try {
-      const scraped = await scrapeTalabatMenu(body.url);
+      console.log(`[talabat/import] restaurant=${restaurantId} url=${sourceUrl}`);
+      const scraped = await scrapeTalabatMenu(sourceUrl);
       let items = await dataStore.readItems();
       const others = items.filter(
         (item) => String(item.restaurant_id || item.restaurantId) !== String(restaurantId),
@@ -1531,28 +2093,108 @@ async function routeRequest(req, res, url, pathname) {
       let added = 0;
       let updated = 0;
       const merged = [...existing];
+      const talabatKeyOf = (entry) => {
+        const raw = entry?.talabat_id ?? entry?.talabatId;
+        if (raw == null || raw === '') return null;
+        return String(raw);
+      };
+      const categoryFirstSeen = [];
+      const categorySeen = new Set();
+      let scrapeIndex = 0;
       for (const scrapedItem of scraped.items || []) {
-        const matchIndex = merged.findIndex(
-          (item) =>
-            String(item.talabat_id) === String(scrapedItem.talabat_id) ||
-            String(item.name) === String(scrapedItem.name),
-        );
-        const normalized = normalizeIncomingItem(scrapedItem, restaurantId, {
-          id: matchIndex === -1 ? nextNumericItemId(items.concat(merged)) : merged[matchIndex].id,
+        const scrapedKey = talabatKeyOf(scrapedItem);
+        const scrapedName = String(scrapedItem.name || '').trim().toLowerCase();
+        const categoryName = String(
+          scrapedItem.categoryName || scrapedItem.category_name || '',
+        ).trim();
+        if (categoryName && !categorySeen.has(categoryName.toLowerCase())) {
+          categorySeen.add(categoryName.toLowerCase());
+          categoryFirstSeen.push(categoryName);
+        }
+        const matchIndex = merged.findIndex((item) => {
+          const existingKey = talabatKeyOf(item);
+          if (scrapedKey && existingKey) return scrapedKey === existingKey;
+          if (scrapedKey || existingKey) return false;
+          return String(item.name || '').trim().toLowerCase() === scrapedName;
         });
+        const displayOrder =
+          matchIndex === -1
+            ? scrapeIndex
+            : Number(
+                merged[matchIndex].display_order ??
+                  merged[matchIndex].displayOrder ??
+                  scrapeIndex,
+              );
+        const normalized = normalizeIncomingItem(
+          {
+            ...scrapedItem,
+            display_order: displayOrder,
+            displayOrder,
+          },
+          restaurantId,
+          {
+            id:
+              matchIndex === -1
+                ? nextNumericItemId(items.concat(merged))
+                : merged[matchIndex].id,
+            ...(matchIndex === -1 ? {} : merged[matchIndex]),
+          },
+        );
+        normalized.display_order = displayOrder;
+        normalized.displayOrder = displayOrder;
         if (matchIndex === -1) {
           merged.push(normalized);
           added += 1;
         } else {
-          merged[matchIndex] = { ...merged[matchIndex], ...normalized };
+          merged[matchIndex] = {
+            ...merged[matchIndex],
+            ...normalized,
+            id: merged[matchIndex].id,
+            display_order: displayOrder,
+            displayOrder,
+          };
           updated += 1;
         }
+        scrapeIndex += 1;
       }
       const migrated = migrateMenuItems(merged).items;
-      const withImages = body.downloadImages === false
-        ? migrated
-        : await persistMenuItemsImages(migrated);
+      let withImages = migrated;
+      if (body.downloadImages !== false) {
+        try {
+          withImages = await persistMenuItemsImages(migrated);
+        } catch (imageError) {
+          console.warn(
+            '[talabat/import] image persist skipped:',
+            imageError?.message || imageError,
+          );
+          withImages = migrated;
+        }
+      }
       await dataStore.writeItems([...others, ...withImages]);
+      try {
+        const allCategories = await dataStore.readMenuCategories();
+        const othersCats = allCategories.filter(
+          (entry) =>
+            String(entry.restaurant_id || entry.restaurantId) !== String(restaurantId),
+        );
+        const scopedCats = allCategories.filter(
+          (entry) =>
+            String(entry.restaurant_id || entry.restaurantId) === String(restaurantId),
+        );
+        const synced = syncCategoriesFromItemNames(
+          scopedCats,
+          restaurantId,
+          categoryFirstSeen.length
+            ? categoryFirstSeen
+            : withImages.map((item) => item.category_name || item.categoryName),
+        );
+        await dataStore.writeMenuCategories([...othersCats, ...synced.categories]);
+      } catch (catError) {
+        console.warn('[talabat/import] category sync skipped:', catError?.message || catError);
+      }
+      console.log(
+        `[talabat/import] ok restaurant=${restaurantId} added=${added} updated=${updated} total=${withImages.length}`,
+      );
       sendJson(res, 200, {
         added,
         updated,
@@ -1562,7 +2204,37 @@ async function routeRequest(req, res, url, pathname) {
         menuUrl: scraped.menuUrl,
       });
     } catch (error) {
+      console.error('[talabat/import] failed:', error?.message || error);
       sendJson(res, 400, { error: error.message || 'Talabat import failed' });
+    }
+    return true;
+  }
+
+  if (pathname === '/api/items/reorder' && req.method === 'PUT') {
+    const auth = requireAuth(req, res);
+    if (!auth) return true;
+    try {
+      const body = parseJson(await readBody(req));
+      const restaurantId =
+        body.restaurantId ||
+        body.restaurant_id ||
+        (await resolveScopedRestaurantId(req, url, auth));
+      if (!restaurantId || !assertRestaurantAccess(auth, restaurantId, authError, res)) {
+        return true;
+      }
+      const orderedIds = (body.orderedIds || body.ordered_ids || []).map(String);
+      if (!orderedIds.length) {
+        sendJson(res, 400, { error: 'orderedIds مطلوب' });
+        return true;
+      }
+      const result = await dataStore.applyItemDisplayOrder(restaurantId, orderedIds);
+      console.log(
+        `[items/reorder] restaurant=${restaurantId} count=${result.count}`,
+      );
+      sendJson(res, 200, { ok: true, count: result.count });
+    } catch (error) {
+      console.error('[items/reorder] failed:', error?.message || error);
+      sendJson(res, 400, { error: error.message || 'Reorder failed' });
     }
     return true;
   }
@@ -1593,6 +2265,10 @@ async function routeRequest(req, res, url, pathname) {
       governorate: body.governorate || '',
       areaName: body.areaName || body.area_name || '',
       deliveryFee: Number(body.deliveryFee ?? body.delivery_fee ?? 0),
+      minOrder: Math.max(0, Number(body.minOrder ?? body.min_order ?? body.minimumOrder ?? body.minimum_order ?? 0) || 0),
+      min_order: Math.max(0, Number(body.minOrder ?? body.min_order ?? body.minimumOrder ?? body.minimum_order ?? 0) || 0),
+      driverDeliveryFee: Number(body.driverDeliveryFee ?? body.driver_delivery_fee ?? body.deliveryFee ?? body.delivery_fee ?? 0),
+      platformMargin: Number(body.platformMargin ?? body.platform_margin ?? 0),
       isActive: body.isActive !== false,
       defaultKitchenId: body.defaultKitchenId || body.default_kitchen_id || null,
       default_kitchen_id: body.defaultKitchenId || body.default_kitchen_id || null,
@@ -1603,6 +2279,140 @@ async function routeRequest(req, res, url, pathname) {
     zones.push(zone);
     await extraStore.deliveryZones.write(zones);
     sendJson(res, 201, zone);
+    return true;
+  }
+
+  if (pathname === '/api/delivery-zones/clone-from' && req.method === 'POST') {
+    const auth = requireAuth(req, res);
+    if (!auth) return true;
+    if (!isSuperAdmin(auth)) {
+      authError(res, 403, 'Super admin only');
+      return true;
+    }
+    const body = parseJson(await readBody(req));
+    const sourceRestaurantId = String(
+      body.sourceRestaurantId || body.source_restaurant_id || '',
+    ).trim();
+    if (!sourceRestaurantId) {
+      sendJson(res, 400, { error: 'sourceRestaurantId is required' });
+      return true;
+    }
+    const restaurants = await dataStore.readRestaurants();
+    const requestedTargets = Array.isArray(body.targetRestaurantIds || body.target_restaurant_ids)
+      ? (body.targetRestaurantIds || body.target_restaurant_ids).map((id) => String(id).trim()).filter(Boolean)
+      : [];
+    const targets = (requestedTargets.length
+      ? restaurants.filter((r) => requestedTargets.includes(String(r.id)))
+      : restaurants
+    ).filter((r) => String(r.id) !== sourceRestaurantId);
+
+    const allZones = await extraStore.deliveryZones.read();
+    const sourceZones = allZones.filter(
+      (zone) =>
+        String(zone.restaurant_id || zone.restaurantId) === sourceRestaurantId &&
+        zone.isActive !== false,
+    );
+    if (!sourceZones.length) {
+      sendJson(res, 404, { error: 'No source delivery zones found' });
+      return true;
+    }
+
+    const zoneKey = (zone) =>
+      `${String(zone.governorate || '').trim()}|${String(zone.areaName || zone.area_name || '').trim()}`;
+
+    const templateByKey = new Map();
+    for (const zone of sourceZones) {
+      const key = zoneKey(zone);
+      if (!key.endsWith('|') && key !== '|') templateByKey.set(key, zone);
+    }
+
+    const now = new Date().toISOString();
+    const nextZones = [...allZones];
+    const summary = [];
+
+    for (const restaurant of targets) {
+      const restaurantId = String(restaurant.id);
+      let added = 0;
+      let updated = 0;
+      for (const [key, source] of templateByKey.entries()) {
+        const deliveryFee = Number(source.deliveryFee ?? source.delivery_fee ?? 0) || 0;
+        const minOrder = Math.max(
+          0,
+          Number(source.minOrder ?? source.min_order ?? source.minimumOrder ?? 0) || 0,
+        );
+        const driverDeliveryFee = Number(
+          source.driverDeliveryFee ?? source.driver_delivery_fee ?? deliveryFee,
+        );
+        const platformMargin = Number(source.platformMargin ?? source.platform_margin ?? 0) || 0;
+        const existingIndex = nextZones.findIndex(
+          (zone) =>
+            String(zone.restaurant_id || zone.restaurantId) === restaurantId &&
+            zoneKey(zone) === key,
+        );
+        if (existingIndex >= 0) {
+          const existing = nextZones[existingIndex];
+          nextZones[existingIndex] = {
+            ...existing,
+            governorate: source.governorate || existing.governorate,
+            areaName: source.areaName || source.area_name || existing.areaName,
+            area_name: source.areaName || source.area_name || existing.areaName,
+            deliveryFee,
+            delivery_fee: deliveryFee,
+            minOrder,
+            min_order: minOrder,
+            driverDeliveryFee,
+            driver_delivery_fee: driverDeliveryFee,
+            platformMargin,
+            platform_margin: platformMargin,
+            isActive: true,
+            restaurant_id: restaurantId,
+            restaurantId,
+            updatedAt: now,
+          };
+          updated += 1;
+          continue;
+        }
+        nextZones.push({
+          id: `zone_${Date.now().toString(36)}_${restaurantId.slice(-6)}_${Math.random()
+            .toString(36)
+            .slice(2, 8)}_${added}`,
+          restaurant_id: restaurantId,
+          restaurantId,
+          governorate: source.governorate || '',
+          areaName: source.areaName || source.area_name || '',
+          area_name: source.areaName || source.area_name || '',
+          deliveryFee,
+          delivery_fee: deliveryFee,
+          minOrder,
+          min_order: minOrder,
+          driverDeliveryFee,
+          driver_delivery_fee: driverDeliveryFee,
+          platformMargin,
+          platform_margin: platformMargin,
+          isActive: true,
+          createdAt: now,
+          updatedAt: now,
+        });
+        added += 1;
+      }
+      summary.push({
+        restaurantId,
+        name: restaurant.name || restaurantId,
+        added,
+        updated,
+        totalZones: nextZones.filter(
+          (zone) => String(zone.restaurant_id || zone.restaurantId) === restaurantId,
+        ).length,
+      });
+    }
+
+    await extraStore.deliveryZones.write(nextZones);
+    sendJson(res, 200, {
+      ok: true,
+      sourceRestaurantId,
+      sourceZoneCount: templateByKey.size,
+      targets: summary,
+    });
     return true;
   }
 
@@ -1630,12 +2440,35 @@ async function routeRequest(req, res, url, pathname) {
       body.defaultKitchenId !== undefined || body.default_kitchen_id !== undefined
         ? body.defaultKitchenId || body.default_kitchen_id || null
         : zones[index].defaultKitchenId || zones[index].default_kitchen_id || null;
+    const nextMinOrder = Math.max(
+      0,
+      Number(
+        body.minOrder ??
+          body.min_order ??
+          body.minimumOrder ??
+          body.minimum_order ??
+          zones[index].minOrder ??
+          zones[index].min_order ??
+          0,
+      ) || 0,
+    );
     zones[index] = {
       ...zones[index],
       ...body,
       restaurant_id: restaurantId,
       areaName: body.areaName || body.area_name || zones[index].areaName,
       deliveryFee: Number(body.deliveryFee ?? body.delivery_fee ?? zones[index].deliveryFee),
+      minOrder: nextMinOrder,
+      min_order: nextMinOrder,
+      driverDeliveryFee: Number(
+        body.driverDeliveryFee ??
+          body.driver_delivery_fee ??
+          zones[index].driverDeliveryFee ??
+          zones[index].deliveryFee,
+      ),
+      platformMargin: Number(
+        body.platformMargin ?? body.platform_margin ?? zones[index].platformMargin ?? 0,
+      ),
       defaultKitchenId: nextKitchenId,
       default_kitchen_id: nextKitchenId,
       updatedAt: new Date().toISOString(),
@@ -1873,10 +2706,9 @@ async function routeRequest(req, res, url, pathname) {
   }
 
   if (pathname.startsWith('/og/') || (req.method === 'GET' && isSocialCrawler(req.headers['user-agent']))) {
-    const slug = pathname.startsWith('/og/')
-      ? decodeURIComponent(pathname.slice(4)).replace(/\/+$/, '')
-      : parseMenuSlugFromPath(pathname);
-    if (slug) {
+    const parsed = parseRestaurantOgRequest(pathname);
+    if (parsed?.slug) {
+      const { slug, kind } = parsed;
       const restaurants = await dataStore.readRestaurants();
       const restaurant = restaurants.find(
         (entry) => String(entry.slug || '').toLowerCase() === slug.toLowerCase(),
@@ -1885,13 +2717,27 @@ async function routeRequest(req, res, url, pathname) {
         const items = filterByRestaurant(await dataStore.readItems(), restaurant.id);
         const map = await dataStore.readSettingsMap();
         const settings = map.byRestaurant?.[restaurant.id] || {};
-        const description = String(
+        const linkHub =
+          settings.linkHub && typeof settings.linkHub === 'object'
+            ? settings.linkHub
+            : settings.link_hub && typeof settings.link_hub === 'object'
+              ? settings.link_hub
+              : {};
+        const restaurantDescription = String(
           settings.restaurantDescription ||
             settings.restaurant_description ||
             restaurant.description ||
             restaurant.description_ar ||
             '',
         ).trim();
+        const hubTagline = String(linkHub.tagline || linkHub.description || '').trim();
+        const hubDisplayName = String(
+          linkHub.displayName || linkHub.display_name || '',
+        ).trim();
+        const description =
+          kind === 'links'
+            ? hubTagline || restaurantDescription
+            : restaurantDescription;
         const logoUrl = String(
           settings.logoUrl ||
             settings.logo_url ||
@@ -1899,6 +2745,24 @@ async function routeRequest(req, res, url, pathname) {
             restaurant.logo_url ||
             '',
         ).trim();
+        const frontendOrigin = requestFrontendOrigin(req);
+        const menuPath = kind === 'links' ? `/r/${slug}/links` : `/${slug}`;
+        const ogOptions = {
+          slug,
+          kind,
+          items,
+          displayName: hubDisplayName || restaurant.name,
+          description: description || undefined,
+          ogDescription: description || undefined,
+          frontendOrigin,
+          siteOrigin: frontendOrigin,
+          menuPath,
+          ogUrl: `${frontendOrigin}${menuPath}`,
+        };
+        // Menu previews keep the generated OG card; link hub uses the restaurant logo.
+        if (kind !== 'links') {
+          ogOptions.ogImageUrl = `https://backend-henna-chi-76.vercel.app/api/og-image/${encodeURIComponent(slug)}`;
+        }
         const ogData = buildRestaurantOgData(
           {
             ...restaurant,
@@ -1908,15 +2772,7 @@ async function routeRequest(req, res, url, pathname) {
             description_ar: description,
             descriptionAr: description,
           },
-          {
-            slug,
-            items,
-            frontendOrigin: requestFrontendOrigin(req),
-            siteOrigin: requestFrontendOrigin(req),
-            menuPath: `/${slug}`,
-            ogUrl: `${requestFrontendOrigin(req)}/${slug}`,
-            ogImageUrl: `https://backend-henna-chi-76.vercel.app/api/og-image/${encodeURIComponent(slug)}`,
-          },
+          ogOptions,
         );
         res.setHeader('Cache-Control', 'public, max-age=60');
         sendHtml(res, 200, buildOgMenuHtml(ogData));
