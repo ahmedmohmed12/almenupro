@@ -4,16 +4,17 @@ import '../../models/order.dart';
 import '../../theme/app_theme.dart';
 
 class OrderStatusChip extends StatelessWidget {
-  const OrderStatusChip({super.key, required this.status});
+  const OrderStatusChip({super.key, required this.status, this.label});
 
   final OrderStatus status;
+  final String? label;
 
   @override
   Widget build(BuildContext context) {
     final (background, foreground) = _colors(status);
 
     return Chip(
-      label: Text(_label(status)),
+      label: Text(label ?? _label(status)),
       backgroundColor: background,
       labelStyle: TextStyle(
         color: foreground,
@@ -35,6 +36,8 @@ class OrderStatusChip extends StatelessWidget {
       OrderStatus.ready => (Colors.green.shade100, Colors.green.shade900),
       OrderStatus.delivered => (Colors.teal.shade100, Colors.teal.shade900),
       OrderStatus.cancelled => (Colors.red.shade100, Colors.red.shade900),
+      OrderStatus.scheduled => (const Color(0xFFFFEDD5), const Color(0xFF9A3412)),
+      OrderStatus.inKitchen => (const Color(0xFFFEF3C7), const Color(0xFF92400E)),
     };
   }
 }
@@ -46,7 +49,9 @@ class OrderTypeBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDelivery = orderType == OrderType.delivery;
+    final isDelivery =
+        orderType == OrderType.delivery ||
+        orderType == OrderType.scheduledDelivery;
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),

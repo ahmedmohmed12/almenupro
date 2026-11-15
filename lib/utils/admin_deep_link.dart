@@ -2,6 +2,10 @@ class AdminDeepLink {
   AdminDeepLink._();
 
   static const loginPath = '/login';
+  static const managerLoginPath = '/manager/login';
+  static const superAdminLoginPath = '/super-admin/login';
+  static const posLoginPath = '/pos/login';
+  static const adminHomePath = '/admin';
   static const orderPrefix = '/admin/orders';
 
   static String orderPath(String orderRef) {
@@ -18,8 +22,12 @@ class AdminDeepLink {
   };
 
   static String loginWithRedirect(String redirectPath) {
-    final safe = sanitizeRedirect(redirectPath) ?? orderPrefix;
-    return '$loginPath?redirect=${Uri.encodeQueryComponent(safe)}';
+    return managerLoginWithRedirect(redirectPath);
+  }
+
+  static String managerLoginWithRedirect(String redirectPath) {
+    final safe = sanitizeRedirect(redirectPath) ?? adminHomePath;
+    return '$managerLoginPath?redirect=${Uri.encodeQueryComponent(safe)}';
   }
 
   /// Only admin-relative paths. Hosts on absolute URLs are ignored (no open redirect).
@@ -39,11 +47,21 @@ class AdminDeepLink {
     if (!path.startsWith('/')) path = '/$path';
     if (path.contains('..')) return null;
     if (path != loginPath &&
-        path != '/admin' &&
+        path != managerLoginPath &&
+        path != superAdminLoginPath &&
+        path != posLoginPath &&
+        path != '/cashier/login' &&
+        path != adminHomePath &&
         !path.startsWith('/admin/')) {
       return null;
     }
-    if (path == loginPath) return '/admin';
+    if (path == loginPath ||
+        path == managerLoginPath ||
+        path == superAdminLoginPath ||
+        path == posLoginPath ||
+        path == '/cashier/login') {
+      return adminHomePath;
+    }
 
     if (uri.hasQuery) {
       final filtered = Map<String, String>.from(uri.queryParameters);
@@ -88,7 +106,11 @@ class AdminDeepLink {
     final normalized = path.endsWith('/') && path.length > 1
         ? path.substring(0, path.length - 1)
         : path;
-    return normalized == loginPath;
+    return normalized == loginPath ||
+        normalized == managerLoginPath ||
+        normalized == superAdminLoginPath ||
+        normalized == posLoginPath ||
+        normalized == '/cashier/login';
   }
 
   static bool matchesOrder(String ref, {required String id, String? invoiceNumber}) {

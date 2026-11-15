@@ -34,7 +34,27 @@
       "destination": "/app.html"
     },
     {
+      "source": "/manager/login",
+      "destination": "/app.html"
+    },
+    {
+      "source": "/super-admin/login",
+      "destination": "/app.html"
+    },
+    {
+      "source": "/pos/login",
+      "destination": "/app.html"
+    },
+    {
+      "source": "/cashier/login",
+      "destination": "/app.html"
+    },
+    {
       "source": "/admin",
+      "destination": "/app.html"
+    },
+    {
+      "source": "/admin/:path*",
       "destination": "/app.html"
     },
     {
@@ -62,6 +82,22 @@
     },
     {
       "source": "/legacy-menu",
+      "destination": "/app.html"
+    },
+    {
+      "source": "/driver",
+      "destination": "/app.html"
+    },
+    {
+      "source": "/order/:path*",
+      "destination": "/app.html"
+    },
+    {
+      "source": "/table/:path*",
+      "destination": "/app.html"
+    },
+    {
+      "source": "/restaurants",
       "destination": "/app.html"
     },
     {

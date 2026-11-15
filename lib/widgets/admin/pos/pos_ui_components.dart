@@ -39,7 +39,7 @@ class PosMenuItemCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 Expanded(
-                  flex: 58,
+                  flex: 52,
                   child: Stack(
                     fit: StackFit.expand,
                     children: [
@@ -82,14 +82,14 @@ class PosMenuItemCard extends StatelessWidget {
                   ),
                 ),
                 Expanded(
-                  flex: 42,
+                  flex: 48,
                   child: Container(
                     color: PosTheme.surface,
                     padding: EdgeInsets.fromLTRB(
+                      compact ? 6 : 8,
                       compact ? 5 : 6,
-                      compact ? 4 : 5,
+                      compact ? 6 : 8,
                       compact ? 5 : 6,
-                      compact ? 4 : 5,
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -100,10 +100,11 @@ class PosMenuItemCard extends StatelessWidget {
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
-                              fontWeight: FontWeight.w800,
-                              fontSize: compact ? 11 : 12,
-                              height: 1.15,
+                              fontWeight: FontWeight.w900,
+                              fontSize: PosTheme.menuItemNameFontSize(compact),
+                              height: 1.2,
                               color: PosTheme.textPrimary,
+                              letterSpacing: 0.1,
                             ),
                           ),
                         ),
@@ -114,8 +115,9 @@ class PosMenuItemCard extends StatelessWidget {
                             '${item.price.toStringAsFixed(3)} د.ك',
                             style: TextStyle(
                               color: PosTheme.orange,
-                              fontWeight: FontWeight.w800,
-                              fontSize: compact ? 11.5 : 12.5,
+                              fontWeight: FontWeight.w900,
+                              fontSize: PosTheme.menuItemPriceFontSize(compact),
+                              height: 1.15,
                             ),
                           ),
                       ],
@@ -169,16 +171,16 @@ class PosQuickItemChip extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w900,
                       ),
                     ),
                     Text(
                       item.price.toStringAsFixed(3),
                       style: const TextStyle(
-                        fontSize: 10,
+                        fontSize: 12,
                         color: PosTheme.accent,
-                        fontWeight: FontWeight.bold,
+                        fontWeight: FontWeight.w900,
                       ),
                     ),
                   ],
@@ -209,48 +211,55 @@ class PosCategoryTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final radius = BorderRadius.circular(PosTheme.categoryChipRadius);
     return Padding(
       padding: EdgeInsets.only(bottom: compact ? 4 : 6),
       child: Material(
-        color: selected ? PosTheme.accentSoft : PosTheme.surface,
-        borderRadius: BorderRadius.circular(compact ? 10 : 12),
+        color: selected ? PosTheme.orange : PosTheme.surfaceAlt,
+        borderRadius: radius,
         child: InkWell(
           onTap: onTap,
-          borderRadius: BorderRadius.circular(compact ? 10 : 12),
-          child: Container(
-            width: double.infinity,
-            padding: EdgeInsets.symmetric(
-              horizontal: compact ? 8 : 10,
-              vertical: compact ? 8 : 12,
+          borderRadius: radius,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(
+              minHeight: PosTheme.categoryChipHeight,
             ),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(compact ? 10 : 12),
-              border: Border.all(
-                color: selected ? PosTheme.accent : PosTheme.border,
-                width: selected ? 1.5 : 1,
+            child: Container(
+              width: double.infinity,
+              padding: EdgeInsets.symmetric(
+                horizontal: compact ? 10 : 12,
+                vertical: compact ? 10 : 12,
               ),
-            ),
-            child: Row(
-              children: [
-                Icon(
-                  icon,
-                  size: compact ? 16 : 18,
-                  color: selected ? PosTheme.accent : PosTheme.textMuted,
+              decoration: BoxDecoration(
+                borderRadius: radius,
+                border: Border.all(
+                  color: selected ? PosTheme.orange : PosTheme.border,
+                  width: selected ? 1.5 : 1,
                 ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    label,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: selected ? FontWeight.bold : FontWeight.w600,
-                      color: selected ? PosTheme.accent : AppTheme.brandBlack,
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    icon,
+                    size: compact ? 16 : 18,
+                    color: selected ? Colors.white : PosTheme.textMuted,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      label,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: PosTheme.categoryChipFontSize,
+                        fontWeight: FontWeight.w800,
+                        height: 1.1,
+                        color: selected ? Colors.white : PosTheme.textMuted,
+                      ),
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),

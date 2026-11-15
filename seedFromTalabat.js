@@ -1,6 +1,6 @@
 const fs = require('fs');
 const path = require('path');
-const { scrapeTalabatMenu } = require('../functions/talabatScraper');
+const { scrapeTalabatMenu } = require('./lib/talabatScraper');
 const {
   persistMenuItemsImages,
   ensureUploadDir,
@@ -14,6 +14,7 @@ async function main() {
   ensureUploadDir();
 
   const url = process.argv[2] || DEFAULT_URL;
+  const restaurantId = String(process.argv[3] || 'rest_molton').trim();
   const result = await scrapeTalabatMenu(url);
 
   const categoryIds = new Map();
@@ -26,6 +27,8 @@ async function main() {
 
   const items = result.items.map((item, index) => ({
     id: item.talabatId || index + 1,
+    restaurant_id: restaurantId,
+    restaurantId,
     category_id: categoryIdFor(item.categoryName),
     category_name: item.categoryName || 'عام',
     name: item.name,
@@ -34,6 +37,7 @@ async function main() {
     image_url: item.imageUrl || '',
     is_available: 1,
     talabat_id: item.talabatId,
+    talabatId: item.talabatId,
     source: 'Talabat',
   }));
 

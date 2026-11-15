@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../services/super_admin_scope_service.dart';
 import '../admin_loyalty_settings_card.dart';
+import '../admin_menu_engineering_settings_card.dart';
 import '../admin_payment_settings_card.dart';
 import '../admin_platform_settings_card.dart';
 import '../admin_pos_roles_staff_card.dart';
@@ -10,6 +11,7 @@ import '../admin_sound_settings_card.dart';
 import '../admin_store_profile_card.dart';
 import '../admin_working_hours_card.dart';
 import 'admin_email_notifications_card.dart';
+import 'admin_link_hub_panel.dart';
 import 'admin_printer_settings_card.dart';
 import 'admin_settings_tab.dart';
 import 'admin_whatsapp_settings_section.dart';
@@ -34,6 +36,8 @@ class AdminSettingsPage extends StatelessWidget {
         return const AdminWhatsappSettingsSection();
       case AdminSettingsTab.store:
         return const AdminStoreProfileCard();
+      case AdminSettingsTab.menuEngineering:
+        return const AdminMenuEngineeringSettingsCard();
       case AdminSettingsTab.loyalty:
         return const AdminLoyaltySettingsCard();
       case AdminSettingsTab.email:
@@ -68,25 +72,25 @@ class AdminSettingsPage extends StatelessWidget {
           Text(
             activeTab.labelAr,
             style: const TextStyle(
-              fontSize: 22,
+              fontSize: 18,
               fontWeight: FontWeight.bold,
               color: burgundy,
             ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 4),
           Text(
             isSuperAdmin
                 ? 'المطعم الحالي: $label'
                 : 'اضبط هذا القسم من إعدادات محلّك',
           ),
           if (isSuperAdmin && !scope.hasSelection) ...[
-            const SizedBox(height: 12),
+            const SizedBox(height: 8),
             const Text(
               'اختر مطعماً من قائمة المطاعم في الشريط الجانبي أولاً.',
               style: TextStyle(color: Colors.orange),
             ),
           ],
-          const SizedBox(height: 20),
+          const SizedBox(height: 10),
           AnimatedSwitcher(
             duration: const Duration(milliseconds: 220),
             child: KeyedSubtree(

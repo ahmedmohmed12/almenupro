@@ -336,7 +336,10 @@ class PosThermalReceiptPreview extends StatelessWidget {
             _MetaRow(label: 'الوقت', value: time),
             _MetaRow(label: 'العميل', value: order.customerName),
             _MetaRow(label: 'هاتف', value: order.phone),
-            if (!isKitchen) _MetaRow(label: 'العنوان', value: order.address),
+            _MetaRow(
+              label: 'العنوان',
+              value: order.address.trim().isEmpty ? '—' : order.address,
+            ),
             if (!isKitchen)
               _MetaRow(label: 'الدفع', value: order.paymentMethod ?? 'كاش'),
             _MetaRow(
@@ -345,6 +348,7 @@ class PosThermalReceiptPreview extends StatelessWidget {
                 OrderType.pickup => 'استلام',
                 OrderType.dineIn => 'صالة',
                 OrderType.delivery => 'توصيل',
+                OrderType.scheduledDelivery => 'توصيل مجدول',
               },
             ),
             const _DashedDivider(),

@@ -2,16 +2,21 @@ import 'dart:math';
 
 import 'package:cloud_firestore/cloud_firestore.dart' hide Order;
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
+import '../l10n/app_strings.dart';
+import '../models/menu_item.dart';
 import '../models/order.dart';
+import '../providers/locale_provider.dart';
 import '../services/api_service.dart';
 import '../services/menu_storage_service.dart';
 import '../services/orders_demo_service.dart';
 import '../utils/whatsapp_launcher.dart';
 import '../widgets/network_menu_image.dart';
+import '../widgets/language_toggle_button.dart';
 
 class ClientMenuPage extends StatefulWidget {
-  const ClientMenuPage({Key? key}) : super(key: key);
+  const ClientMenuPage({super.key});
 
   @override
   State<ClientMenuPage> createState() => _ClientMenuPageState();
@@ -77,6 +82,32 @@ class _ClientMenuPageState extends State<ClientMenuPage> {
     return count;
   }
 
+  String _localizedItemName(String itemId, Map<String, dynamic> item) {
+    return MenuItem.fromMap(
+      itemId,
+      item,
+    ).localizedName(context.read<LocaleProvider>().localeCode);
+  }
+
+  String _localizedItemDescription(String itemId, Map<String, dynamic> item) {
+    return MenuItem.fromMap(
+      itemId,
+      item,
+    ).localizedDescription(context.read<LocaleProvider>().localeCode);
+  }
+
+  String _cartItemName(Map<String, dynamic> item) {
+    final localeCode = context.read<LocaleProvider>().localeCode;
+    if (localeCode.startsWith('en')) {
+      final english = item['nameEn']?.toString().trim() ?? '';
+      if (english.isNotEmpty) return english;
+    } else {
+      final arabic = item['nameAr']?.toString().trim() ?? '';
+      if (arabic.isNotEmpty) return arabic;
+    }
+    return item['name']?.toString() ?? '';
+  }
+
   void _addToCart(String itemId, Map<String, dynamic> itemData) {
     setState(() {
       if (_cart.containsKey(itemId)) {
@@ -84,6 +115,8 @@ class _ClientMenuPageState extends State<ClientMenuPage> {
       } else {
         _cart[itemId] = {
           'name': itemData['name'],
+          'nameAr': itemData['name_ar'] ?? itemData['nameAr'],
+          'nameEn': itemData['name_en'] ?? itemData['nameEn'],
           'price': (itemData['price'] ?? 0.0).toDouble(),
           'quantity': 1,
         };
@@ -107,7 +140,8 @@ class _ClientMenuPageState extends State<ClientMenuPage> {
     required Map<String, dynamic> item,
   }) {
     final imageUrl = item['imageUrl'] as String? ?? '';
-    final name = item['name'] as String? ?? '';
+    final strings = AppStrings.read(context);
+    final name = _localizedItemName(itemId, item);
     final price = (item['price'] as num?)?.toDouble() ?? 0;
 
     showDialog<void>(
@@ -116,7 +150,10 @@ class _ClientMenuPageState extends State<ClientMenuPage> {
       builder: (ctx) {
         return Dialog(
           backgroundColor: Colors.transparent,
-          insetPadding: const EdgeInsets.symmetric(horizontal: 28, vertical: 40),
+          insetPadding: const EdgeInsets.symmetric(
+            horizontal: 28,
+            vertical: 40,
+          ),
           child: Container(
             decoration: BoxDecoration(
               color: Colors.white,
@@ -138,7 +175,7 @@ class _ClientMenuPageState extends State<ClientMenuPage> {
                             ? NetworkMenuImage(
                                 imageUrl: imageUrl,
                                 fit: BoxFit.cover,
-                                errorBuilder: (_, __, ___) =>
+                                errorBuilder: (_, _, _) =>
                                     _buildImagePlaceholder(large: true),
                               )
                             : _buildImagePlaceholder(large: true),
@@ -177,7 +214,7 @@ class _ClientMenuPageState extends State<ClientMenuPage> {
                       ),
                       const SizedBox(height: 10),
                       Text(
-                        '${price.toStringAsFixed(3)} د.ك',
+                        '${price.toStringAsFixed(3)} ${strings.currency}',
                         style: const TextStyle(
                           fontSize: 24,
                           fontWeight: FontWeight.bold,
@@ -204,7 +241,7 @@ class _ClientMenuPageState extends State<ClientMenuPage> {
                             Navigator.pop(ctx);
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(
-                                content: Text('تمت إضافة "$name" إلى السلة'),
+                                content: Text(strings.addedToCart(name)),
                                 duration: const Duration(seconds: 2),
                               ),
                             );
@@ -213,9 +250,12 @@ class _ClientMenuPageState extends State<ClientMenuPage> {
                             Icons.add_shopping_cart,
                             color: darkYellowColor,
                           ),
-                          label: const Text(
-                            'إضافة إلى سلة المشتريات',
-                            style: TextStyle(
+                          label: Text(
+                            strings.tr(
+                              'إضافة إلى سلة المشتريات',
+                              'Add to cart',
+                            ),
+                            style: const TextStyle(
                               color: Colors.white,
                               fontWeight: FontWeight.bold,
                               fontSize: 16,
@@ -238,16 +278,22 @@ class _ClientMenuPageState extends State<ClientMenuPage> {
     String invoiceNumber,
     String orderTime,
   ) async {
+    final strings = AppStrings.read(context);
     final itemsDetails = StringBuffer();
     for (final item in _cart.values) {
       final lineTotal =
           (item['price'] as num).toDouble() * (item['quantity'] as int);
       itemsDetails.writeln(
-        "• ${item['name']} x${item['quantity']} (${lineTotal.toStringAsFixed(3)} د.ك)",
+        "• ${_cartItemName(item)} x${item['quantity']} "
+        "(${lineTotal.toStringAsFixed(3)} ${strings.currency})",
       );
     }
 
-    final message = '''
+    final paymentLabel = _paymentMethod == 'نقداً عند الاستلام'
+        ? strings.tr('نقداً عند الاستلام', 'Cash on delivery')
+        : strings.tr('كي نت عند الاستلام', 'K-Net on delivery');
+    final message = strings.isArabic
+        ? '''
 🧾 *فاتورة طلب جديدة - Molton Cookies*
 ----------------------------------
 📌 *رقم الفاتورة:* #$invoiceNumber
@@ -264,6 +310,24 @@ $itemsDetails
 💰 *الإجمالي النهائي:* ${_totalCartPrice.toStringAsFixed(3)} د.ك
 ----------------------------------
 شكراً لطلبكم من مولتن كوكيز! ❤️
+'''
+        : '''
+🧾 *New order invoice - Molton Cookies*
+----------------------------------
+📌 *Invoice number:* #$invoiceNumber
+👤 *Customer name:* ${_nameController.text.trim()}
+📞 *Phone number:* ${_phoneController.text.trim()}
+📍 *Delivery address:* ${_addressController.text.trim()}
+💳 *Payment method:* $paymentLabel
+
+🕒 *Order time:* $orderTime
+
+🛒 *Order details:*
+$itemsDetails
+----------------------------------
+💰 *Grand total:* ${_totalCartPrice.toStringAsFixed(3)} KWD
+----------------------------------
+Thank you for ordering from Molton Cookies! ❤️
 ''';
 
     final opened = await openWhatsAppChat(
@@ -275,8 +339,7 @@ $itemsDetails
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'تعذر فتح الواتساب. افتح الرابط يدوياً:\n'
-            'https://wa.me/${normalizeWhatsAppNumber(_whatsappNumber)}',
+            '${strings.tr('تعذر فتح الواتساب. افتح الرابط يدوياً:', 'Could not open WhatsApp. Open this link manually:')}\nhttps://wa.me/${normalizeWhatsAppNumber(_whatsappNumber)}',
           ),
           duration: const Duration(seconds: 8),
         ),
@@ -287,19 +350,21 @@ $itemsDetails
   }
 
   void _showWhatsAppFallbackDialog(String invoiceNumber) {
+    final strings = AppStrings.read(context);
     final link = 'https://wa.me/${normalizeWhatsAppNumber(_whatsappNumber)}';
     showDialog<void>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('فتح الواتساب يدوياً'),
+        title: Text(
+          strings.tr('فتح الواتساب يدوياً', 'Open WhatsApp manually'),
+        ),
         content: SelectableText(
-          'لم يُفتح الواتساب تلقائياً.\n'
-          'انسخ الرابط أو افتحه في تبويب جديد:\n\n$link',
+          '${strings.tr('لم يُفتح الواتساب تلقائياً.\nانسخ الرابط أو افتحه في تبويب جديد:', 'WhatsApp did not open automatically.\nCopy the link or open it in a new tab:')}\n\n$link',
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('إغلاق'),
+            child: Text(strings.tr('إغلاق', 'Close')),
           ),
           FilledButton(
             onPressed: () async {
@@ -309,7 +374,7 @@ $itemsDetails
                 message: 'طلب Molton Cookies - فاتورة #$invoiceNumber',
               );
             },
-            child: const Text('إعادة المحاولة'),
+            child: Text(strings.tr('إعادة المحاولة', 'Try again')),
           ),
         ],
       ),
@@ -317,6 +382,7 @@ $itemsDetails
   }
 
   void _showCartBottomSheet() {
+    final strings = AppStrings.read(context);
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -345,9 +411,12 @@ $itemsDetails
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          const Text(
-                            'تأكيد الطلب والفاتورة',
-                            style: TextStyle(
+                          Text(
+                            strings.tr(
+                              'تأكيد الطلب والفاتورة',
+                              'Confirm order and invoice',
+                            ),
+                            style: const TextStyle(
                               fontSize: 20,
                               fontWeight: FontWeight.bold,
                               color: burgundyColor,
@@ -363,9 +432,12 @@ $itemsDetails
                       Expanded(
                         child: ListView(
                           children: [
-                            const Text(
-                              'الأصناف المختارة:',
-                              style: TextStyle(
+                            Text(
+                              strings.tr(
+                                'الأصناف المختارة:',
+                                'Selected items:',
+                              ),
+                              style: const TextStyle(
                                 fontWeight: FontWeight.bold,
                                 fontSize: 16,
                               ),
@@ -375,29 +447,35 @@ $itemsDetails
                               final item = entry.value;
                               final lineTotal =
                                   (item['price'] as num).toDouble() *
-                                      (item['quantity'] as int);
+                                  (item['quantity'] as int);
                               return Padding(
-                                padding:
-                                    const EdgeInsets.symmetric(vertical: 4),
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 4,
+                                ),
                                 child: Row(
                                   mainAxisAlignment:
                                       MainAxisAlignment.spaceBetween,
                                   children: [
                                     Text(
-                                      "${item['name']} (x${item['quantity']})",
+                                      "${_cartItemName(item)} (x${item['quantity']})",
                                       style: const TextStyle(
                                         fontWeight: FontWeight.w500,
                                       ),
                                     ),
-                                    Text('${lineTotal.toStringAsFixed(3)} د.ك'),
+                                    Text(
+                                      '${lineTotal.toStringAsFixed(3)} ${strings.currency}',
+                                    ),
                                   ],
                                 ),
                               );
                             }),
                             const Divider(height: 25),
-                            const Text(
-                              'بيانات التوصيل:',
-                              style: TextStyle(
+                            Text(
+                              strings.tr(
+                                'بيانات التوصيل:',
+                                'Delivery details:',
+                              ),
+                              style: const TextStyle(
                                 fontWeight: FontWeight.bold,
                                 fontSize: 16,
                                 color: burgundyColor,
@@ -406,66 +484,93 @@ $itemsDetails
                             const SizedBox(height: 10),
                             TextFormField(
                               controller: _nameController,
-                              decoration: const InputDecoration(
-                                labelText: 'اسم العميل',
-                                border: OutlineInputBorder(),
+                              decoration: InputDecoration(
+                                labelText: strings.customerName,
+                                border: const OutlineInputBorder(),
                                 isDense: true,
                               ),
                               validator: (val) => val == null || val.isEmpty
-                                  ? 'يرجى إدخال الاسم'
+                                  ? strings.tr(
+                                      'يرجى إدخال الاسم',
+                                      'Please enter your name',
+                                    )
                                   : null,
                             ),
                             const SizedBox(height: 10),
                             TextFormField(
                               controller: _phoneController,
                               keyboardType: TextInputType.phone,
-                              decoration: const InputDecoration(
-                                labelText: 'رقم الهاتف',
-                                border: OutlineInputBorder(),
+                              decoration: InputDecoration(
+                                labelText: strings.phone,
+                                border: const OutlineInputBorder(),
                                 isDense: true,
                               ),
                               validator: (val) => val == null || val.isEmpty
-                                  ? 'يرجى إدخال رقم الهاتف'
+                                  ? strings.tr(
+                                      'يرجى إدخال رقم الهاتف',
+                                      'Please enter your phone number',
+                                    )
                                   : null,
                             ),
                             const SizedBox(height: 10),
                             TextFormField(
                               controller: _addressController,
                               maxLines: 2,
-                              decoration: const InputDecoration(
-                                labelText:
-                                    'عنوان التوصيل (المنطقة، القطعة، الشارع، المنزل)',
-                                border: OutlineInputBorder(),
+                              decoration: InputDecoration(
+                                labelText: strings.tr(
+                                  'عنوان التوصيل (المنطقة، القطعة، الشارع، المنزل)',
+                                  'Delivery address (area, block, street, house)',
+                                ),
+                                border: const OutlineInputBorder(),
                                 isDense: true,
                               ),
                               validator: (val) => val == null || val.isEmpty
-                                  ? 'يرجى إدخال العنوان'
+                                  ? strings.tr(
+                                      'يرجى إدخال العنوان',
+                                      'Please enter the address',
+                                    )
                                   : null,
                             ),
                             const SizedBox(height: 15),
-                            const Text(
-                              'طريقة الدفع:',
-                              style: TextStyle(
+                            Text(
+                              '${strings.paymentMethod}:',
+                              style: const TextStyle(
                                 fontWeight: FontWeight.bold,
                                 fontSize: 16,
                                 color: burgundyColor,
                               ),
                             ),
-                            RadioListTile<String>(
-                              title: const Text('دفع نقدي عند الاستلام (كاش)'),
-                              value: 'نقداً عند الاستلام',
+                            RadioGroup<String>(
                               groupValue: _paymentMethod,
-                              activeColor: burgundyColor,
-                              onChanged: (val) =>
-                                  setModalState(() => _paymentMethod = val!),
-                            ),
-                            RadioListTile<String>(
-                              title: const Text('كي نت (K-Net) عند الاستلام'),
-                              value: 'K-Net (كي نت)',
-                              groupValue: _paymentMethod,
-                              activeColor: burgundyColor,
-                              onChanged: (val) =>
-                                  setModalState(() => _paymentMethod = val!),
+                              onChanged: (val) {
+                                if (val != null) {
+                                  setModalState(() => _paymentMethod = val);
+                                }
+                              },
+                              child: Column(
+                                children: [
+                                  RadioListTile<String>(
+                                    title: Text(
+                                      strings.tr(
+                                        'دفع نقدي عند الاستلام (كاش)',
+                                        'Cash on delivery',
+                                      ),
+                                    ),
+                                    value: 'نقداً عند الاستلام',
+                                    activeColor: burgundyColor,
+                                  ),
+                                  RadioListTile<String>(
+                                    title: Text(
+                                      strings.tr(
+                                        'كي نت (K-Net) عند الاستلام',
+                                        'K-Net on delivery',
+                                      ),
+                                    ),
+                                    value: 'K-Net (كي نت)',
+                                    activeColor: burgundyColor,
+                                  ),
+                                ],
+                              ),
                             ),
                           ],
                         ),
@@ -474,15 +579,15 @@ $itemsDetails
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          const Text(
-                            'الإجمالي النهائي:',
-                            style: TextStyle(
+                          Text(
+                            '${strings.grandTotal}:',
+                            style: const TextStyle(
                               fontSize: 18,
                               fontWeight: FontWeight.bold,
                             ),
                           ),
                           Text(
-                            '${_totalCartPrice.toStringAsFixed(3)} د.ك',
+                            '${_totalCartPrice.toStringAsFixed(3)} ${strings.currency}',
                             style: const TextStyle(
                               fontSize: 20,
                               fontWeight: FontWeight.bold,
@@ -503,9 +608,12 @@ $itemsDetails
                             ),
                           ),
                           icon: const Icon(Icons.send, color: Colors.white),
-                          label: const Text(
-                            'إرسال الطلب عبر الواتساب',
-                            style: TextStyle(
+                          label: Text(
+                            strings.tr(
+                              'إرسال الطلب عبر الواتساب',
+                              'Send order via WhatsApp',
+                            ),
+                            style: const TextStyle(
                               color: Colors.white,
                               fontSize: 17,
                               fontWeight: FontWeight.bold,
@@ -540,8 +648,7 @@ $itemsDetails
                                   try {
                                     final order = Order(
                                       id: '',
-                                      customerName:
-                                          _nameController.text.trim(),
+                                      customerName: _nameController.text.trim(),
                                       phone: _phoneController.text.trim(),
                                       address: _addressController.text.trim(),
                                       items: orderItems
@@ -567,11 +674,15 @@ $itemsDetails
                                   } catch (e) {
                                     debugPrint('Order save error: $e');
                                     if (context.mounted) {
-                                      ScaffoldMessenger.of(context)
-                                          .showSnackBar(
-                                        const SnackBar(
+                                      ScaffoldMessenger.of(
+                                        context,
+                                      ).showSnackBar(
+                                        SnackBar(
                                           content: Text(
-                                            'تعذر حفظ الطلب. حاول مرة أخرى.',
+                                            strings.tr(
+                                              'تعذر حفظ الطلب. حاول مرة أخرى.',
+                                              'Could not save the order. Please try again.',
+                                            ),
                                           ),
                                         ),
                                       );
@@ -596,8 +707,13 @@ $itemsDetails
                                   if (context.mounted) {
                                     Navigator.pop(ctx);
                                     ScaffoldMessenger.of(context).showSnackBar(
-                                      const SnackBar(
-                                        content: Text('تم إرسال طلبك بنجاح!'),
+                                      SnackBar(
+                                        content: Text(
+                                          strings.tr(
+                                            'تم إرسال طلبك بنجاح!',
+                                            'Your order was sent successfully!',
+                                          ),
+                                        ),
                                       ),
                                     );
                                   }
@@ -616,7 +732,7 @@ $itemsDetails
     );
   }
 
-  Widget _buildCategoryBar(List<String> categories) {
+  Widget _buildCategoryBar(Map<String, String> categories) {
     return Container(
       height: 60,
       color: Colors.white,
@@ -625,14 +741,14 @@ $itemsDetails
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         itemCount: categories.length,
         itemBuilder: (context, index) {
-          final category = categories[index];
+          final category = categories.keys.elementAt(index);
           final isSelected = category == _selectedCategory;
 
           return Padding(
             padding: const EdgeInsets.only(left: 8),
             child: ChoiceChip(
               label: Text(
-                category,
+                categories[category] ?? category,
                 style: TextStyle(
                   color: isSelected ? Colors.white : burgundyColor,
                   fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
@@ -662,8 +778,11 @@ $itemsDetails
     required Map<String, dynamic> item,
     required int quantity,
   }) {
+    final strings = AppStrings.of(context);
     final imageUrl = item['imageUrl'] as String? ?? '';
     final price = (item['price'] as num?)?.toDouble() ?? 0;
+    final name = _localizedItemName(itemId, item);
+    final description = _localizedItemDescription(itemId, item);
 
     return Container(
       margin: const EdgeInsets.only(bottom: 14),
@@ -730,7 +849,7 @@ $itemsDetails
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    item['name'] as String? ?? '',
+                    name,
                     style: const TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
@@ -739,7 +858,7 @@ $itemsDetails
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    item['description'] as String? ?? '',
+                    description,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
@@ -750,7 +869,7 @@ $itemsDetails
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    '${price.toStringAsFixed(3)} د.ك',
+                    '${price.toStringAsFixed(3)} ${strings.currency}',
                     style: const TextStyle(
                       fontSize: 15,
                       fontWeight: FontWeight.bold,
@@ -835,6 +954,7 @@ $itemsDetails
   }
 
   Widget _buildFloatingCartBar() {
+    final strings = AppStrings.of(context);
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: const BoxDecoration(
@@ -862,30 +982,35 @@ $itemsDetails
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 4,
+                ),
                 decoration: BoxDecoration(
                   color: darkYellowColor,
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Text(
-                  '$_totalCartItems أصناف',
+                  strings.tr(
+                    '$_totalCartItems أصناف',
+                    '$_totalCartItems items',
+                  ),
                   style: const TextStyle(
                     color: Colors.white,
                     fontWeight: FontWeight.bold,
                   ),
                 ),
               ),
-              const Text(
-                'متابعة الطلب',
-                style: TextStyle(
+              Text(
+                strings.continueOrder,
+                style: const TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.bold,
                   color: Colors.white,
                 ),
               ),
               Text(
-                '${_totalCartPrice.toStringAsFixed(3)} د.ك',
+                '${_totalCartPrice.toStringAsFixed(3)} ${strings.currency}',
                 style: const TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.bold,
@@ -901,103 +1026,130 @@ $itemsDetails
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: lightBgColor,
-      appBar: AppBar(
-        backgroundColor: burgundyColor,
-        elevation: 2,
-        centerTitle: true,
-        title: const Row(
-          mainAxisSize: MainAxisSize.min,
+    final strings = AppStrings.of(context);
+    return Directionality(
+      textDirection: context.watch<LocaleProvider>().textDirection,
+      child: Scaffold(
+        backgroundColor: lightBgColor,
+        appBar: AppBar(
+          backgroundColor: burgundyColor,
+          elevation: 2,
+          centerTitle: true,
+          title: const Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.cookie, color: darkYellowColor, size: 26),
+              SizedBox(width: 8),
+              Text(
+                'Molten Cookies',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 20,
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            const LanguageToggleButton(
+              compact: true,
+              foregroundColor: Colors.white,
+            ),
+            IconButton(
+              icon: const Icon(Icons.admin_panel_settings, color: Colors.white),
+              onPressed: () => Navigator.pushNamed(context, '/admin'),
+            ),
+          ],
+        ),
+        body: Column(
           children: [
-            Icon(Icons.cookie, color: darkYellowColor, size: 26),
-            SizedBox(width: 8),
-            Text(
-              'Molten Cookies',
-              style: TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.bold,
-                fontSize: 20,
+            StreamBuilder<List<MenuItemRecord>>(
+              stream: MenuStorageService.instance.watchItems(),
+              builder: (context, snapshot) {
+                final categories = <String, String>{'الكل': strings.all};
+                final records = snapshot.data ?? [];
+                for (final record in records) {
+                  final data = record.data;
+                  if (data['isAvailable'] == false) continue;
+                  if (data['showOnWebsite'] == false ||
+                      data['show_on_website'] == false) {
+                    continue;
+                  }
+                  final cat = data['categoryName'];
+                  if (cat != null && cat.toString().isNotEmpty) {
+                    final rawCategory = cat.toString();
+                    final item = MenuItem.fromMap(record.id, data);
+                    categories[rawCategory] = item.localizedCategoryName(
+                      strings.localeCode,
+                    );
+                  }
+                }
+
+                return _buildCategoryBar(categories);
+              },
+            ),
+            Expanded(
+              child: StreamBuilder<List<MenuItemRecord>>(
+                stream: MenuStorageService.instance.watchItems(),
+                builder: (context, snapshot) {
+                  if (snapshot.hasError) {
+                    return Center(
+                      child: Text(
+                        '${strings.tr('خطأ', 'Error')}: ${snapshot.error}',
+                      ),
+                    );
+                  }
+                  if (snapshot.connectionState == ConnectionState.waiting &&
+                      !snapshot.hasData) {
+                    return const Center(
+                      child: CircularProgressIndicator(color: burgundyColor),
+                    );
+                  }
+
+                  final records = snapshot.data ?? [];
+                  final filteredRecords = records.where((record) {
+                    final data = record.data;
+                    if (data['isAvailable'] == false) return false;
+                    if (data['showOnWebsite'] == false ||
+                        data['show_on_website'] == false) {
+                      return false;
+                    }
+                    if (_selectedCategory == 'الكل') return true;
+                    return data['categoryName'] == _selectedCategory;
+                  }).toList();
+
+                  if (filteredRecords.isEmpty) {
+                    return Center(child: Text(strings.noItemsAvailable));
+                  }
+
+                  return ListView.builder(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 14,
+                    ),
+                    itemCount: filteredRecords.length,
+                    itemBuilder: (context, index) {
+                      final record = filteredRecords[index];
+                      final data = record.data;
+                      final id = record.id;
+                      final qtyInCart = _cart[id]?['quantity'] as int? ?? 0;
+
+                      return _buildMenuItemCard(
+                        itemId: id,
+                        item: data,
+                        quantity: qtyInCart,
+                      );
+                    },
+                  );
+                },
               ),
             ),
           ],
         ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.admin_panel_settings, color: Colors.white),
-            onPressed: () => Navigator.pushNamed(context, '/admin'),
-          ),
-        ],
+        bottomNavigationBar: _totalCartItems > 0
+            ? _buildFloatingCartBar()
+            : null,
       ),
-      body: Column(
-        children: [
-          StreamBuilder<List<MenuItemRecord>>(
-            stream: MenuStorageService.instance.watchItems(),
-            builder: (context, snapshot) {
-              final categories = <String>{'الكل'};
-              final records = snapshot.data ?? [];
-              for (final record in records) {
-                final data = record.data;
-                if (data['isAvailable'] == false) continue;
-                final cat = data['categoryName'];
-                if (cat != null && cat.toString().isNotEmpty) {
-                  categories.add(cat.toString());
-                }
-              }
-
-              return _buildCategoryBar(categories.toList());
-            },
-          ),
-          Expanded(
-            child: StreamBuilder<List<MenuItemRecord>>(
-              stream: MenuStorageService.instance.watchItems(),
-              builder: (context, snapshot) {
-                if (snapshot.hasError) {
-                  return Center(child: Text('خطأ: ${snapshot.error}'));
-                }
-                if (snapshot.connectionState == ConnectionState.waiting &&
-                    !snapshot.hasData) {
-                  return const Center(
-                    child: CircularProgressIndicator(color: burgundyColor),
-                  );
-                }
-
-                final records = snapshot.data ?? [];
-                final filteredRecords = records.where((record) {
-                  final data = record.data;
-                  if (data['isAvailable'] == false) return false;
-                  if (_selectedCategory == 'الكل') return true;
-                  return data['categoryName'] == _selectedCategory;
-                }).toList();
-
-                if (filteredRecords.isEmpty) {
-                  return const Center(child: Text('لا توجد أصناف حالياً'));
-                }
-
-                return ListView.builder(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                  itemCount: filteredRecords.length,
-                  itemBuilder: (context, index) {
-                    final record = filteredRecords[index];
-                    final data = record.data;
-                    final id = record.id;
-                    final qtyInCart = _cart[id]?['quantity'] as int? ?? 0;
-
-                    return _buildMenuItemCard(
-                      itemId: id,
-                      item: data,
-                      quantity: qtyInCart,
-                    );
-                  },
-                );
-              },
-            ),
-          ),
-        ],
-      ),
-      bottomNavigationBar:
-          _totalCartItems > 0 ? _buildFloatingCartBar() : null,
     );
   }
 }

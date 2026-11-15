@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart';
+
 import '../models/delivery_address_details.dart';
 import '../models/invoice_language.dart';
 import '../models/order.dart';
@@ -46,8 +48,11 @@ abstract final class PosPrintHelper {
   }
 
   static String? get restaurantAddress {
-    final description =
-        RestaurantSettingsService.instance.cached?.restaurantDescription.trim();
+    final description = RestaurantSettingsService
+        .instance
+        .cached
+        ?.restaurantDescription
+        .trim();
     if (description == null || description.isEmpty) return null;
     return description;
   }
@@ -116,21 +121,24 @@ abstract final class PosPrintHelper {
   }
 
   /// Always prints a kitchen 80mm ticket: QZ Tray first, browser print fallback.
-  static Future<void> printIncomingAcceptance({
+  static Future<bool> printIncomingAcceptance({
     required Order order,
     required PosReceiptKind kind,
   }) async {
+    final shift = PosOperationsService.instance.activeShift;
+    if (shift == null || !shift.isOpen) {
+      debugPrint(
+        'Kitchen print skipped for ${order.id}: no open cashier shift.',
+      );
+      return false;
+    }
     await ensureReady();
     final cfg = settings.copyWith(
       paperPreset: PosPrintPaperPreset.mm80,
       copies: 1,
     );
-    final html = buildHtml(
-      order: order,
-      kind: kind,
-      overrideSettings: cfg,
-    );
-    if (html.trim().isEmpty) return;
+    final html = buildHtml(order: order, kind: kind, overrideSettings: cfg);
+    if (html.trim().isEmpty) return false;
 
     final silent = await _tryQzSilentPrint(
       html: html,
@@ -139,9 +147,10 @@ abstract final class PosPrintHelper {
       widthMm: 80,
       printerName: cfg.qzPrinterName,
     );
-    if (silent) return;
+    if (silent) return true;
 
     await printPosReceiptHtml(html, zeroClick: true);
+    return true;
   }
 
   static Future<bool> _tryQzSilentPrint({

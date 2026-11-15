@@ -6,6 +6,7 @@ import '../../../models/menu_item.dart';
 import '../../../theme/app_theme.dart';
 import '../../network_menu_image.dart';
 import '../product_sale_price.dart';
+import '../menu_engineering_badge.dart';
 
 class MenuGridItemCard extends StatelessWidget {
   const MenuGridItemCard({
@@ -60,6 +61,12 @@ class MenuGridItemCard extends StatelessWidget {
                           percent: item.discountPercent!,
                           compact: true,
                         ),
+                      ),
+                    if ((item.catalogBadge ?? '').trim().isNotEmpty)
+                      Positioned(
+                        bottom: 8,
+                        left: 8,
+                        child: MenuEngineeringBadge.forItem(item, compact: true),
                       ),
                     Positioned(
                       top: 8,

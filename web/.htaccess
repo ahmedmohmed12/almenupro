@@ -1,0 +1,21 @@
+# Flutter web SPA on Apache (cPanel / shared hosting).
+# Upload the contents of build/web to public_html (or a subdomain folder).
+
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteBase /
+
+  # Existing files and folders (js, png, canvaskit, assets) are served as-is.
+  RewriteCond %{REQUEST_FILENAME} -f [OR]
+  RewriteCond %{REQUEST_FILENAME} -d
+  RewriteRule ^ - [L]
+
+  # Deep links: /admin, /admin/pos, /suhail-alyamani → index.html
+  RewriteRule ^ index.html [L]
+</IfModule>
+
+<IfModule mod_headers.c>
+  <FilesMatch "\.(html|js)$">
+    Header set Cache-Control "no-cache, no-store, must-revalidate"
+  </FilesMatch>
+</IfModule>

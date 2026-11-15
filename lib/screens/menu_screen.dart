@@ -1,4 +1,8 @@
+import 'dart:async';
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../models/customer_restaurant_context.dart';
@@ -6,24 +10,42 @@ import '../models/delivery_zone.dart';
 import '../models/menu_item.dart';
 import '../models/offer.dart';
 import '../models/restaurant.dart';
+import '../models/restaurant_review.dart';
 import '../models/restaurant_settings.dart';
 import '../providers/cart_provider.dart';
 import '../providers/customer_session_provider.dart';
+import '../providers/locale_provider.dart';
+import '../providers/order_type_provider.dart';
+import '../models/order.dart';
 import '../services/api_service.dart';
+import '../services/dining_tables_service.dart';
+import '../services/pending_review_service.dart';
 import '../theme/app_theme.dart';
 import '../utils/discount.dart';
+import '../utils/dynamic_menu_sort.dart';
+import '../utils/restaurant_route.dart';
 import '../widgets/menu/customer_phone_gate.dart';
 import '../widgets/menu/customization_dialog.dart';
 import '../widgets/menu/free_delivery_progress_bar.dart';
 import '../widgets/menu/menu_checkout_sheet.dart';
+import '../widgets/menu/order_review_sheet.dart';
 import '../widgets/menu/storefront_header.dart';
 import '../widgets/menu/storefront_offers_banner.dart';
+import '../widgets/menu/video/menu_video_widgets.dart';
+import '../widgets/table_qr/table_service_actions.dart';
 import '../l10n/app_strings.dart';
 
 class MenuScreen extends StatefulWidget {
-  const MenuScreen({super.key, this.slug});
+  const MenuScreen({
+    super.key,
+    this.slug,
+    this.dineInTableId,
+    this.dineInTableName,
+  });
 
   final String? slug;
+  final String? dineInTableId;
+  final String? dineInTableName;
 
   @override
   State<MenuScreen> createState() => _MenuScreenState();
@@ -38,24 +60,64 @@ class _MenuScreenState extends State<MenuScreen> {
   Restaurant? _restaurant;
   RestaurantSettings? _settings;
   List<DeliveryZone> _zones = const [];
+  ReviewSummary _reviewSummary = const ReviewSummary();
   var _loading = true;
   var _loadingMore = false;
   var _retrying = false;
   var _total = 0;
   String? _error;
-  String _selectedCategory = 'اختيارات على ذوقك';
+  String _selectedCategory = 'الكل';
+  var _searchOpen = false;
+  String _searchQuery = '';
+  final _searchController = TextEditingController();
+  final _searchFocus = FocusNode();
+  Timer? _reviewPollTimer;
+  var _reviewPromptOpen = false;
+  final Set<String> _promptedOrderIds = {};
+  String _dineInTableId = '';
+  String _dineInTableName = '';
+  var _tableContextResolved = false;
 
   @override
   void initState() {
     super.initState();
+    _dineInTableId =
+        (widget.dineInTableId ?? Uri.base.queryParameters['table'] ?? '')
+            .trim();
+    _dineInTableName = widget.dineInTableName?.trim() ?? '';
     _loadItems(autoRetry: true);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<CustomerSessionProvider>().restore();
+      if (_dineInTableId.isNotEmpty) {
+        context.read<CustomerSessionProvider>().bindDineInTable(
+          tableId: _dineInTableId,
+          tableName: _dineInTableName,
+        );
+        context.read<OrderTypeProvider>().setOrderType(OrderType.dineIn);
+      }
+      unawaited(_checkPendingReviews(forceUrlRate: true));
     });
+    _reviewPollTimer = Timer.periodic(
+      const Duration(seconds: 45),
+      (_) => unawaited(_checkPendingReviews()),
+    );
   }
 
-  String get _restaurantId =>
-      _restaurant?.id ?? ApiService.defaultRestaurantId;
+  @override
+  void dispose() {
+    _reviewPollTimer?.cancel();
+    _searchController.dispose();
+    _searchFocus.dispose();
+    super.dispose();
+  }
+
+  String get _restaurantId => _restaurant?.id ?? ApiService.defaultRestaurantId;
+
+  String? get _menuSlug {
+    final fromWidget = widget.slug?.trim().toLowerCase();
+    if (fromWidget != null && fromWidget.isNotEmpty) return fromWidget;
+    return RestaurantRoute.slugFromBrowserLocation();
+  }
 
   CustomerRestaurantContext? get _restaurantContext {
     final restaurant = _restaurant;
@@ -67,18 +129,91 @@ class _MenuScreenState extends State<MenuScreen> {
     );
   }
 
+  Future<void> _checkPendingReviews({bool forceUrlRate = false}) async {
+    if (!mounted || _reviewPromptOpen) return;
+    final slug = _menuSlug;
+    final restaurantId = _restaurant?.id;
+    if (slug == null || slug.isEmpty || restaurantId == null) return;
+
+    final strings = AppStrings.read(context);
+    final candidates = <PendingReviewRequest>[];
+
+    if (forceUrlRate && kIsWeb) {
+      final rateId =
+          (Uri.base.queryParameters['rate'] ??
+                  Uri.base.queryParameters['review'] ??
+                  '')
+              .trim();
+      if (rateId.isNotEmpty) {
+        candidates.add(
+          PendingReviewRequest(
+            orderId: rateId,
+            restaurantId: restaurantId,
+            restaurantSlug: slug,
+            restaurantName: _restaurant?.name ?? '',
+          ),
+        );
+      }
+    }
+
+    candidates.addAll(await PendingReviewService.instance.list());
+
+    for (final pending in candidates) {
+      if (_promptedOrderIds.contains(pending.orderId)) continue;
+      if (await PendingReviewService.instance.wasDismissed(pending.orderId)) {
+        continue;
+      }
+
+      final eligibility = await ApiService.instance.fetchReviewEligibility(
+        orderId: pending.orderId,
+        slug: slug,
+        restaurantId: restaurantId,
+      );
+
+      if (!eligibility.eligible) {
+        if (eligibility.reason == 'already_reviewed') {
+          await PendingReviewService.instance.remove(pending.orderId);
+        }
+        continue;
+      }
+
+      if (!mounted || _reviewPromptOpen) return;
+      _reviewPromptOpen = true;
+      _promptedOrderIds.add(pending.orderId);
+      final submitted = await OrderReviewSheet.show(
+        context,
+        orderId: pending.orderId,
+        restaurantId: restaurantId,
+        restaurantSlug: slug,
+        restaurantName: _restaurant?.name ?? '',
+        invoiceNumber: eligibility.invoiceNumber,
+        customerName: eligibility.customerName,
+        strings: strings,
+      );
+      _reviewPromptOpen = false;
+
+      if (submitted == true) {
+        await PendingReviewService.instance.remove(pending.orderId);
+        final summary = await ApiService.instance.fetchReviewSummary(
+          slug: slug,
+        );
+        if (mounted) setState(() => _reviewSummary = summary);
+      } else {
+        await PendingReviewService.instance.markDismissed(pending.orderId);
+      }
+      break;
+    }
+  }
+
   Future<Restaurant> _resolveRestaurant() async {
-    final slug = widget.slug?.trim().toLowerCase();
+    final slug = (widget.slug?.trim().toLowerCase().isNotEmpty == true)
+        ? widget.slug!.trim().toLowerCase()
+        : RestaurantRoute.slugFromBrowserLocation();
     if (slug != null && slug.isNotEmpty) {
       return ApiService.instance.fetchPublicRestaurant(slug: slug);
     }
-    final restaurants = await ApiService.instance.fetchPublicRestaurants();
-    if (restaurants.isEmpty) {
-      throw Exception('لا توجد مطاعم متاحة حالياً');
-    }
-    return restaurants.firstWhere(
-      (entry) => entry.id == ApiService.defaultRestaurantId,
-      orElse: () => restaurants.first,
+    throw Exception(
+      AppStrings.read(context).tr('المطعم غير موجود', 'Restaurant not found'),
     );
   }
 
@@ -97,6 +232,7 @@ class _MenuScreenState extends State<MenuScreen> {
     try {
       if (reset || _restaurant == null) {
         _restaurant = await _resolveRestaurant();
+        await _resolveTableContext();
         if (mounted) {
           context.read<CartProvider>().bindRestaurant(_restaurantId);
         }
@@ -106,6 +242,7 @@ class _MenuScreenState extends State<MenuScreen> {
         lite: true,
         limit: _pageSize,
         offset: reset ? 0 : _items.length,
+        channel: 'website',
       );
       if (reset) {
         try {
@@ -128,6 +265,14 @@ class _MenuScreenState extends State<MenuScreen> {
         } catch (_) {
           if (mounted) _offers = const [];
         }
+        try {
+          final summary = await ApiService.instance.fetchReviewSummary(
+            slug: _menuSlug,
+            restaurantId: _restaurantId,
+          );
+          if (mounted) _reviewSummary = summary;
+        } catch (_) {}
+        unawaited(_checkPendingReviews());
       }
       if (!mounted) return;
       setState(() {
@@ -147,6 +292,7 @@ class _MenuScreenState extends State<MenuScreen> {
             lite: true,
             limit: _pageSize,
             offset: 0,
+            channel: 'website',
           );
           if (!mounted) return;
           context.read<CartProvider>().bindRestaurant(_restaurantId);
@@ -170,18 +316,50 @@ class _MenuScreenState extends State<MenuScreen> {
     }
   }
 
+  Future<void> _resolveTableContext() async {
+    if (_tableContextResolved || _dineInTableId.isEmpty || _restaurant == null) {
+      return;
+    }
+    _tableContextResolved = true;
+    try {
+      final result = await DiningTablesService.instance.fetchPublicTable(
+        branchId: _restaurant!.id,
+        tableId: _dineInTableId,
+      );
+      _dineInTableId = result.table.id;
+      _dineInTableName = result.table.displayName;
+      if (!mounted) return;
+      context.read<CustomerSessionProvider>().bindDineInTable(
+        tableId: _dineInTableId,
+        tableName: _dineInTableName,
+        restaurantId: _restaurant!.id,
+        tableZone: result.table.zone,
+      );
+      context.read<OrderTypeProvider>().setOrderType(OrderType.dineIn);
+    } catch (_) {
+      if (!mounted) return;
+      context.read<CustomerSessionProvider>().bindDineInTable(
+        tableId: _dineInTableId,
+        tableName: _dineInTableName,
+        restaurantId: _restaurant!.id,
+      );
+    }
+  }
+
   void _addToCart(MenuItem item) {
     if (item.hasCustomizations) {
       showCustomizationDialog(context, item);
       return;
     }
+    final strings = AppStrings.read(context);
+    final displayName = item.localizedName(strings.localeCode);
     context.read<CartProvider>().addMenuItem(
-          item,
-          offerId: matchingOfferIdForItem(item, _offers),
-        );
+      item,
+      offerId: matchingOfferIdForItem(item, _offers),
+    );
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('تمت إضافة "${item.name}" إلى السلة'),
+        content: Text(strings.addedToCart(displayName)),
         duration: const Duration(seconds: 2),
         behavior: SnackBarBehavior.floating,
       ),
@@ -189,48 +367,108 @@ class _MenuScreenState extends State<MenuScreen> {
   }
 
   List<String> _categories(List<MenuItem> items) {
-    final categories = <String>{
+    final categories = <String>[
+      'الكل',
+      if (_settings?.smartUpsellEnabled != false) _smartCategory,
       if (_offers.isNotEmpty || items.any((item) => item.hasDiscount))
         _offersCategory,
-      if (_settings?.smartUpsellEnabled != false) _smartCategory,
-      'الكل',
-    };
+    ];
+    final seen = categories.toSet();
     for (final item in items) {
-      if (item.categoryName.trim().isNotEmpty) {
-        categories.add(item.categoryName.trim());
+      final name = item.categoryName.trim();
+      if (name.isNotEmpty && seen.add(name)) {
+        categories.add(name);
       }
     }
-    return categories.toList();
+    return categories;
   }
 
   List<MenuItem> _filteredItems(List<MenuItem> items) {
+    List<MenuItem> result;
     if (_selectedCategory == _offersCategory) {
-      return itemsForOffersTab(items, _offers, originalItems: _items);
-    }
-    if (_selectedCategory == _smartCategory) {
+      result = itemsForOffersTab(items, _offers, originalItems: _items);
+    } else if (_selectedCategory == _smartCategory) {
       if (_settings?.smartUpsellEnabled == false) {
-        return items;
+        result = items;
+      } else {
+        final bumpIds = _settings?.impulseBumpItemIds ?? const <int>[];
+        if (bumpIds.isNotEmpty) {
+          final byId = {for (final item in items) item.id: item};
+          final picked = bumpIds
+              .map((id) => byId[id])
+              .whereType<MenuItem>()
+              .toList();
+          result = picked.isNotEmpty ? picked : items;
+        } else {
+          final maxPrice = _settings?.impulseBumpMaxPrice ?? 2;
+          final cheap = items.where((item) => item.price <= maxPrice).toList()
+            ..sort((a, b) => a.price.compareTo(b.price));
+          if (cheap.isNotEmpty) {
+            result = cheap.take(8).toList();
+          } else {
+            final sorted = [...items]
+              ..sort((a, b) => a.price.compareTo(b.price));
+            result = sorted.take(8).toList();
+          }
+        }
       }
-      final bumpIds = _settings?.impulseBumpItemIds ?? const <int>[];
-      if (bumpIds.isNotEmpty) {
-        final byId = {for (final item in items) item.id: item};
-        final picked = bumpIds
-            .map((id) => byId[id])
-            .whereType<MenuItem>()
-            .toList();
-        if (picked.isNotEmpty) return picked;
-      }
-      final maxPrice = _settings?.impulseBumpMaxPrice ?? 2;
-      final cheap = items.where((item) => item.price <= maxPrice).toList()
-        ..sort((a, b) => a.price.compareTo(b.price));
-      if (cheap.isNotEmpty) return cheap.take(8).toList();
-      final sorted = [...items]..sort((a, b) => a.price.compareTo(b.price));
-      return sorted.take(8).toList();
+    } else if (_selectedCategory == 'الكل') {
+      result = items;
+    } else {
+      result = items
+          .where((item) => item.categoryName.trim() == _selectedCategory)
+          .toList();
     }
-    if (_selectedCategory == 'الكل') return items;
-    return items
-        .where((item) => item.categoryName.trim() == _selectedCategory)
-        .toList();
+    return sortCatalogItems(_applySearch(result), settings: _settings);
+  }
+
+  List<MenuItem> _applySearch(List<MenuItem> items) {
+    final query = _searchQuery.trim().toLowerCase();
+    if (query.isEmpty) return items;
+    return items.where((item) {
+      final haystack = [
+        item.name,
+        item.nameAr,
+        item.nameEn,
+        item.description,
+        item.descriptionAr,
+        item.descriptionEn,
+        item.categoryName,
+        item.categoryNameEn,
+      ].join(' ').toLowerCase();
+      return haystack.contains(query);
+    }).toList();
+  }
+
+  void _toggleSearch() {
+    setState(() {
+      _searchOpen = !_searchOpen;
+      if (!_searchOpen) {
+        _searchQuery = '';
+        _searchController.clear();
+      }
+    });
+    if (_searchOpen) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _searchFocus.requestFocus();
+      });
+    }
+  }
+
+  Future<void> _shareMenu() async {
+    final slug = (_restaurant?.slug ?? widget.slug ?? '').trim();
+    final uri = Uri.base;
+    final origin =
+        '${uri.scheme}://${uri.host}${uri.hasPort ? ':${uri.port}' : ''}';
+    final link = slug.isEmpty ? uri.toString() : '$origin/$slug';
+    await Clipboard.setData(ClipboardData(text: link));
+    if (!mounted) return;
+    final arabic = context.read<LocaleProvider>().isArabic;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(arabic ? 'تم نسخ رابط المنيو' : 'Menu link copied'),
+      ),
+    );
   }
 
   int _gridColumns(double width) {
@@ -284,16 +522,13 @@ class _MenuScreenState extends State<MenuScreen> {
           mainAxisSpacing: gap,
           childAspectRatio: _gridChildAspect(columns),
         ),
-        delegate: SliverChildBuilderDelegate(
-          (context, index) {
-            return StorefrontItemCard(
-              item: items[index],
-              onAdd: () => _addToCart(items[index]),
-              dense: columns <= 2,
-            );
-          },
-          childCount: items.length,
-        ),
+        delegate: SliverChildBuilderDelegate((context, index) {
+          return StorefrontItemCard(
+            item: items[index],
+            onAdd: () => _addToCart(items[index]),
+            dense: columns <= 2,
+          );
+        }, childCount: items.length),
       ),
     );
   }
@@ -304,7 +539,7 @@ class _MenuScreenState extends State<MenuScreen> {
     final session = context.watch<CustomerSessionProvider>();
 
     return Directionality(
-      textDirection: TextDirection.rtl,
+      textDirection: context.watch<LocaleProvider>().textDirection,
       child: Scaffold(
         backgroundColor: AppTheme.brandBackground,
         body: SafeArea(
@@ -324,7 +559,18 @@ class _MenuScreenState extends State<MenuScreen> {
                     onCheckout: _openCartAndSmartSalesman,
                   ),
                 ),
-              if (!session.identified) const CustomerPhoneGate(),
+              if (session.isQrDineIn)
+                PositionedDirectional(
+                  end: 14,
+                  bottom: cart.items.isEmpty ? 18 : 92,
+                  child: TableServiceActions(
+                    branchId: _restaurantId,
+                    tableId: session.dineInTableId ?? _dineInTableId,
+                    restaurantId: _restaurantId,
+                  ),
+                ),
+              if (!session.identified && !session.isQrDineIn)
+                const CustomerPhoneGate(),
             ],
           ),
         ),
@@ -341,16 +587,17 @@ class _MenuScreenState extends State<MenuScreen> {
   }
 
   Widget _buildBody({double cartReserve = 0}) {
+    final strings = AppStrings.of(context);
     if (_loading && _items.isEmpty) {
-      return const Center(
+      return Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            CircularProgressIndicator(color: AppTheme.brandOrange),
-            SizedBox(height: 16),
+            const CircularProgressIndicator(color: AppTheme.brandOrange),
+            const SizedBox(height: 16),
             Text(
-              'جاري تحميل المنيو...',
-              style: TextStyle(color: AppTheme.brandBlack),
+              strings.tr('جاري تحميل المنيو...', 'Loading menu...'),
+              style: const TextStyle(color: AppTheme.brandBlack),
             ),
           ],
         ),
@@ -359,7 +606,7 @@ class _MenuScreenState extends State<MenuScreen> {
 
     if (_items.isEmpty) {
       return _ErrorState(
-        message: _error ?? 'لا توجد أصناف متاحة حالياً',
+        message: _error ?? strings.noItemsAvailable,
         onRetry: () => _loadItems(autoRetry: true),
       );
     }
@@ -367,12 +614,9 @@ class _MenuScreenState extends State<MenuScreen> {
     final pricedItems = applyOfferDiscountsToItems(_items, _offers);
     final categories = _categories(pricedItems);
     final filtered = _filteredItems(pricedItems);
-    final offerGroups = _selectedCategory == _offersCategory
-        ? groupItemsForOffersTab(
-            pricedItems,
-            _offers,
-            originalItems: _items,
-          )
+    final offerGroups =
+        _selectedCategory == _offersCategory && _searchQuery.trim().isEmpty
+        ? groupItemsForOffersTab(pricedItems, _offers, originalItems: _items)
         : null;
 
     return Column(
@@ -389,13 +633,16 @@ class _MenuScreenState extends State<MenuScreen> {
                 children: [
                   Text(
                     _retrying
-                        ? 'جاري تحديث المنيو...'
-                        : 'تعذر التحديث. يمكنك متابعة التصفح.',
+                        ? strings.tr('جاري تحديث المنيو...', 'Updating menu...')
+                        : strings.tr(
+                            'تعذر التحديث. يمكنك متابعة التصفح.',
+                            'Update failed. You can continue browsing.',
+                          ),
                     style: const TextStyle(fontSize: 13),
                   ),
                   TextButton(
                     onPressed: _retrying ? null : () => _loadItems(),
-                    child: const Text('إعادة المحاولة'),
+                    child: Text(strings.tr('إعادة المحاولة', 'Try again')),
                   ),
                 ],
               ),
@@ -413,131 +660,267 @@ class _MenuScreenState extends State<MenuScreen> {
               return false;
             },
             child: RefreshIndicator(
-            color: AppTheme.brandOrange,
-            onRefresh: () => _loadItems(),
-            child: LayoutBuilder(
-              builder: (context, viewport) {
-                final maxWidth = viewport.maxWidth >= 1280 ? 1240.0 : viewport.maxWidth;
-                return Align(
-                  alignment: Alignment.topCenter,
-                  child: ConstrainedBox(
-                    constraints: BoxConstraints(maxWidth: maxWidth),
-                    child: CustomScrollView(
-              slivers: [
-                SliverToBoxAdapter(
-                  child: StorefrontHero(
-                    restaurantName: _restaurant?.name ?? 'AlMenuPro',
-                    description: _settings?.restaurantDescription ?? '',
-                    logoUrl: _settings?.logoUrl ?? '',
-                    deliveryFee: _zones.isEmpty ? 0 : _zones.first.deliveryFee,
-                    session: context.watch<CustomerSessionProvider>(),
-                  ),
-                ),
-                if (_offers.isNotEmpty)
-                  SliverToBoxAdapter(
-                    child: StorefrontOffersBanner(
-                      offers: _offers,
-                      onOpenOffers: () {
-                        setState(() => _selectedCategory = _offersCategory);
-                      },
-                    ),
-                  ),
-                SliverToBoxAdapter(
-                  child: _CategoryBar(
-                    categories: categories,
-                    selected: _selectedCategory,
-                    onSelected: (value) {
-                      setState(() => _selectedCategory = value);
-                    },
-                  ),
-                ),
-                if (filtered.isEmpty)
-                  SliverFillRemaining(
-                    hasScrollBody: false,
-                    child: Center(
-                      child: Text(
-                        _selectedCategory == _offersCategory
-                            ? 'لا توجد أصناف مخفضة حالياً'
-                            : 'لا توجد أصناف في هذا التصنيف',
-                        style: const TextStyle(
-                          color: AppTheme.brandBlack,
-                          fontSize: 16,
-                        ),
-                      ),
-                    ),
-                  )
-                else
-                  SliverLayoutBuilder(
-                    builder: (context, constraints) {
-                      final width = constraints.crossAxisExtent;
-                      final columns = _gridColumns(width);
-                      final pad = width >= 900 ? 20.0 : width >= 600 ? 12.0 : 10.0;
-                      final gap = width >= 900 ? 14.0 : 8.0;
-                      final groups = offerGroups;
-                      if (groups != null) {
-                        return SliverMainAxisGroup(
-                          slivers: [
-                            if (groups.featured.isNotEmpty) ...[
-                              _offersSectionHeader('عروض مميزة', pad),
-                              _offersItemGrid(
-                                groups.featured,
-                                columns: columns,
-                                pad: pad,
-                                gap: gap,
-                              ),
-                            ],
-                            if (groups.rest.isNotEmpty) ...[
-                              if (groups.featured.isNotEmpty)
-                                _offersSectionHeader('باقي المنيو', pad),
-                              _offersItemGrid(
-                                groups.rest,
-                                columns: columns,
-                                pad: pad,
-                                gap: gap,
-                              ),
-                            ],
-                          ],
-                        );
-                      }
-
-                      return _offersItemGrid(
-                        filtered,
-                        columns: columns,
-                        pad: pad,
-                        gap: gap,
-                      );
-                    },
-                  ),
-                if (_items.length < _total || _loadingMore)
-                  SliverToBoxAdapter(
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(10, 0, 10, 16),
-                      child: Center(
-                        child: _loadingMore
-                            ? const CircularProgressIndicator(
-                                color: AppTheme.brandOrange,
-                              )
-                            : TextButton(
-                                onPressed: () => _loadItems(reset: false),
-                                child: Text(
-                                  'عرض المزيد (${_items.length}/$_total)',
+              color: AppTheme.brandOrange,
+              onRefresh: () => _loadItems(),
+              child: LayoutBuilder(
+                builder: (context, viewport) {
+                  final maxWidth = viewport.maxWidth >= 1280
+                      ? 1240.0
+                      : viewport.maxWidth;
+                  return Align(
+                    alignment: Alignment.topCenter,
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(maxWidth: maxWidth),
+                      child: CustomScrollView(
+                        slivers: [
+                          SliverToBoxAdapter(
+                            child: StorefrontHero(
+                              restaurantName: _restaurant?.name ?? 'AlMenuPro',
+                              description:
+                                  _settings?.restaurantDescription ?? '',
+                              logoUrl: _settings?.logoUrl ?? '',
+                              heroImageUrl: _settings?.heroImageUrl ?? '',
+                              deliveryFee: _zones.isEmpty
+                                  ? 0
+                                  : _zones.first.deliveryFee,
+                              session: context.watch<CustomerSessionProvider>(),
+                              isArabic: context
+                                  .watch<LocaleProvider>()
+                                  .isArabic,
+                              rating: _reviewSummary.hasReviews
+                                  ? _reviewSummary.average
+                                  : null,
+                              reviewCount: _reviewSummary.count,
+                              onSearch: _toggleSearch,
+                              onShare: _shareMenu,
+                              onToggleLanguage: () =>
+                                  context.read<LocaleProvider>().toggle(),
+                            ),
+                          ),
+                          if (_searchOpen)
+                            SliverToBoxAdapter(
+                              child: Padding(
+                                padding: const EdgeInsets.fromLTRB(
+                                  10,
+                                  8,
+                                  10,
+                                  0,
+                                ),
+                                child: TextField(
+                                  controller: _searchController,
+                                  focusNode: _searchFocus,
+                                  onChanged: (value) =>
+                                      setState(() => _searchQuery = value),
+                                  decoration: InputDecoration(
+                                    hintText:
+                                        context.watch<LocaleProvider>().isArabic
+                                        ? 'ابحث في المنيو...'
+                                        : 'Search the menu...',
+                                    prefixIcon: const Icon(Icons.search),
+                                    suffixIcon: _searchQuery.isEmpty
+                                        ? IconButton(
+                                            icon: const Icon(Icons.close),
+                                            onPressed: _toggleSearch,
+                                          )
+                                        : IconButton(
+                                            icon: const Icon(Icons.clear),
+                                            onPressed: () {
+                                              _searchController.clear();
+                                              setState(() => _searchQuery = '');
+                                            },
+                                          ),
+                                    filled: true,
+                                    fillColor: Colors.white,
+                                    contentPadding: const EdgeInsets.symmetric(
+                                      horizontal: 12,
+                                      vertical: 10,
+                                    ),
+                                    border: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(14),
+                                      borderSide: const BorderSide(
+                                        color: Color(0xFFE0D6CC),
+                                      ),
+                                    ),
+                                    enabledBorder: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(14),
+                                      borderSide: const BorderSide(
+                                        color: Color(0xFFE0D6CC),
+                                      ),
+                                    ),
+                                  ),
                                 ),
                               ),
+                            ),
+                          if (_offers.isNotEmpty)
+                            SliverToBoxAdapter(
+                              child: StorefrontOffersBanner(
+                                offers: _offers,
+                                onOpenOffers: () {
+                                  setState(
+                                    () => _selectedCategory = _offersCategory,
+                                  );
+                                },
+                              ),
+                            ),
+                          SliverToBoxAdapter(
+                            child: FeaturedStoriesBar(
+                              items: pricedItems,
+                              onAdd: _addToCart,
+                            ),
+                          ),
+                          SliverToBoxAdapter(
+                            child: _CategoryBar(
+                              categories: categories,
+                              selected: _selectedCategory,
+                              labelFor: (category) {
+                                if (category == _smartCategory) {
+                                  return strings.tr(
+                                    'اختيارات على ذوقك',
+                                    'Picks for you',
+                                  );
+                                }
+                                if (category == _offersCategory) {
+                                  return strings.tr(
+                                    'العروض والخصومات',
+                                    'Offers & discounts',
+                                  );
+                                }
+                                if (category == 'الكل') return strings.all;
+                                final matching = pricedItems.where(
+                                  (item) =>
+                                      item.categoryName.trim() == category,
+                                );
+                                return matching.isEmpty
+                                    ? category
+                                    : matching.first.localizedCategoryName(
+                                        strings.localeCode,
+                                      );
+                              },
+                              onSelected: (value) {
+                                setState(() => _selectedCategory = value);
+                              },
+                            ),
+                          ),
+                          if (filtered.isEmpty)
+                            SliverFillRemaining(
+                              hasScrollBody: false,
+                              child: Center(
+                                child: Text(
+                                  _searchQuery.trim().isNotEmpty
+                                      ? (context
+                                                .watch<LocaleProvider>()
+                                                .isArabic
+                                            ? 'لا توجد نتائج للبحث'
+                                            : 'No search results')
+                                      : _selectedCategory == _offersCategory
+                                      ? strings.tr(
+                                          'لا توجد أصناف مخفضة حالياً',
+                                          'No discounted items right now',
+                                        )
+                                      : strings.noItemsInCategory,
+                                  style: const TextStyle(
+                                    color: AppTheme.brandBlack,
+                                    fontSize: 16,
+                                  ),
+                                ),
+                              ),
+                            )
+                          else
+                            SliverLayoutBuilder(
+                              builder: (context, constraints) {
+                                final width = constraints.crossAxisExtent;
+                                final columns = _gridColumns(width);
+                                final pad = width >= 900
+                                    ? 20.0
+                                    : width >= 600
+                                    ? 12.0
+                                    : 10.0;
+                                final gap = width >= 900 ? 14.0 : 8.0;
+                                final groups = offerGroups;
+                                if (groups != null) {
+                                  return SliverMainAxisGroup(
+                                    slivers: [
+                                      if (groups.featured.isNotEmpty) ...[
+                                        _offersSectionHeader(
+                                          strings.tr(
+                                            'عروض مميزة',
+                                            'Featured offers',
+                                          ),
+                                          pad,
+                                        ),
+                                        _offersItemGrid(
+                                          groups.featured,
+                                          columns: columns,
+                                          pad: pad,
+                                          gap: gap,
+                                        ),
+                                      ],
+                                      if (groups.rest.isNotEmpty) ...[
+                                        if (groups.featured.isNotEmpty)
+                                          _offersSectionHeader(
+                                            strings.tr(
+                                              'باقي المنيو',
+                                              'More from the menu',
+                                            ),
+                                            pad,
+                                          ),
+                                        _offersItemGrid(
+                                          groups.rest,
+                                          columns: columns,
+                                          pad: pad,
+                                          gap: gap,
+                                        ),
+                                      ],
+                                    ],
+                                  );
+                                }
+
+                                return _offersItemGrid(
+                                  filtered,
+                                  columns: columns,
+                                  pad: pad,
+                                  gap: gap,
+                                );
+                              },
+                            ),
+                          if (_items.length < _total || _loadingMore)
+                            SliverToBoxAdapter(
+                              child: Padding(
+                                padding: const EdgeInsets.fromLTRB(
+                                  10,
+                                  0,
+                                  10,
+                                  16,
+                                ),
+                                child: Center(
+                                  child: _loadingMore
+                                      ? const CircularProgressIndicator(
+                                          color: AppTheme.brandOrange,
+                                        )
+                                      : TextButton(
+                                          onPressed: () =>
+                                              _loadItems(reset: false),
+                                          child: Text(
+                                            '${strings.tr('عرض المزيد', 'Show more')} (${_items.length}/$_total)',
+                                          ),
+                                        ),
+                                ),
+                              ),
+                            ),
+                          if (cartReserve > 0)
+                            SliverToBoxAdapter(
+                              child: SizedBox(
+                                height:
+                                    cartReserve +
+                                    MediaQuery.paddingOf(context).bottom,
+                              ),
+                            ),
+                        ],
                       ),
                     ),
-                  ),
-                if (cartReserve > 0)
-                  SliverToBoxAdapter(
-                    child: SizedBox(
-                      height: cartReserve + MediaQuery.paddingOf(context).bottom,
-                    ),
-                  ),
-              ],
-            ),
-                  ),
-                );
-              },
-            ),
+                  );
+                },
+              ),
             ),
           ),
         ),
@@ -562,8 +945,7 @@ class _StorefrontCartBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final strings = AppStrings.of(context);
-    final showFreeDelivery =
-        settings != null && settings!.hasFreeDeliveryGoal;
+    final showFreeDelivery = settings != null && settings!.hasFreeDeliveryGoal;
 
     return Material(
       color: Colors.white,
@@ -627,7 +1009,7 @@ class _StorefrontCartBar extends StatelessWidget {
                             ),
                             Expanded(
                               child: Text(
-                                'متابعة الطلب',
+                                strings.continueOrder,
                                 textAlign: TextAlign.center,
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
@@ -642,7 +1024,7 @@ class _StorefrontCartBar extends StatelessWidget {
                                 fit: BoxFit.scaleDown,
                                 alignment: AlignmentDirectional.centerEnd,
                                 child: Text(
-                                  '${totalPrice.toStringAsFixed(3)} د.ك',
+                                  '${totalPrice.toStringAsFixed(3)} ${strings.currency}',
                                   maxLines: 1,
                                   style: TextStyle(
                                     fontSize: narrow ? 13 : 16,
@@ -671,11 +1053,13 @@ class _CategoryBar extends StatelessWidget {
     required this.categories,
     required this.selected,
     required this.onSelected,
+    required this.labelFor,
   });
 
   final List<String> categories;
   final String selected;
   final ValueChanged<String> onSelected;
+  final String Function(String category) labelFor;
 
   @override
   Widget build(BuildContext context) {
@@ -700,10 +1084,7 @@ class _CategoryBar extends StatelessWidget {
                     color: isSelected ? Colors.white : AppTheme.brandMaroon,
                   )
                 : null,
-            label: Text(
-              category,
-              overflow: TextOverflow.ellipsis,
-            ),
+            label: Text(labelFor(category), overflow: TextOverflow.ellipsis),
             visualDensity: VisualDensity.compact,
             padding: const EdgeInsets.symmetric(horizontal: 4),
             materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
@@ -737,10 +1118,7 @@ class _CategoryBar extends StatelessWidget {
 }
 
 class _ErrorState extends StatelessWidget {
-  const _ErrorState({
-    required this.message,
-    required this.onRetry,
-  });
+  const _ErrorState({required this.message, required this.onRetry});
 
   final String message;
   final VoidCallback onRetry;
@@ -753,11 +1131,7 @@ class _ErrorState extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(
-              Icons.cloud_off,
-              size: 56,
-              color: AppTheme.brandOrange,
-            ),
+            const Icon(Icons.cloud_off, size: 56, color: AppTheme.brandOrange),
             const SizedBox(height: 16),
             Text(
               message.replaceFirst('Exception: ', ''),
@@ -771,7 +1145,9 @@ class _ErrorState extends StatelessWidget {
                 backgroundColor: AppTheme.brandOrange,
               ),
               icon: const Icon(Icons.refresh),
-              label: const Text('إعادة المحاولة'),
+              label: Text(
+                AppStrings.of(context).tr('إعادة المحاولة', 'Try again'),
+              ),
             ),
           ],
         ),

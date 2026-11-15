@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../services/super_admin_scope_service.dart';
 import '../admin_breakpoints.dart';
 import '../admin_loyalty_settings_card.dart';
+import '../admin_menu_engineering_settings_card.dart';
 import '../admin_payment_settings_card.dart';
 import '../admin_platform_settings_card.dart';
 import '../admin_pos_roles_staff_card.dart';
@@ -11,6 +12,7 @@ import '../admin_sound_settings_card.dart';
 import '../admin_store_profile_card.dart';
 import '../admin_working_hours_card.dart';
 import 'admin_email_notifications_card.dart';
+import 'admin_link_hub_panel.dart';
 import 'admin_printer_settings_card.dart';
 import 'admin_settings_tab.dart';
 import 'admin_whatsapp_settings_section.dart';
@@ -37,6 +39,10 @@ class AdminSettingsTabbedPanel extends StatelessWidget {
         return const AdminWhatsappSettingsSection();
       case AdminSettingsTab.store:
         return const AdminStoreProfileCard();
+      case AdminSettingsTab.linkHub:
+        return const AdminLinkHubPanel();
+      case AdminSettingsTab.menuEngineering:
+        return const AdminMenuEngineeringSettingsCard();
       case AdminSettingsTab.loyalty:
         return const AdminLoyaltySettingsCard();
       case AdminSettingsTab.email:
@@ -66,19 +72,19 @@ class AdminSettingsTabbedPanel extends StatelessWidget {
 
     return AdminResponsivePage(
       scrollable: true,
-      padding: EdgeInsets.fromLTRB(pagePad, 16, pagePad, pagePad),
+      padding: EdgeInsets.fromLTRB(pagePad, 8, pagePad, 16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
             _tab.labelAr,
             style: const TextStyle(
-              fontSize: 20,
+              fontSize: 18,
               fontWeight: FontWeight.bold,
               color: burgundy,
             ),
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: 2),
           Text(
             isSuperAdmin
                 ? 'المطعم الحالي: $label'
@@ -86,13 +92,13 @@ class AdminSettingsTabbedPanel extends StatelessWidget {
             style: TextStyle(color: Colors.grey.shade700, fontSize: 13),
           ),
           if (isSuperAdmin && !scope.hasSelection) ...[
-            const SizedBox(height: 10),
+            const SizedBox(height: 8),
             const Text(
               'اختر مطعماً من قائمة «المطاعم» أولاً.',
               style: TextStyle(color: Colors.orange),
             ),
           ],
-          const SizedBox(height: 16),
+          const SizedBox(height: 10),
           AnimatedSwitcher(
             duration: const Duration(milliseconds: 180),
             child: KeyedSubtree(

@@ -1,6 +1,12 @@
 enum AdminSettingsTab {
   whatsapp('whatsapp', '💬 رقم الواتساب والربط', 'whatsapp'),
   store('store', '🏪 بيانات المحل والمعاينة', 'storefront'),
+  linkHub('link-hub', '🔗 صفحة الروابط / Link in Bio', 'link_hub'),
+  menuEngineering(
+    'menu-engineering',
+    '📈 الترتيب الديناميكي للمنيو',
+    'menu_engineering',
+  ),
   loyalty('loyalty', '🎁 برنامج الولاء والكاش باك', 'loyalty'),
   email('email', '✉️ إشعارات الإيميل', 'email'),
   platforms('platforms', '🌐 إعدادات المنصات', 'platforms'),

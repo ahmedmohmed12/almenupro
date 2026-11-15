@@ -13,6 +13,9 @@ Add these in **Vercel → Project → Settings → Environment Variables**:
 | `ADMIN_AUTH_SECRET` | long random string | Signs admin JWT tokens |
 | `SUPER_ADMIN_USER` | `superadmin` | Platform login username |
 | `SUPER_ADMIN_PASSWORD` | strong password | Platform login password |
+| `SUPER_ADMIN_EMAIL` | `you@example.com` | Receives HTML alerts for every new order (any restaurant) |
+| `RESEND_API_KEY` | `re_...` | Resend API key (same mail stack as signup alerts) |
+| `MAIL_FROM` | `Almenupro <noreply@yourdomain.com>` | Verified sender in Resend (optional; defaults to Resend onboarding address) |
 
 After adding `MONGODB_URI`, redeploy the backend. Check persistence:
 
@@ -50,6 +53,21 @@ npx vercel env add MONGODB_URI production
 npx vercel env add ADMIN_AUTH_SECRET production
 npx vercel env add SUPER_ADMIN_USER production
 npx vercel env add SUPER_ADMIN_PASSWORD production
+npx vercel env add SUPER_ADMIN_EMAIL production
+npx vercel env add RESEND_API_KEY production
+npx vercel env add MAIL_FROM production
 ```
 
 Redeploy both projects after setting variables.
+
+## Super-admin new-order email
+
+Triggered automatically in the API when an order is persisted via `dataStore.prependOrder` (guest/web/QR `POST /api/orders`) or new table POS orders (`send-kitchen` / `checkout` when not a duplicate). Uses `lib/orderNotify.js` → `lib/mailer.js` (Resend). No Firebase Cloud Function and no extra npm package.
+
+Local dry-run (does not hit the DB):
+
+```bash
+node scripts/order-email-smoke.js
+```
+
+Requires `SUPER_ADMIN_EMAIL` and `RESEND_API_KEY` in the environment (or a local `.env` loaded by your process manager).

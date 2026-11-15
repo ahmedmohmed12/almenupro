@@ -1,0 +1,10 @@
+u-menus FRONTEND — upload to https://u-menus.com/
+
+This folder is already built. Do not run Flutter or npm on the server.
+
+1. Unzip into public_html (or the document root of u-menus.com).
+2. Keep .htaccess in that folder (needed for /admin and /r/...).
+3. Open https://u-menus.com/ and https://u-menus.com/admin
+
+This build talks to https://backend.u-menus.com/api
+The backend must be running first, or the admin page cannot load data.

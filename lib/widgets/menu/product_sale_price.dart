@@ -69,11 +69,11 @@ class ProductSalePrice extends StatelessWidget {
         Text(
           '${original.toStringAsFixed(3)} $currency',
           style: TextStyle(
-            fontSize: compact ? 10 : 11,
+            fontSize: compact ? 11.5 : 12,
             color: const Color(0xFF94A3B8),
             decoration: TextDecoration.lineThrough,
             decorationColor: const Color(0xFF94A3B8),
-            fontWeight: FontWeight.w500,
+            fontWeight: FontWeight.w600,
           ),
         ),
         const SizedBox(width: 6),
@@ -83,8 +83,8 @@ class ProductSalePrice extends StatelessWidget {
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
-              fontSize: compact ? 13 : 15,
-              fontWeight: FontWeight.w800,
+              fontSize: compact ? 14.5 : 15.5,
+              fontWeight: FontWeight.w900,
               color: AppTheme.brandOrange,
               height: 1.1,
             ),

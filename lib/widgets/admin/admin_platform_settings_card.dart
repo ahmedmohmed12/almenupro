@@ -4,7 +4,9 @@ import 'package:flutter/services.dart';
 import '../../models/sales_platform_config.dart';
 import '../../services/restaurant_settings_service.dart';
 import '../../services/super_admin_scope_service.dart';
+import 'admin_breakpoints.dart';
 import 'admin_corner_toast.dart';
+import 'admin_responsive_layout.dart';
 
 class AdminPlatformSettingsCard extends StatefulWidget {
   const AdminPlatformSettingsCard({super.key});
@@ -74,9 +76,28 @@ class _AdminPlatformSettingsCardState extends State<AdminPlatformSettingsCard> {
     setState(() => _platforms[index] = next);
   }
 
-  void _removePlatform(int index) {
+  Future<void> _removePlatform(int index) async {
     final platform = _platforms[index];
     if (platform.isBuiltIn) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('حذف المنصة'),
+        content: Text('حذف «${platform.name}» من قائمة المنصات؟'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('إلغاء'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: Colors.red.shade700),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('حذف'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
     setState(() => _platforms.removeAt(index));
   }
 
@@ -125,114 +146,124 @@ class _AdminPlatformSettingsCardState extends State<AdminPlatformSettingsCard> {
     );
   }
 
+  Widget _addButton({required bool expanded}) {
+    final button = FilledButton.icon(
+      style: FilledButton.styleFrom(
+        backgroundColor: burgundy,
+        foregroundColor: Colors.white,
+        visualDensity: VisualDensity.compact,
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      ),
+      onPressed: _loading || _saving ? null : _addPlatform,
+      icon: const Icon(Icons.add, size: 18),
+      label: const Text('منصة جديدة'),
+    );
+    return expanded ? SizedBox(width: double.infinity, child: button) : button;
+  }
+
+  Widget _platformTile(int index) {
+    final platform = _platforms[index];
+    return Container(
+      padding: const EdgeInsets.fromLTRB(10, 8, 6, 8),
+      decoration: BoxDecoration(
+        color: platform.color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: platform.color.withValues(alpha: 0.28)),
+      ),
+      child: Row(
+        children: [
+          SalesPlatformBadge(platform: platform),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  platform.isLocal
+                      ? 'طلبات المحل — بدون عمولة'
+                      : 'عمولة ${platform.commissionPercent.toStringAsFixed(1)}%',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF555555),
+                  ),
+                ),
+                if (!platform.isLocal)
+                  Text(
+                    'ID: ${platform.id}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 11, color: Color(0xFF999999)),
+                  ),
+              ],
+            ),
+          ),
+          IconButton(
+            tooltip: 'تعديل',
+            visualDensity: VisualDensity.compact,
+            onPressed: () => _editPlatform(index),
+            icon: const Icon(Icons.edit_outlined, size: 20),
+          ),
+          if (!platform.isBuiltIn)
+            IconButton(
+              tooltip: 'حذف',
+              visualDensity: VisualDensity.compact,
+              onPressed: () => _removePlatform(index),
+              icon: Icon(Icons.delete_outline, size: 20, color: Colors.red.shade400),
+            ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final compact = AdminBreakpoints.isCompact(context);
+    final narrow = AdminBreakpoints.isNarrowContent(context);
+
     return Card(
+      margin: EdgeInsets.zero,
       child: Padding(
-        padding: const EdgeInsets.all(20),
+        padding: EdgeInsets.all(compact ? 10 : 14),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: burgundy.withValues(alpha: 0.08),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: const Icon(Icons.hub_outlined, color: burgundy),
-                ),
-                const SizedBox(width: 12),
-                const Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'إعدادات المنصات (Platform Settings)',
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 16,
-                          color: burgundy,
-                        ),
-                      ),
-                      SizedBox(height: 4),
-                      Text(
-                        'إدارة منصات التوصيل ونسب العمولة لحساب صافي الدخل.',
-                        style: TextStyle(fontSize: 13, color: Color(0xFF666666)),
-                      ),
-                    ],
-                  ),
-                ),
-                FilledButton.icon(
-                  onPressed: _loading || _saving ? null : _addPlatform,
-                  icon: const Icon(Icons.add, size: 18),
-                  label: const Text('منصة جديدة'),
-                ),
-              ],
+            AdminSectionHeader(
+              icon: Icons.hub_outlined,
+              iconColor: burgundy,
+              title: 'المنصات والعمولات',
+              subtitle: 'أضف أو عدّل منصات التوصيل ونسبة العمولة.',
+              actions: compact ? const [] : [_addButton(expanded: false)],
             ),
-            const SizedBox(height: 16),
+            if (compact) ...[
+              const SizedBox(height: 8),
+              _addButton(expanded: true),
+            ],
+            const SizedBox(height: 10),
             if (_loading)
-              const Center(child: CircularProgressIndicator(color: burgundy))
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 24),
+                child: Center(child: CircularProgressIndicator(color: burgundy)),
+              )
             else
-              ...List.generate(_platforms.length, (index) {
-                final platform = _platforms[index];
-                return Container(
-                  margin: const EdgeInsets.only(bottom: 10),
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: platform.color.withValues(alpha: 0.06),
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: platform.color.withValues(alpha: 0.25)),
-                  ),
-                  child: Row(
-                    children: [
-                      SalesPlatformBadge(platform: platform),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              platform.isLocal
-                                  ? 'طلبات المحل — بدون عمولة'
-                                  : 'عمولة ${platform.commissionPercent.toStringAsFixed(1)}%',
-                              style: const TextStyle(
-                                fontSize: 12,
-                                color: Color(0xFF666666),
-                              ),
-                            ),
-                            if (!platform.isLocal)
-                              Text(
-                                'ID: ${platform.id}',
-                                style: const TextStyle(
-                                  fontSize: 11,
-                                  color: Color(0xFF999999),
-                                ),
-                              ),
-                          ],
-                        ),
-                      ),
-                      IconButton(
-                        tooltip: 'تعديل',
-                        onPressed: () => _editPlatform(index),
-                        icon: const Icon(Icons.edit_outlined),
-                      ),
-                      if (!platform.isBuiltIn)
-                        IconButton(
-                          tooltip: 'حذف',
-                          onPressed: () => _removePlatform(index),
-                          icon: Icon(Icons.delete_outline, color: Colors.red.shade400),
-                        ),
-                    ],
-                  ),
-                );
-              }),
+              AdminResponsiveGrid(
+                minTileWidth: narrow ? 260 : 320,
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  for (var i = 0; i < _platforms.length; i++) _platformTile(i),
+                ],
+              ),
             const SizedBox(height: 12),
-            Align(
-              alignment: Alignment.centerLeft,
+            SizedBox(
+              width: double.infinity,
               child: FilledButton.icon(
-                style: FilledButton.styleFrom(backgroundColor: burgundy),
+                style: FilledButton.styleFrom(
+                  backgroundColor: burgundy,
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                ),
                 onPressed: _loading || _saving ? null : _save,
                 icon: _saving
                     ? const SizedBox(
@@ -336,13 +367,19 @@ class _PlatformEditorDialogState extends State<_PlatformEditorDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final width = MediaQuery.sizeOf(context).width;
     return AlertDialog(
+      insetPadding: EdgeInsets.symmetric(
+        horizontal: width < 600 ? 16 : 40,
+        vertical: 24,
+      ),
       title: Text(widget.title),
       content: SizedBox(
-        width: 420,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
+        width: width < 600 ? width : 420,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
             TextField(
               controller: _nameController,
               decoration: const InputDecoration(
@@ -395,6 +432,7 @@ class _PlatformEditorDialogState extends State<_PlatformEditorDialog> {
               }).toList(),
             ),
           ],
+          ),
         ),
       ),
       actions: [

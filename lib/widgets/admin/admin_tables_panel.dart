@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../models/dining_table.dart';
+import '../../services/scheduled_orders_controller.dart';
+import '../../services/scheduled_release_engine.dart';
 import '../../services/dining_tables_service.dart';
+import '../../services/super_admin_scope_service.dart';
 
 class AdminTablesPanel extends StatefulWidget {
   const AdminTablesPanel({super.key});
@@ -343,18 +347,21 @@ class _AdminTablesPanelState extends State<AdminTablesPanel> {
             spacing: 12,
             runSpacing: 12,
             children: [
-              for (final table in entry.value)
-                SizedBox(
-                  width: 260,
-                  child: _TableCard(
-                    table: table,
-                    onEdit: () => _showEditor(table: table),
-                    onDelete: () => _delete(table),
-                    onRelease: table.activeSession == null
-                        ? null
-                        : () => _release(table),
-                  ),
-                ),
+                  for (final table in entry.value)
+                    SizedBox(
+                      width: 260,
+                      child: _TableCard(
+                        table: table,
+                        restaurantId: table.restaurantId.isNotEmpty
+                            ? table.restaurantId
+                            : SuperAdminScopeService.instance.effectiveRestaurantId,
+                        onEdit: () => _showEditor(table: table),
+                        onDelete: () => _delete(table),
+                        onRelease: table.activeSession == null
+                            ? null
+                            : () => _release(table),
+                      ),
+                    ),
             ],
           ),
           const SizedBox(height: 20),
@@ -367,21 +374,52 @@ class _AdminTablesPanelState extends State<AdminTablesPanel> {
 class _TableCard extends StatelessWidget {
   const _TableCard({
     required this.table,
+    required this.restaurantId,
     required this.onEdit,
     required this.onDelete,
     this.onRelease,
   });
 
   final DiningTable table;
+  final String restaurantId;
   final VoidCallback onEdit;
   final VoidCallback onDelete;
   final VoidCallback? onRelease;
 
+  String get _qrUrl {
+    final origin = Uri.base.origin;
+    final branch = restaurantId.trim();
+    return '$origin/table/$branch/${table.id}';
+  }
+
   @override
   Widget build(BuildContext context) {
+    return ListenableBuilder(
+      listenable: ScheduledOrdersController.instance,
+      builder: (context, _) => _buildCard(context),
+    );
+  }
+
+  Widget _buildCard(BuildContext context) {
+    final locked = scheduledTableIsLocked(
+      ScheduledOrdersController.instance.orders,
+      table.number,
+      DateTime.now(),
+    );
+    final awaiting = table.isAwaitingCheck;
+    final waiter = table.isWaiterCall;
     final occupied = table.isOccupied;
+    final accent = locked
+        ? const Color(0xFF78716C)
+        : awaiting
+            ? const Color(0xFFEF4444)
+            : waiter
+                ? const Color(0xFF3B82F6)
+                : occupied
+                    ? const Color(0xFFF59E0B)
+                    : const Color(0xFF10B981);
     return Card(
-      color: occupied ? const Color(0xFFFFF3E0) : Colors.white,
+      color: Color.lerp(accent, Colors.white, 0.82),
       child: Padding(
         padding: const EdgeInsets.all(12),
         child: Column(
@@ -391,7 +429,7 @@ class _TableCard extends StatelessWidget {
               children: [
                 Icon(
                   Icons.table_restaurant,
-                  color: occupied ? Colors.orange.shade800 : const Color(0xFF2E7D32),
+                  color: accent,
                 ),
                 const SizedBox(width: 8),
                 Expanded(
@@ -401,9 +439,9 @@ class _TableCard extends StatelessWidget {
                   ),
                 ),
                 Text(
-                  table.status.labelAr,
+                  locked ? 'محجوزة' : table.status.labelAr,
                   style: TextStyle(
-                    color: occupied ? Colors.orange.shade800 : const Color(0xFF2E7D32),
+                    color: accent,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -422,6 +460,24 @@ class _TableCard extends StatelessWidget {
                 TextButton(onPressed: onEdit, child: const Text('تعديل')),
                 if (onRelease != null)
                   TextButton(onPressed: onRelease, child: const Text('تفريغ')),
+                TextButton(
+                  onPressed: () async {
+                    if (restaurantId.trim().isEmpty) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('اختر المطعم أولاً ثم انسخ رابط QR'),
+                        ),
+                      );
+                      return;
+                    }
+                    await Clipboard.setData(ClipboardData(text: _qrUrl));
+                    if (!context.mounted) return;
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('تم نسخ رابط QR: $_qrUrl')),
+                    );
+                  },
+                  child: const Text('نسخ QR'),
+                ),
                 TextButton(
                   onPressed: onDelete,
                   child: const Text('حذف', style: TextStyle(color: Colors.red)),

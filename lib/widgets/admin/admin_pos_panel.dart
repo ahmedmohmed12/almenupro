@@ -26,11 +26,15 @@ import '../../services/restaurant_settings_service.dart';
 import '../../services/pos_print_helper.dart';
 import '../../services/pos_print_settings_service.dart';
 import '../../services/pos_operations_service.dart';
+import '../../models/scheduled_order.dart';
+import '../../services/scheduled_orders_controller.dart';
 import '../../services/offline/pos_sync_service.dart';
 import '../../services/pos/pos_barcode_listener.dart';
 import '../../services/pos/pos_hardware_bridge.dart';
 import '../../services/pos/pos_platform_profile.dart';
 import '../../theme/app_theme.dart';
+import '../../utils/order_payment_utils.dart';
+import '../../utils/pos_cart_from_order.dart';
 import '../../utils/pos_receipt_html.dart';
 import '../../utils/whatsapp_phone.dart';
 import '../menu/offer_usage_limit_alert.dart';
@@ -59,8 +63,11 @@ class AdminPosPanel extends StatefulWidget {
     this.onDineInKitchenSent,
     this.onDineInReleased,
     this.onOpenTables,
+    this.onOpenPendingPickup,
     this.onOpenDriverHandoff,
     this.onOpenOnlineOrders,
+    this.resumeHeldPickup,
+    this.onHeldPickupCleared,
     this.tableManagementEnabled = false,
     this.shiftLabel,
   });
@@ -76,8 +83,11 @@ class AdminPosPanel extends StatefulWidget {
   final VoidCallback? onDineInKitchenSent;
   final VoidCallback? onDineInReleased;
   final VoidCallback? onOpenTables;
+  final VoidCallback? onOpenPendingPickup;
   final VoidCallback? onOpenDriverHandoff;
   final VoidCallback? onOpenOnlineOrders;
+  final Order? resumeHeldPickup;
+  final VoidCallback? onHeldPickupCleared;
   final bool tableManagementEnabled;
   /// Short caption for the merged maroon POS header (cashier / shift).
   final String? shiftLabel;
@@ -103,6 +113,10 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
   final _floorController = TextEditingController();
   final _externalOrderIdController = TextEditingController();
   final _platformDeliveryFeeController = TextEditingController();
+  final _scheduledPrepController = TextEditingController(text: '20');
+  final _scheduledRouteController = TextEditingController(text: '15');
+  final _scheduledBufferController = TextEditingController(text: '0');
+  DateTime? _scheduledTarget;
 
   final List<CartItem> _cart = [];
   List<MenuItem> _allItems = const [];
@@ -137,6 +151,7 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
   var _menuLoading = true;
   String? _menuError;
   PosBarcodeListener? _barcodeListener;
+  Order? _settlingHeldOrder;
 
   String get _restaurantId =>
       widget.restaurantId ??
@@ -193,6 +208,47 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
     unawaited(_loadPage());
     _phoneController.addListener(_onPhoneChanged);
     unawaited(PosPrintSettingsService.instance.initialize());
+    _maybeHydrateHeldPickup(widget.resumeHeldPickup);
+  }
+
+  @override
+  void didUpdateWidget(covariant AdminPosPanel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.resumeHeldPickup?.id != widget.resumeHeldPickup?.id) {
+      _maybeHydrateHeldPickup(widget.resumeHeldPickup);
+    }
+  }
+
+  bool get _canHoldLocalPickup =>
+      _isPickup &&
+      !_isDineIn &&
+      !_isScheduled &&
+      !_platformSelection.isExternal &&
+      _settlingHeldOrder == null;
+
+  bool get _isSettlingHeldPickup => _settlingHeldOrder != null;
+
+  void _maybeHydrateHeldPickup(Order? order) {
+    if (order == null) return;
+    if (_settlingHeldOrder?.id == order.id && _cart.isNotEmpty) return;
+    _nameController.text = order.customerName;
+    _phoneController.text = order.phone;
+    _cart
+      ..clear()
+      ..addAll(cartItemsFromOrderLines(order.items, _allItems));
+    _orderMode = 'takeaway';
+    _isPickup = true;
+    _platformSelection = PosPlatformSelection(
+      platform: _salesPlatforms.firstWhere(
+        (entry) => entry.isLocal,
+        orElse: () => _salesPlatforms.first,
+      ),
+    );
+    _settlingHeldOrder = order;
+    if (mounted) {
+      setState(() {});
+      _cartTick.value++;
+    }
   }
 
   @override
@@ -216,6 +272,9 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
     _floorController.dispose();
     _externalOrderIdController.dispose();
     _platformDeliveryFeeController.dispose();
+    _scheduledPrepController.dispose();
+    _scheduledRouteController.dispose();
+    _scheduledBufferController.dispose();
     super.dispose();
   }
 
@@ -991,7 +1050,77 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
       );
       return false;
     }
+    if (_isScheduled && _scheduledTarget == null) {
+      _showMessage(
+        s.tr(
+          'حدد تاريخ ووقت التوصيل للطلب المجدول',
+          'Choose the delivery date and time for the scheduled order',
+        ),
+      );
+      return false;
+    }
     return true;
+  }
+
+  bool get _isScheduled => _orderMode == 'scheduled';
+
+  int _scheduledMinutes(TextEditingController controller, int fallback) {
+    final parsed = int.tryParse(controller.text.trim());
+    if (parsed == null || parsed < 0) return fallback;
+    return parsed;
+  }
+
+  ({int prep, int route, int buffer, DateTime? target, DateTime? release})
+  _scheduleSnapshot() {
+    final prep = _scheduledMinutes(_scheduledPrepController, 20);
+    final route = _scheduledMinutes(_scheduledRouteController, 15);
+    final buffer = _scheduledMinutes(_scheduledBufferController, 0);
+    final target = _scheduledTarget;
+    return (
+      prep: prep,
+      route: route,
+      buffer: buffer,
+      target: target,
+      release: target?.subtract(Duration(minutes: prep + route + buffer)),
+    );
+  }
+
+  String _formatScheduleClock(DateTime value) {
+    String two(int number) => number.toString().padLeft(2, '0');
+    return '${value.year}-${two(value.month)}-${two(value.day)} ${two(value.hour)}:${two(value.minute)}';
+  }
+
+  void _resetScheduledMode() {
+    _orderMode = 'takeaway';
+    _isPickup = true;
+    _scheduledTarget = null;
+    _scheduledPrepController.text = '20';
+    _scheduledRouteController.text = '15';
+    _scheduledBufferController.text = '0';
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _rememberScheduledHold(
+    Order order,
+    ({int prep, int route, int buffer, DateTime? target, DateTime? release})
+    schedule,
+  ) async {
+    final target = schedule.target;
+    if (target == null) return;
+    await ScheduledOrdersController.instance.add(
+      ScheduledOrder(
+        id: order.id,
+        kind: ScheduledKind.delivery,
+        customerName: order.customerName,
+        phone: order.phone,
+        targetAt: target,
+        createdAt: order.createdAt,
+        preparationMinutes: schedule.prep,
+        routeMinutes: schedule.route,
+        cashierBufferMinutes: schedule.buffer,
+        notes: order.address,
+      ),
+    );
   }
 
   Future<Order?> _sendDineInKitchen() async {
@@ -1144,6 +1273,105 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
     }
   }
 
+  Future<Order?> _holdPickupOrder() async {
+    if (!_canHoldLocalPickup || !_validateOrder()) return null;
+    _submitting = true;
+    _cartTick.value++;
+    try {
+      final invoiceNumber = DateTime.now().millisecondsSinceEpoch
+          .toString()
+          .substring(5);
+      final shift = PosOperationsService.instance.activeShift;
+      final order = await OrdersService.instance.submitHeldPickupFromCart(
+        cartItems: List.from(_cart),
+        customerName: _nameController.text.trim(),
+        phone: _phoneController.text.trim(),
+        invoiceNumber: invoiceNumber,
+        restaurantId: _restaurantId,
+        shiftId: shift?.id,
+        cashierId: shift?.cashierId,
+        cashierName: shift?.cashierName,
+      );
+      _clearCart();
+      (widget.onOrderSubmitted ?? widget.onOrdersSubmitted)?.call();
+      unawaited(
+        PosPrintHelper.printIfAuto(
+          order: order,
+          kind: PosReceiptKind.kitchen,
+        ),
+      );
+      if (mounted) {
+        _showMessage(
+          AppStrings.read(context).tr(
+            'تم تعليق الفاتورة وإرسالها للمطبخ — الدفع عند الاستلام',
+            'Order held and sent to kitchen — pay on pickup',
+          ),
+        );
+      }
+      return order;
+    } catch (error) {
+      _showMessage(error.toString().replaceFirst('Exception: ', ''));
+      return null;
+    } finally {
+      if (mounted) {
+        _submitting = false;
+        _cartTick.value++;
+      }
+    }
+  }
+
+  Future<Order?> _settleHeldPickupOrder({bool autoPrint = true}) async {
+    final held = _settlingHeldOrder;
+    if (held == null || !_validateOrder()) return null;
+    final shift = PosOperationsService.instance.activeShift;
+    if (shift == null || !shift.isOpen) {
+      _showMessage('افتح وردية كاشير أولاً قبل تسجيل الدفع');
+      return null;
+    }
+    _submitting = true;
+    _cartTick.value++;
+    try {
+      final order = await OrdersService.instance.settleHeldPickupOrder(
+        order: held,
+        paymentMethod: _paymentMethod,
+        cartItems: List.from(_cart),
+        restaurantId: _restaurantId,
+        shiftId: shift.id,
+        cashierId: shift.cashierId,
+        cashierName: shift.cashierName,
+      );
+      if (autoPrint) {
+        unawaited(
+          PosPrintHelper.printIfAuto(
+            order: order,
+            kind: PosReceiptKind.customer,
+          ),
+        );
+      }
+      _clearCart();
+      _settlingHeldOrder = null;
+      widget.onHeldPickupCleared?.call();
+      (widget.onOrderSubmitted ?? widget.onOrdersSubmitted)?.call();
+      if (mounted) {
+        _showMessage(
+          AppStrings.read(context).tr(
+            'تم الدفع وإغلاق الفاتورة',
+            'Payment recorded and invoice closed',
+          ),
+        );
+      }
+      return order;
+    } catch (error) {
+      _showMessage(error.toString().replaceFirst('Exception: ', ''));
+      return null;
+    } finally {
+      if (mounted) {
+        _submitting = false;
+        _cartTick.value++;
+      }
+    }
+  }
+
   Future<Order?> _submitOrder({bool autoPrint = true}) async {
     if (!_validateOrder()) return null;
     if (_isDineIn) return _checkoutDineIn(autoPrint: autoPrint);
@@ -1157,6 +1385,7 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
       final orderSource = _platformSelection.platform.id;
       final platformMeta = _platformSelection.metaForTotal(_grandTotal);
       final shift = PosOperationsService.instance.activeShift;
+      final schedule = _isScheduled ? _scheduleSnapshot() : null;
       final order = await OrdersService.instance.submitOrderFromCart(
         cartItems: List.from(_cart),
         customerName: _nameController.text.trim(),
@@ -1173,7 +1402,9 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
             ? const DeliveryAddressDetails()
             : _addressDetails,
         orderSource: orderSource,
-        orderType: _isPickup ? OrderType.pickup : OrderType.delivery,
+        orderType: schedule != null
+            ? OrderType.scheduledDelivery
+            : (_isPickup ? OrderType.pickup : OrderType.delivery),
         platformMeta: platformMeta,
         targetKitchenId: _isPickup ? null : _selectedTargetKitchenId,
         targetKitchenName: _isPickup ? null : _selectedTargetKitchenName,
@@ -1181,7 +1412,18 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
         shiftId: shift?.id,
         cashierId: shift?.cashierId,
         cashierName: shift?.cashierName,
+        status: schedule != null ? OrderStatus.scheduled : null,
+        deliveryDate: schedule?.target,
+        targetDeliveryTime: schedule?.target,
+        prepTimeMinutes: schedule?.prep,
+        routeTimeMinutes: schedule?.route,
+        cashierBufferMinutes: schedule?.buffer,
+        autoReleaseTime: schedule?.release,
       );
+
+      if (schedule?.target != null && schedule?.release != null) {
+        await _rememberScheduledHold(order, schedule!);
+      }
 
       await CustomerCheckoutCacheService.instance.saveProfile(
         _restaurantId,
@@ -1199,21 +1441,24 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
       );
 
       _clearCart();
+      if (schedule != null) _resetScheduledMode();
       (widget.onOrderSubmitted ?? widget.onOrdersSubmitted)?.call();
-      unawaited(_dispatchDelivery(order));
-      if (autoPrint) {
-        unawaited(
-          PosPrintHelper.printIfAuto(
-            order: order,
-            kind: PosReceiptKind.kitchen,
-          ),
-        );
-        unawaited(
-          PosPrintHelper.printIfAuto(
-            order: order,
-            kind: PosReceiptKind.customer,
-          ),
-        );
+      if (schedule == null) {
+        unawaited(_dispatchDelivery(order));
+        if (autoPrint) {
+          unawaited(
+            PosPrintHelper.printIfAuto(
+              order: order,
+              kind: PosReceiptKind.kitchen,
+            ),
+          );
+          unawaited(
+            PosPrintHelper.printIfAuto(
+              order: order,
+              kind: PosReceiptKind.customer,
+            ),
+          );
+        }
       }
       return order;
     } on ApiRequestException catch (error) {
@@ -1262,7 +1507,7 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
 
   Future<void> _dispatchDelivery(Order order) async {
     if (!_fleetDeliveryEnabled) return;
-    if (_isPickup || _isDineIn) return;
+    if (_isPickup || _isDineIn || _isScheduled) return;
     try {
       await ApiService.instance.createDeliveryRequest(
         customerPhone: order.phone,
@@ -1278,6 +1523,20 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
 
   Future<void> _completeAndPrint(PosReceiptKind kind) async {
     if (_submitting) return;
+    if (_isSettlingHeldPickup) {
+      if (kind == PosReceiptKind.kitchen) {
+        _showMessage(
+          AppStrings.read(context).tr(
+            'أعد طباعة مطبخ من تفاصيل الطلب إن لزم',
+            'Reprint kitchen from order details if needed',
+          ),
+        );
+        return;
+      }
+      if (!_validateOrder()) return;
+      unawaited(_settleHeldPickupOrder());
+      return;
+    }
     if (_isDineIn) {
       if (kind == PosReceiptKind.kitchen) {
         if (!_validateOrder()) return;
@@ -1311,6 +1570,7 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
     }
 
     if (!_validateOrder()) return;
+    final schedule = _isScheduled ? _scheduleSnapshot() : null;
     _submitting = true;
     final cartSnapshot = List<CartItem>.from(_cart);
     final snapshot = (
@@ -1328,11 +1588,23 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
       targetKitchenId: _selectedTargetKitchenId,
       targetKitchenName: _selectedTargetKitchenName,
       kind: kind,
+      scheduled: schedule != null,
+      scheduledTarget: schedule?.target,
+      prepMinutes: schedule?.prep ?? 20,
+      routeMinutes: schedule?.route ?? 15,
+      bufferMinutes: schedule?.buffer ?? 0,
+      autoRelease: schedule?.release,
     );
     _clearCart();
+    if (schedule != null) _resetScheduledMode();
     _submitting = false;
     _showMessage(
-      kind == PosReceiptKind.kitchen
+      schedule != null
+          ? AppStrings.read(context).tr(
+              'تم حفظ الطلب المجدول. لن يُطبع حتى وقت الإطلاق.',
+              'Scheduled order saved. It will not print until release time.',
+            )
+          : kind == PosReceiptKind.kitchen
           ? AppStrings.read(context).tr(
               'تم إرسال تذكرة المطبخ',
               'Kitchen ticket sent',
@@ -1358,6 +1630,12 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
       String? targetKitchenId,
       String? targetKitchenName,
       PosReceiptKind kind,
+      bool scheduled,
+      DateTime? scheduledTarget,
+      int prepMinutes,
+      int routeMinutes,
+      int bufferMinutes,
+      DateTime? autoRelease,
     }) snapshot,
   ) async {
     try {
@@ -1391,7 +1669,9 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
             ? const DeliveryAddressDetails()
             : snapshot.addressDetails,
         orderSource: orderSource,
-        orderType: snapshot.isPickup ? OrderType.pickup : OrderType.delivery,
+        orderType: snapshot.scheduled
+            ? OrderType.scheduledDelivery
+            : (snapshot.isPickup ? OrderType.pickup : OrderType.delivery),
         platformMeta: platformMeta,
         targetKitchenId: snapshot.isPickup ? null : snapshot.targetKitchenId,
         targetKitchenName:
@@ -1400,7 +1680,24 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
         shiftId: shift?.id,
         cashierId: shift?.cashierId,
         cashierName: shift?.cashierName,
+        status: snapshot.scheduled ? OrderStatus.scheduled : null,
+        deliveryDate: snapshot.scheduledTarget,
+        targetDeliveryTime: snapshot.scheduledTarget,
+        prepTimeMinutes: snapshot.scheduled ? snapshot.prepMinutes : null,
+        routeTimeMinutes: snapshot.scheduled ? snapshot.routeMinutes : null,
+        cashierBufferMinutes: snapshot.scheduled ? snapshot.bufferMinutes : null,
+        autoReleaseTime: snapshot.autoRelease,
       );
+
+      if (snapshot.scheduled && snapshot.scheduledTarget != null) {
+        await _rememberScheduledHold(order, (
+          prep: snapshot.prepMinutes,
+          route: snapshot.routeMinutes,
+          buffer: snapshot.bufferMinutes,
+          target: snapshot.scheduledTarget,
+          release: snapshot.autoRelease,
+        ));
+      }
 
       unawaited(
         CustomerCheckoutCacheService.instance.saveProfile(
@@ -1420,10 +1717,12 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
         ),
       );
       (widget.onOrderSubmitted ?? widget.onOrdersSubmitted)?.call();
-      unawaited(_dispatchDelivery(order));
-      unawaited(
-        PosPrintHelper.printOrder(order: order, kind: snapshot.kind),
-      );
+      if (!snapshot.scheduled) {
+        unawaited(_dispatchDelivery(order));
+        unawaited(
+          PosPrintHelper.printOrder(order: order, kind: snapshot.kind),
+        );
+      }
     } catch (error) {
       if (!mounted) return;
       _showMessage(
@@ -1682,6 +1981,7 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
             onOpenSearch: () => unawaited(_openSearchOverlay(barcodeMode: false)),
             onOpenBarcode: () => unawaited(_openSearchOverlay(barcodeMode: true)),
             onOpenTables: widget.onOpenTables,
+            onOpenPendingPickup: widget.onOpenPendingPickup,
             onOpenDriverHandoff: widget.onOpenDriverHandoff,
             onOpenOnlineOrders: widget.onOpenOnlineOrders,
             tableManagementEnabled: widget.tableManagementEnabled,
@@ -1772,6 +2072,14 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
           );
           _platformDeliveryFeeController.clear();
           break;
+        case 'scheduled':
+          _isPickup = false;
+          _platformSelection = PosPlatformSelection(
+            platform: local,
+            externalOrderId: _platformSelection.externalOrderId,
+          );
+          _platformDeliveryFeeController.clear();
+          break;
         case 'platforms':
           final platform = _platformSelection.isExternal
               ? _platformSelection.platform
@@ -1789,46 +2097,78 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
       }
     });
 
-    if (mode == 'delivery') {
+    if (mode == 'delivery' || mode == 'scheduled') {
       unawaited(_openDeliveryAddressDialog());
     }
   }
 
   Widget _buildCategoryChipsBar(List<String> categories) {
+    if (categories.isEmpty) return const SizedBox.shrink();
+
+    final columns = (categories.length / 2).ceil();
+    final rows = <List<String>>[
+      categories.take(columns).toList(),
+      if (categories.length > columns) categories.skip(columns).toList(),
+    ];
+
     return Container(
       color: PosTheme.surface,
-      padding: const EdgeInsets.fromLTRB(8, 2, 8, 4),
-      child: SizedBox(
-        height: 34,
-        child: ListView.separated(
-          scrollDirection: Axis.horizontal,
-          itemCount: categories.length,
-          separatorBuilder: (_, _) => const SizedBox(width: 5),
-          itemBuilder: (context, index) {
-            final category = categories[index];
-            final selected = _selectedCategory == category;
-            return FilterChip(
-              visualDensity: const VisualDensity(horizontal: -2, vertical: -3),
-              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              padding: const EdgeInsets.symmetric(horizontal: 2),
-              label: Text(
-                category,
-                style: TextStyle(
-                  fontWeight: FontWeight.w700,
-                  fontSize: 12,
-                  color: selected ? Colors.white : PosTheme.textPrimary,
-                ),
-              ),
-              selected: selected,
-              showCheckmark: false,
-              selectedColor: PosTheme.orange,
-              backgroundColor: PosTheme.surfaceAlt,
-              side: BorderSide(
-                color: selected ? PosTheme.orange : PosTheme.border,
-              ),
-              onSelected: (_) => setState(() => _selectedCategory = category),
-            );
-          },
+      padding: const EdgeInsets.fromLTRB(8, 6, 8, 8),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          for (var rowIndex = 0; rowIndex < rows.length; rowIndex++) ...[
+            if (rowIndex > 0) const SizedBox(height: 8),
+            Row(
+              children: [
+                for (var col = 0; col < columns; col++) ...[
+                  if (col > 0) const SizedBox(width: 8),
+                  Expanded(
+                    child: col < rows[rowIndex].length
+                        ? _categoryChip(rows[rowIndex][col])
+                        : const SizedBox(height: PosTheme.categoryChipHeight),
+                  ),
+                ],
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _categoryChip(String category) {
+    final selected = _selectedCategory == category;
+    final radius = BorderRadius.circular(PosTheme.categoryChipRadius);
+    return Material(
+      color: selected ? PosTheme.orange : PosTheme.surfaceAlt,
+      borderRadius: radius,
+      child: InkWell(
+        onTap: () => setState(() => _selectedCategory = category),
+        borderRadius: radius,
+        child: Container(
+          height: PosTheme.categoryChipHeight,
+          alignment: Alignment.center,
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+          decoration: BoxDecoration(
+            borderRadius: radius,
+            border: Border.all(
+              color: selected ? PosTheme.orange : PosTheme.border,
+              width: selected ? 1.5 : 1,
+            ),
+          ),
+          child: Text(
+            category,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontWeight: FontWeight.w800,
+              fontSize: PosTheme.categoryChipFontSize,
+              height: 1.1,
+              color: selected ? Colors.white : PosTheme.textMuted,
+            ),
+          ),
         ),
       ),
     );
@@ -1872,7 +2212,9 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
               padding: EdgeInsets.fromLTRB(pad, 8, pad, 0),
               child: _buildCustomerFields(),
             ),
-            if (!_isDineIn && !_isPickup && _orderMode == 'delivery')
+            if (!_isDineIn &&
+                !_isPickup &&
+                (_orderMode == 'delivery' || _orderMode == 'scheduled'))
               Padding(
                 padding: EdgeInsets.fromLTRB(pad, 8, pad, 0),
                 child: _buildDeliverySummary(),
@@ -2087,6 +2429,17 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
                           color: Color(0xFF475569),
                         ),
                       ),
+                    if (_isScheduled)
+                      Text(
+                        _scheduleSnapshot().release == null
+                            ? 'حدد موعد الإطلاق من نافذة التوصيل'
+                            : 'إطلاق المطبخ ${_formatScheduleClock(_scheduleSnapshot().release!)}',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF9A3412),
+                        ),
+                      ),
                   ],
                 ),
               ),
@@ -2120,7 +2473,8 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
               ),
               child: SizedBox(
                 width: 520,
-                height: MediaQuery.sizeOf(dialogContext).height * 0.78,
+                height: MediaQuery.sizeOf(dialogContext).height *
+                    (_isScheduled ? 0.9 : 0.78),
                 child: Column(
                   children: [
                     Padding(
@@ -2129,7 +2483,12 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
                         children: [
                           Expanded(
                             child: Text(
-                              s.tr('بيانات التوصيل', 'Delivery details'),
+                              _isScheduled
+                                  ? s.tr(
+                                      'طلب توصيل مجدول',
+                                      'Scheduled delivery',
+                                    )
+                                  : s.tr('بيانات التوصيل', 'Delivery details'),
                               style: const TextStyle(
                                 fontSize: 18,
                                 fontWeight: FontWeight.w800,
@@ -2158,8 +2517,27 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
                         width: double.infinity,
                         height: 48,
                         child: FilledButton(
-                          onPressed: () => Navigator.pop(dialogContext),
-                          child: Text(s.tr('حفظ العنوان', 'Save address')),
+                          onPressed: () {
+                            if (_isScheduled && _scheduledTarget == null) {
+                              setDialogState(() {});
+                              _showMessage(
+                                s.tr(
+                                  'حدد تاريخ ووقت التوصيل',
+                                  'Choose the delivery date and time',
+                                ),
+                              );
+                              return;
+                            }
+                            Navigator.pop(dialogContext);
+                          },
+                          child: Text(
+                            _isScheduled
+                                ? s.tr(
+                                    'متابعة لاختيار الأصناف',
+                                    'Continue to the menu',
+                                  )
+                                : s.tr('حفظ العنوان', 'Save address'),
+                          ),
                         ),
                       ),
                     ),
@@ -2174,6 +2552,123 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
     if (mounted) setState(() {});
   }
 
+  Widget _buildScheduleFields(void Function(VoidCallback apply) refresh) {
+    final release = _scheduleSnapshot().release;
+    final target = _scheduledTarget;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        OutlinedButton.icon(
+          onPressed: () async {
+            final now = DateTime.now();
+            final current = _scheduledTarget ?? now;
+            final picked = await showDatePicker(
+              context: context,
+              initialDate: current,
+              firstDate: DateTime(now.year, now.month, now.day),
+              lastDate: now.add(const Duration(days: 365)),
+            );
+            if (picked == null) return;
+            refresh(() {
+              _scheduledTarget = DateTime(
+                picked.year,
+                picked.month,
+                picked.day,
+                current.hour,
+                current.minute,
+              );
+            });
+          },
+          icon: const Icon(Icons.calendar_today_outlined),
+          label: Align(
+            alignment: AlignmentDirectional.centerStart,
+            child: Text(
+              target == null
+                  ? 'تاريخ التوصيل'
+                  : 'تاريخ التوصيل: ${_formatScheduleClock(target).split(' ').first}',
+            ),
+          ),
+        ),
+        const SizedBox(height: 8),
+        OutlinedButton.icon(
+          onPressed: () async {
+            final current = _scheduledTarget ?? DateTime.now();
+            final picked = await showTimePicker(
+              context: context,
+              initialTime: TimeOfDay.fromDateTime(current),
+            );
+            if (picked == null) return;
+            refresh(() {
+              final base = _scheduledTarget ?? DateTime.now();
+              _scheduledTarget = DateTime(
+                base.year,
+                base.month,
+                base.day,
+                picked.hour,
+                picked.minute,
+              );
+            });
+          },
+          icon: const Icon(Icons.schedule),
+          label: Align(
+            alignment: AlignmentDirectional.centerStart,
+            child: Text(
+              target == null
+                  ? 'وقت التوصيل المستهدف'
+                  : 'وقت التوصيل: ${TimeOfDay.fromDateTime(target).format(context)}',
+            ),
+          ),
+        ),
+        const SizedBox(height: 8),
+        TextFormField(
+          controller: _scheduledPrepController,
+          keyboardType: TextInputType.number,
+          decoration: const InputDecoration(
+            labelText: 'زمن التحضير (دقائق)',
+            isDense: true,
+            border: OutlineInputBorder(),
+          ),
+          onChanged: (_) => refresh(() {}),
+        ),
+        const SizedBox(height: 8),
+        TextFormField(
+          controller: _scheduledRouteController,
+          keyboardType: TextInputType.number,
+          decoration: const InputDecoration(
+            labelText: 'زمن الطريق (دقائق)',
+            isDense: true,
+            border: OutlineInputBorder(),
+          ),
+          onChanged: (_) => refresh(() {}),
+        ),
+        const SizedBox(height: 8),
+        TextFormField(
+          controller: _scheduledBufferController,
+          keyboardType: TextInputType.number,
+          decoration: const InputDecoration(
+            labelText: 'هامش الكاشير (دقائق)',
+            helperText: 'القيمة 0 تُبقي الإطلاق = الهدف − (التحضير + الطريق)',
+            isDense: true,
+            border: OutlineInputBorder(),
+          ),
+          onChanged: (_) => refresh(() {}),
+        ),
+        const SizedBox(height: 8),
+        InputDecorator(
+          decoration: const InputDecoration(
+            labelText: 'وقت الإطلاق التلقائي',
+            isDense: true,
+            border: OutlineInputBorder(),
+          ),
+          child: Text(
+            release == null ? '—' : _formatScheduleClock(release),
+            style: const TextStyle(fontWeight: FontWeight.w800),
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _buildDeliveryFields({VoidCallback? onDialogUpdate}) {
     final s = AppStrings.of(context);
     void refresh(VoidCallback apply) {
@@ -2184,6 +2679,12 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
 
     return Column(
       children: [
+        if (_isScheduled) ...[
+          _buildScheduleFields(refresh),
+          const SizedBox(height: 12),
+          const Divider(height: 1),
+          const SizedBox(height: 12),
+        ],
         DropdownButtonFormField<String>(
           value: _availableGovernorates.contains(_selectedGovernorate)
               ? _selectedGovernorate
@@ -2442,7 +2943,59 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
               initialPhone: _phoneController.text,
             ),
           ],
-          const SizedBox(height: 10),
+          if (_isSettlingHeldPickup) ...[
+            Material(
+              color: PosTheme.orangeSoft,
+              borderRadius: BorderRadius.circular(12),
+              child: ListTile(
+                dense: true,
+                leading: const Icon(Icons.pause_circle_filled, color: PosTheme.orange),
+                title: Text(
+                  s.tr(
+                    'تسوية فاتورة معلّقة #${(_settlingHeldOrder!.invoiceNumber ?? _settlingHeldOrder!.id)}',
+                    'Settling held invoice #${(_settlingHeldOrder!.invoiceNumber ?? _settlingHeldOrder!.id)}',
+                  ),
+                  style: const TextStyle(fontWeight: FontWeight.w800),
+                ),
+                subtitle: Text(
+                  s.tr(
+                    'عدّل السلة إن لزم ثم اختر الدفع واضغط إغلاق الفاتورة',
+                    'Edit the cart if needed, choose payment, then close the invoice',
+                  ),
+                ),
+                trailing: IconButton(
+                  tooltip: s.tr('إلغاء التسوية', 'Cancel settlement'),
+                  onPressed: _submitting
+                      ? null
+                      : () {
+                          setState(() {
+                            _settlingHeldOrder = null;
+                            _clearCart();
+                          });
+                          widget.onHeldPickupCleared?.call();
+                        },
+                  icon: const Icon(Icons.close),
+                ),
+              ),
+            ),
+            const SizedBox(height: 10),
+          ],
+          if (_canHoldLocalPickup) ...[
+            OutlinedButton.icon(
+              style: OutlinedButton.styleFrom(
+                foregroundColor: PosTheme.headerMaroon,
+                side: const BorderSide(color: PosTheme.headerMaroon),
+                minimumSize: const Size.fromHeight(44),
+              ),
+              onPressed: _submitting ? null : () => unawaited(_holdPickupOrder()),
+              icon: const Icon(Icons.pause_circle_outline),
+              label: Text(
+                s.tr('تعليق الفاتورة / دفع لاحقاً', 'Hold invoice / pay later'),
+                style: const TextStyle(fontWeight: FontWeight.w800),
+              ),
+            ),
+            const SizedBox(height: 10),
+          ],
           Row(
             children: [
               Expanded(
@@ -2486,7 +3039,9 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
                       : () => _completeAndPrint(PosReceiptKind.customer),
                   icon: const Icon(Icons.receipt_long_rounded, size: 22),
                   label: Text(
-                    s.tr('فاتورة', 'Checkout'),
+                    _isSettlingHeldPickup
+                        ? s.tr('إغلاق الفاتورة / دفع', 'Close invoice / pay')
+                        : s.tr('فاتورة', 'Checkout'),
                     style: const TextStyle(
                       fontWeight: FontWeight.w900,
                       fontSize: 15,

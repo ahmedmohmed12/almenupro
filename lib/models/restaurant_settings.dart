@@ -1,4 +1,5 @@
 import '../models/invoice_language.dart';
+import '../models/link_hub_config.dart';
 import '../models/loyalty_cashback.dart';
 import '../models/payment_method_config.dart';
 import '../models/pos_role.dart';
@@ -31,12 +32,18 @@ class RestaurantSettings {
     this.posRoles = const [],
     this.posAutoLockMinutes = 5,
     this.logoUrl = '',
+    this.heroImageUrl = '',
     this.restaurantDescription = '',
     this.notificationEmail = '',
     this.notifyOnNewOrderEmail = true,
     this.notifyOnShiftCloseEmail = false,
     this.tableManagementEnabled = false,
+    this.kitchenManagementEnabled = false,
+    this.deliveryManagementEnabled = false,
     this.invoiceLanguage = InvoiceLanguage.arabic,
+    this.dynamicMenuSortingEnabled = false,
+    this.paydayStartDay = 1,
+    this.linkHub = const LinkHubConfig(),
   });
 
   final String whatsappNumber;
@@ -66,12 +73,21 @@ class RestaurantSettings {
   final List<PosRole> posRoles;
   final int posAutoLockMinutes;
   final String logoUrl;
+  final String heroImageUrl;
   final String restaurantDescription;
   final String notificationEmail;
   final bool notifyOnNewOrderEmail;
   final bool notifyOnShiftCloseEmail;
   final bool tableManagementEnabled;
+  final bool kitchenManagementEnabled;
+  final bool deliveryManagementEnabled;
   final InvoiceLanguage invoiceLanguage;
+  /// When false, the public menu keeps the restaurant's manual [MenuItem.displayOrder].
+  final bool dynamicMenuSortingEnabled;
+  /// Day of month when salaries typically arrive (1–31). Cycle is 30-ish days from this date.
+  final int paydayStartDay;
+  /// Public link-in-bio hub (`/r/{slug}/links`).
+  final LinkHubConfig linkHub;
 
   List<PaymentMethodConfig> get configuredPaymentMethods =>
       PaymentMethodCatalog.mergeWithDefaults(paymentMethods);
@@ -191,6 +207,11 @@ class RestaurantSettings {
           (json['pos_auto_lock_minutes'] as num?)?.toInt() ??
           5,
       logoUrl: json['logoUrl']?.toString() ?? json['logo_url']?.toString() ?? '',
+      heroImageUrl: json['heroImageUrl']?.toString() ??
+          json['hero_image_url']?.toString() ??
+          json['coverUrl']?.toString() ??
+          json['cover_url']?.toString() ??
+          '',
       restaurantDescription: json['restaurantDescription']?.toString() ??
           json['restaurant_description']?.toString() ??
           json['description']?.toString() ??
@@ -207,9 +228,34 @@ class RestaurantSettings {
           (json['features'] is Map &&
               (json['features']['tableManagement'] == true ||
                   json['features']['table_management'] == true)),
+      kitchenManagementEnabled: json['kitchenManagementEnabled'] == true ||
+          json['kitchenManagement'] == true ||
+          (json['features'] is Map &&
+              (json['features']['kitchenManagement'] == true ||
+                  json['features']['kitchen_management'] == true)),
+      deliveryManagementEnabled: json['deliveryManagementEnabled'] == true ||
+          json['deliveryManagement'] == true ||
+          (json['features'] is Map &&
+              (json['features']['deliveryManagement'] == true ||
+                  json['features']['delivery_management'] == true)),
       invoiceLanguage: InvoiceLanguage.fromStorage(
         json['invoiceLanguage']?.toString() ??
             json['invoice_language']?.toString(),
+      ),
+      dynamicMenuSortingEnabled: json['dynamicMenuSortingEnabled'] == true ||
+          json['dynamic_menu_sorting_enabled'] == true ||
+          json['enable_dynamic_menu'] == true ||
+          json['enableDynamicMenu'] == true,
+      paydayStartDay: _clampPaydayDay(
+        (json['paydayStartDay'] as num?)?.toInt() ??
+            (json['payday_start_day'] as num?)?.toInt(),
+      ),
+      linkHub: LinkHubConfig.fromJson(
+        (json['linkHub'] ?? json['link_hub']) is Map
+            ? Map<String, dynamic>.from(
+                (json['linkHub'] ?? json['link_hub']) as Map,
+              )
+            : null,
       ),
     );
   }
@@ -238,12 +284,18 @@ class RestaurantSettings {
     List<PosRole>? posRoles,
     int? posAutoLockMinutes,
     String? logoUrl,
+    String? heroImageUrl,
     String? restaurantDescription,
     String? notificationEmail,
     bool? notifyOnNewOrderEmail,
     bool? notifyOnShiftCloseEmail,
     bool? tableManagementEnabled,
+    bool? kitchenManagementEnabled,
+    bool? deliveryManagementEnabled,
     InvoiceLanguage? invoiceLanguage,
+    bool? dynamicMenuSortingEnabled,
+    int? paydayStartDay,
+    LinkHubConfig? linkHub,
   }) {
     final nextCountry = whatsappCountryCode ?? this.whatsappCountryCode;
     final nextPhone = whatsappPhone ?? this.whatsappPhone;
@@ -281,6 +333,7 @@ class RestaurantSettings {
       posRoles: posRoles ?? this.posRoles,
       posAutoLockMinutes: posAutoLockMinutes ?? this.posAutoLockMinutes,
       logoUrl: logoUrl ?? this.logoUrl,
+      heroImageUrl: heroImageUrl ?? this.heroImageUrl,
       restaurantDescription: restaurantDescription ?? this.restaurantDescription,
       notificationEmail: notificationEmail ?? this.notificationEmail,
       notifyOnNewOrderEmail: notifyOnNewOrderEmail ?? this.notifyOnNewOrderEmail,
@@ -288,7 +341,15 @@ class RestaurantSettings {
           notifyOnShiftCloseEmail ?? this.notifyOnShiftCloseEmail,
       tableManagementEnabled:
           tableManagementEnabled ?? this.tableManagementEnabled,
+      kitchenManagementEnabled:
+          kitchenManagementEnabled ?? this.kitchenManagementEnabled,
+      deliveryManagementEnabled:
+          deliveryManagementEnabled ?? this.deliveryManagementEnabled,
       invoiceLanguage: invoiceLanguage ?? this.invoiceLanguage,
+      dynamicMenuSortingEnabled:
+          dynamicMenuSortingEnabled ?? this.dynamicMenuSortingEnabled,
+      paydayStartDay: paydayStartDay ?? this.paydayStartDay,
+      linkHub: linkHub ?? this.linkHub,
     );
   }
 
@@ -315,13 +376,24 @@ class RestaurantSettings {
         'posRoles': posRoles.map((role) => role.toJson()).toList(),
         'posAutoLockMinutes': posAutoLockMinutes,
         'logoUrl': logoUrl,
+        'heroImageUrl': heroImageUrl,
         'restaurantDescription': restaurantDescription,
         'notificationEmail': notificationEmail,
         'notifyOnNewOrderEmail': notifyOnNewOrderEmail,
         'notifyOnShiftCloseEmail': notifyOnShiftCloseEmail,
         'invoiceLanguage': invoiceLanguage.code,
+        'dynamicMenuSortingEnabled': dynamicMenuSortingEnabled,
+        'paydayStartDay': paydayStartDay,
+        'linkHub': linkHub.toJson(),
         if (updatedAt != null) 'updatedAt': updatedAt!.toIso8601String(),
       };
+
+  static int _clampPaydayDay(int? value) {
+    final day = value ?? 1;
+    if (day < 1) return 1;
+    if (day > 31) return 31;
+    return day;
+  }
 
   static List<PaymentMethodConfig> _parsePaymentMethods(dynamic raw) {
     if (raw is! List) return const [];

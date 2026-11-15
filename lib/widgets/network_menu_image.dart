@@ -28,6 +28,15 @@ class NetworkMenuImage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final resolved = resolveImageUrl(imageUrl);
+    if (resolved.startsWith('data:image/')) {
+      return Image.memory(
+        Uri.parse(resolved).data!.contentAsBytes(),
+        fit: fit,
+        width: width,
+        height: height,
+        errorBuilder: errorBuilder ?? (_, __, ___) => _fallback(context),
+      );
+    }
     final uri = Uri.tryParse(resolved);
     final canLoad = resolved.isNotEmpty &&
         uri != null &&

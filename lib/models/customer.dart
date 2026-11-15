@@ -12,6 +12,7 @@ class Customer {
     this.addressDetails = const DeliveryAddressDetails(),
     this.paymentMethod = 'كاش',
     this.totalOrders = 0,
+    this.addresses = const [],
     this.createdAt,
     this.updatedAt,
   });
@@ -26,6 +27,7 @@ class Customer {
   final DeliveryAddressDetails addressDetails;
   final String paymentMethod;
   final int totalOrders;
+  final List<String> addresses;
   final DateTime? createdAt;
   final DateTime? updatedAt;
 
@@ -59,9 +61,30 @@ class Customer {
       totalOrders: (map['totalOrders'] as num?)?.toInt() ??
           (map['total_orders'] as num?)?.toInt() ??
           0,
+      addresses: _parseAddresses(map, formattedAddress),
       createdAt: _parseDate(map['createdAt'] ?? map['created_at']),
       updatedAt: _parseDate(map['updatedAt'] ?? map['updated_at']),
     );
+  }
+
+  static List<String> _parseAddresses(Map<String, dynamic> map, String formattedAddress) {
+    final raw = map['addresses'];
+    final list = <String>[];
+    if (raw is List) {
+      for (final row in raw) {
+        if (row is String && row.trim().isNotEmpty) {
+          list.add(row.trim());
+        } else if (row is Map) {
+          final text = row['address']?.toString().trim() ?? '';
+          if (text.isNotEmpty) list.add(text);
+        }
+      }
+    }
+    final current = formattedAddress.trim();
+    if (current.isNotEmpty && !list.contains(current)) {
+      list.insert(0, current);
+    }
+    return list;
   }
 
   static DateTime? _parseDate(Object? raw) {

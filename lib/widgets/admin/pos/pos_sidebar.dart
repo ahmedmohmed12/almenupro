@@ -98,6 +98,7 @@ class _PosSidebarState extends State<PosSidebar> {
     const labels = <String, String>{
       'pos_home': 'Point of Sale / Orders',
       'dine_in': 'Dining Tables',
+      'pending_pickup': 'Held pickup / pay later',
       'online_orders': 'Online / Customer Orders',
       'driver_handoff': 'Driver Handoff / Delivery Payment',
       'printer_settings': 'Printer Settings',

@@ -7,9 +7,11 @@ import '../models/delivery_address_details.dart';
 import '../models/order.dart';
 import '../models/order_platform.dart';
 import '../utils/firebase_config.dart';
+import '../utils/order_payment_utils.dart';
 import 'firebase_service.dart';
 import 'orders_demo_service.dart';
 import 'api_service.dart';
+import 'offline/pos_sync_service.dart';
 
 /// Unified orders access for admin dashboard and checkout.
 class OrdersService {
@@ -38,19 +40,6 @@ class OrdersService {
     String? acceptedBy,
     String? acceptedByName,
   }) async {
-    if (usesFirebase) {
-      await _firebase.updateOrderStatus(
-        orderId,
-        status,
-        shiftId: shiftId,
-        cashierId: cashierId,
-        cashierName: cashierName,
-        autoAccepted: autoAccepted,
-        acceptedBy: acceptedBy,
-        acceptedByName: acceptedByName,
-      );
-      return;
-    }
     await OrdersDemoService.updateOrderStatus(
       orderId,
       status,
@@ -61,13 +50,25 @@ class OrdersService {
       acceptedBy: acceptedBy,
       acceptedByName: acceptedByName,
     );
+    if (usesFirebase) {
+      try {
+        await _firebase.updateOrderStatus(
+          orderId,
+          status,
+          shiftId: shiftId,
+          cashierId: cashierId,
+          cashierName: cashierName,
+          autoAccepted: autoAccepted,
+          acceptedBy: acceptedBy,
+          acceptedByName: acceptedByName,
+        );
+      } catch (error) {
+        debugPrint('Firebase order status mirror skipped: $error');
+      }
+    }
   }
 
   Future<void> refreshOrders() async {
-    if (usesFirebase) {
-      await _firebase.refreshOrders();
-      return;
-    }
     await OrdersDemoService.refreshFromApi();
   }
 
@@ -95,6 +96,21 @@ class OrdersService {
     String? targetKitchenId,
     String? targetKitchenName,
     bool refreshList = true,
+    bool offlineFirst = false,
+    String? shiftId,
+    String? cashierId,
+    String? cashierName,
+    String? tableId,
+    OrderStatus? status,
+    DateTime? deliveryDate,
+    DateTime? targetDeliveryTime,
+    int? prepTimeMinutes,
+    int? routeTimeMinutes,
+    int? cashierBufferMinutes,
+    DateTime? autoReleaseTime,
+    String? paymentStatus,
+    String? heldShiftId,
+    DateTime? paidAt,
   }) async {
     final order = OrdersDemoService.orderFromCart(
       cartItems: cartItems,
@@ -119,7 +135,32 @@ class OrdersService {
       offerTitle: offerTitle,
       targetKitchenId: targetKitchenId,
       targetKitchenName: targetKitchenName,
+      shiftId: shiftId,
+      cashierId: cashierId,
+      cashierName: cashierName,
+      tableId: tableId,
+      initialStatus:
+          status ?? (offlineFirst ? OrderStatus.confirmed : OrderStatus.pending),
+      createdFromPos: offlineFirst,
+      deliveryDate: deliveryDate,
+      targetDeliveryTime: targetDeliveryTime,
+      prepTimeMinutes: prepTimeMinutes,
+      routeTimeMinutes: routeTimeMinutes,
+      cashierBufferMinutes: cashierBufferMinutes,
+      autoReleaseTime: autoReleaseTime,
+      paymentStatus: paymentStatus,
+      heldShiftId: heldShiftId,
+      paidAt: paidAt,
     );
+
+    if (offlineFirst) {
+      final saved = await PosSyncService.instance.commitPosSale(
+        order,
+        restaurantId: restaurantId ?? ApiService.defaultRestaurantId,
+      );
+      unawaited(refreshOrders());
+      return saved;
+    }
 
     final created = await ApiService.instance.createOrder(
       order,
@@ -130,23 +171,106 @@ class OrdersService {
       unawaited(OrdersDemoService.refreshFromApi());
     }
 
-    if (usesFirebase) {
-      try {
-        if (refreshList) {
-          await _firebase.addOrder(created);
-        } else {
-          unawaited(() async {
-            try {
-              await _firebase.addOrder(created);
-            } catch (error) {
-              debugPrint('Firebase order mirror skipped: $error');
-            }
-          }());
-        }
-      } catch (error) {
-        debugPrint('Firebase order mirror skipped: $error');
-      }
-    }
+    unawaited(mirrorOrder(created, restaurantId: restaurantId));
     return created;
+  }
+
+  Future<Order> submitHeldPickupFromCart({
+    required List<CartItem> cartItems,
+    required String customerName,
+    required String phone,
+    required String invoiceNumber,
+    String? restaurantId,
+    String? shiftId,
+    String? cashierId,
+    String? cashierName,
+  }) {
+    return submitOrderFromCart(
+      cartItems: cartItems,
+      customerName: customerName,
+      phone: phone,
+      address: 'استلام من المحل',
+      paymentMethod: 'غير مدفوع',
+      invoiceNumber: invoiceNumber,
+      restaurantId: restaurantId,
+      orderSource: 'pos',
+      orderType: OrderType.pickup,
+      offlineFirst: true,
+      shiftId: shiftId,
+      cashierId: cashierId,
+      cashierName: cashierName,
+      paymentStatus: OrderPaymentStatus.pending.storageValue,
+      heldShiftId: shiftId,
+    );
+  }
+
+  Future<Order> settleHeldPickupOrder({
+    required Order order,
+    required String paymentMethod,
+    required List<CartItem> cartItems,
+    required String restaurantId,
+    String? shiftId,
+    String? cashierId,
+    String? cashierName,
+  }) async {
+    final subtotal = cartItems.fold<double>(
+      0,
+      (sum, item) => sum + item.totalPrice,
+    );
+    final settled = order.copyWith(
+      items: cartItems.map(OrderLineItem.fromCartItem).toList(),
+      subtotal: subtotal,
+      totalPrice: subtotal,
+      paymentMethod: paymentMethod,
+      paymentStatus: OrderPaymentStatus.paid.storageValue,
+      paidAt: DateTime.now().toUtc(),
+      status: OrderStatus.delivered,
+      shiftId: shiftId ?? order.shiftId,
+      cashierId: cashierId ?? order.cashierId,
+      cashierName: cashierName ?? order.cashierName,
+      heldShiftId: order.heldShiftId ?? order.shiftId,
+    );
+
+    try {
+      final saved = await ApiService.instance.settlePickupOrder(
+        settled,
+        restaurantId: restaurantId,
+        shiftId: shiftId,
+        cashierId: cashierId,
+        cashierName: cashierName,
+      );
+      final resolved = saved ?? settled;
+      OrdersDemoService.replaceVisibleOrder(resolved);
+      unawaited(OrdersDemoService.refreshFromApi());
+      return resolved;
+    } catch (error) {
+      debugPrint('Pickup settle API failed, applying locally: $error');
+      OrdersDemoService.replaceVisibleOrder(settled);
+      unawaited(mirrorOrder(settled, restaurantId: restaurantId));
+      return settled;
+    }
+  }
+
+  Future<Order> saveScheduledInvoice(Order order, {String? restaurantId}) async {
+    OrdersDemoService.replaceVisibleOrder(order);
+    try {
+      await ApiService.instance.createOrder(
+        order,
+        restaurantId: restaurantId ?? ApiService.defaultRestaurantId,
+        bumpUpdatedAt: true,
+      );
+      return order;
+    } catch (_) {
+      return order;
+    }
+  }
+
+  Future<void> mirrorOrder(Order order, {String? restaurantId}) async {
+    if (!usesFirebase) return;
+    try {
+      await _firebase.addOrder(order, restaurantId: restaurantId);
+    } catch (error) {
+      debugPrint('Firebase order mirror skipped: $error');
+    }
   }
 }

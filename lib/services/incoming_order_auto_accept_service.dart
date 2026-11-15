@@ -23,6 +23,8 @@ class IncomingOrderAutoAcceptService extends ChangeNotifier {
   final Map<String, _TrackedIncomingOrder> _tracked = {};
   final Set<String> _inFlight = {};
   final Set<String> _printed = {};
+  final Set<String> _warnedNoShift = {};
+  final ValueNotifier<String?> shiftReadinessWarning = ValueNotifier(null);
   Timer? _ticker;
 
   bool get hasActiveCountdowns => _tracked.isNotEmpty;
@@ -40,14 +42,19 @@ class IncomingOrderAutoAcceptService extends ChangeNotifier {
         .toList(growable: false);
     for (final id in removed) {
       _tracked.remove(id);
+      _warnedNoShift.remove(id);
     }
     if (removed.isNotEmpty) notifyListeners();
     _ensureTicker();
   }
 
+  bool _heldForCashierEdit(Order order) =>
+      isTalabatOrder(order) || isKeetaOrder(order) || isJahezOrder(order);
+
   void trackNewOrder(Order order) {
     if (AdminAuthService.instance.isKitchen) return;
     if (order.status != OrderStatus.pending) return;
+    if (_heldForCashierEdit(order)) return;
     if (!isOnlineMenuOrder(order)) return;
     if (_tracked.containsKey(order.id) || _inFlight.contains(order.id)) return;
 
@@ -55,6 +62,9 @@ class IncomingOrderAutoAcceptService extends ChangeNotifier {
       order: order,
       deadline: DateTime.now().add(countdownDuration),
     );
+    if (!_hasOpenCashierShift()) {
+      _publishNoOpenShiftWarning(order);
+    }
     _ensureTicker();
     notifyListeners();
   }
@@ -63,15 +73,20 @@ class IncomingOrderAutoAcceptService extends ChangeNotifier {
   void focusDeepLinkedOrder(Order order) {
     if (AdminAuthService.instance.isKitchen) return;
     if (order.status != OrderStatus.pending) return;
+    if (_heldForCashierEdit(order)) return;
     if (!isOnlineMenuOrder(order)) return;
     if (_inFlight.contains(order.id)) return;
 
     final existing = _tracked[order.id];
-    final deadline = existing?.deadline ?? order.createdAt.add(countdownDuration);
+    final deadline =
+        existing?.deadline ?? order.createdAt.add(countdownDuration);
     _tracked[order.id] = _TrackedIncomingOrder(
       order: order,
       deadline: deadline,
     );
+    if (!_hasOpenCashierShift()) {
+      _publishNoOpenShiftWarning(order);
+    }
     _ensureTicker();
     notifyListeners();
 
@@ -97,7 +112,7 @@ class IncomingOrderAutoAcceptService extends ChangeNotifier {
       _ticker = null;
       return;
     }
-    _ticker ??= Timer.periodic(const Duration(milliseconds: 250), (_) {
+    _ticker ??= Timer.periodic(const Duration(seconds: 1), (_) {
       _onTick();
     });
   }
@@ -107,15 +122,29 @@ class IncomingOrderAutoAcceptService extends ChangeNotifier {
     _onTick();
   }
 
+  String _countdownFingerprint = '';
+
   void _onTick() {
     if (_tracked.isEmpty) {
       _ensureTicker();
-      notifyListeners();
+      if (_countdownFingerprint.isNotEmpty) {
+        _countdownFingerprint = '';
+        notifyListeners();
+      }
       return;
     }
 
-    notifyListeners();
     final now = DateTime.now();
+    final fingerprint = _tracked.entries
+        .map((entry) {
+          final left = entry.value.deadline.difference(now).inSeconds;
+          return '${entry.key}:${left < 0 ? 0 : left}';
+        })
+        .join('|');
+    if (fingerprint != _countdownFingerprint) {
+      _countdownFingerprint = fingerprint;
+      notifyListeners();
+    }
     final expired = _tracked.values
         .where((entry) => !now.isBefore(entry.deadline))
         .map((entry) => entry.order)
@@ -125,10 +154,17 @@ class IncomingOrderAutoAcceptService extends ChangeNotifier {
     }
   }
 
-  bool _cashierCanAutoAccept() {
-    if (!AdminAuthService.instance.isCashier) return true;
+  bool _hasOpenCashierShift() {
     final shift = PosOperationsService.instance.activeShift;
     return shift != null && shift.isOpen;
+  }
+
+  void _publishNoOpenShiftWarning(Order order) {
+    if (!_warnedNoShift.add(order.id)) return;
+    debugPrint(
+      'Incoming order ${order.id} is waiting: no cashier shift is open.',
+    );
+    shiftReadinessWarning.value = order.id;
   }
 
   ({String cashierId, String cashierName, String shiftId}) _receivingIdentity(
@@ -164,12 +200,19 @@ class IncomingOrderAutoAcceptService extends ChangeNotifier {
 
   Future<void> _accept(Order order, {required bool autoFallback}) async {
     if (_inFlight.contains(order.id)) return;
+    final unassignedConfirmed =
+        order.status == OrderStatus.confirmed &&
+        (order.cashierId ?? '').trim().isEmpty &&
+        (order.shiftId ?? '').trim().isEmpty &&
+        order.receivedByCashierLabel.trim().isEmpty;
     if (order.status != OrderStatus.pending &&
-        _tracked[order.id] == null) {
+        _tracked[order.id] == null &&
+        !unassignedConfirmed) {
       return;
     }
 
-    if (autoFallback && !_cashierCanAutoAccept()) {
+    if (autoFallback && !_hasOpenCashierShift()) {
+      _publishNoOpenShiftWarning(order);
       return;
     }
 
@@ -187,16 +230,15 @@ class IncomingOrderAutoAcceptService extends ChangeNotifier {
         OrderStatus.confirmed,
         shiftId: identity.shiftId.isNotEmpty ? identity.shiftId : null,
         cashierId: identity.cashierId.isNotEmpty ? identity.cashierId : null,
-        cashierName:
-            identity.cashierName.isNotEmpty ? identity.cashierName : null,
+        cashierName: identity.cashierName.isNotEmpty
+            ? identity.cashierName
+            : null,
         autoAccepted: autoFallback,
         acceptedBy: AdminAuthService.instance.auditUserId,
         acceptedByName: AdminAuthService.instance.auditUserName,
       );
 
-      await _printOnce(
-        order.copyWith(status: OrderStatus.confirmed),
-      );
+      await _printOnce(order.copyWith(status: OrderStatus.confirmed));
     } catch (error, stackTrace) {
       if (kDebugMode) {
         debugPrint('Incoming order accept failed: $error\n$stackTrace');
@@ -219,10 +261,14 @@ class IncomingOrderAutoAcceptService extends ChangeNotifier {
   Future<void> _printOnce(Order order) async {
     if (!_printed.add(order.id)) return;
     try {
-      await PosPrintHelper.printIncomingAcceptance(
+      final printed = await PosPrintHelper.printIncomingAcceptance(
         order: order,
         kind: PosReceiptKind.kitchen,
       );
+      if (!printed) {
+        _printed.remove(order.id);
+        _publishNoOpenShiftWarning(order);
+      }
     } catch (error, stackTrace) {
       _printed.remove(order.id);
       if (kDebugMode) {
@@ -233,10 +279,7 @@ class IncomingOrderAutoAcceptService extends ChangeNotifier {
 }
 
 class _TrackedIncomingOrder {
-  const _TrackedIncomingOrder({
-    required this.order,
-    required this.deadline,
-  });
+  const _TrackedIncomingOrder({required this.order, required this.deadline});
 
   final Order order;
   final DateTime deadline;

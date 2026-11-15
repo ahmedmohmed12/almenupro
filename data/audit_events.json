@@ -1,0 +1,1184 @@
+[
+  {
+    "id": "audit_1792427278192_w91o",
+    "restaurantId": "rest_1791364026166_z8z2",
+    "action": "platform_settlement_corrected",
+    "entityType": "order_audit_events",
+    "entityId": "ext_talabat_7a5c67e9c32563ebffd906c9",
+    "performedById": "admin:rest_1791364026166_z8z2",
+    "performedByName": "Beit Wadha",
+    "authorizedById": null,
+    "authorizedByName": null,
+    "metadata": {
+      "previousPayment": "",
+      "paymentMethod": "KNET",
+      "previousTotal": 11.25,
+      "invoiceAmount": 11.25
+    },
+    "createdAt": "2026-10-19T16:27:58.192Z"
+  },
+  {
+    "id": "audit_1792346411992_rqqj",
+    "restaurantId": "rest_1791364026166_z8z2",
+    "action": "delivery_contact_updated",
+    "entityType": "order_audit_events",
+    "entityId": "ext_talabat_91d33230eefbcd980629d40f",
+    "performedById": "staff_1791364134512_f9zk",
+    "performedByName": "mo",
+    "authorizedById": null,
+    "authorizedByName": null,
+    "metadata": {
+      "address": "118,منزل 39,Farwaniya",
+      "phone": "+96555226559",
+      "deliveryInstructions": "",
+      "deliveryZoneId": "zone_1791480472025_nry9",
+      "targetKitchenId": "kitchen_sabah__rest_1791364026166_z8z2",
+      "financialsUnchanged": true
+    },
+    "createdAt": "2026-10-18T18:00:11.992Z"
+  },
+  {
+    "id": "audit_1792346366622_0gyu",
+    "restaurantId": "rest_1791364026166_z8z2",
+    "action": "delivery_contact_updated",
+    "entityType": "order_audit_events",
+    "entityId": "ext_talabat_91d33230eefbcd980629d40f",
+    "performedById": "staff_1791364134512_f9zk",
+    "performedByName": "mo",
+    "authorizedById": null,
+    "authorizedByName": null,
+    "metadata": {
+      "address": "118,منزل 39,Farwaniya",
+      "phone": "+96555226559",
+      "deliveryInstructions": "",
+      "deliveryZoneId": "zone_1791480472025_nry9",
+      "targetKitchenId": "kitchen_sabah__rest_1791364026166_z8z2",
+      "financialsUnchanged": true
+    },
+    "createdAt": "2026-10-18T17:59:26.622Z"
+  },
+  {
+    "id": "audit_1792335475042_257z",
+    "restaurantId": "rest_1791364026166_z8z2",
+    "action": "shift_open",
+    "entityType": "shift",
+    "entityId": "shift_1792335475028_218v",
+    "performedById": "staff_1791364134512_f9zk",
+    "performedByName": "mo",
+    "authorizedById": null,
+    "authorizedByName": null,
+    "metadata": {
+      "openingFloat": 1234
+    },
+    "createdAt": "2026-10-18T14:57:55.042Z"
+  },
+  {
+    "id": "audit_1791819936717_uo1a",
+    "restaurantId": "rest_1791364026166_z8z2",
+    "action": "shift_open",
+    "entityType": "shift",
+    "entityId": "shift_1791819936714_nsjf",
+    "performedById": "staff_1791364134512_f9zk",
+    "performedByName": "mo",
+    "authorizedById": null,
+    "authorizedByName": null,
+    "metadata": {
+      "openingFloat": 0
+    },
+    "createdAt": "2026-10-12T15:45:36.717Z"
+  },
+  {
+    "id": "audit_1791658100734_4jjz",
+    "restaurantId": "rest_1791364026166_z8z2",
+    "action": "shift_open",
+    "entityType": "shift",
+    "entityId": "shift_1791658100732_pkt0",
+    "performedById": "staff_1791364134512_f9zk",
+    "performedByName": "mo",
+    "authorizedById": null,
+    "authorizedByName": null,
+    "metadata": {
+      "openingFloat": 0
+    },
+    "createdAt": "2026-10-10T18:48:20.734Z"
+  },
+  {
+    "id": "audit_1791642429101_8yc6",
+    "restaurantId": "rest_1791364026166_z8z2",
+    "action": "platform_settlement_corrected",
+    "entityType": "order_audit_events",
+    "entityId": "ext_talabat_c393b7b57b0510b4d0f870dc",
+    "performedById": "staff_1791364134512_f9zk",
+    "performedByName": "mo",
+    "authorizedById": null,
+    "authorizedByName": null,
+    "metadata": {
+      "previousPayment": "KNET",
+      "paymentMethod": "KNET",
+      "previousTotal": 7.99,
+      "invoiceAmount": 7.99
+    },
+    "createdAt": "2026-10-10T14:27:09.101Z"
+  },
+  {
+    "id": "audit_1791642425443_9hc1",
+    "restaurantId": "rest_1791364026166_z8z2",
+    "action": "platform_settlement_corrected",
+    "entityType": "order_audit_events",
+    "entityId": "ext_talabat_c393b7b57b0510b4d0f870dc",
+    "performedById": "staff_1791364134512_f9zk",
+    "performedByName": "mo",
+    "authorizedById": null,
+    "authorizedByName": null,
+    "metadata": {
+      "previousPayment": "Cash",
+      "paymentMethod": "KNET",
+      "previousTotal": 7.99,
+      "invoiceAmount": 7.99
+    },
+    "createdAt": "2026-10-10T14:27:05.443Z"
+  },
+  {
+    "id": "audit_1791642410510_2r5v",
+    "restaurantId": "rest_1791364026166_z8z2",
+    "action": "platform_settlement_corrected",
+    "entityType": "order_audit_events",
+    "entityId": "ext_talabat_17441a67bc78a249e32eb65c",
+    "performedById": "staff_1791364134512_f9zk",
+    "performedByName": "mo",
+    "authorizedById": null,
+    "authorizedByName": null,
+    "metadata": {
+      "previousPayment": "Cash",
+      "paymentMethod": "KNET",
+      "previousTotal": 10,
+      "invoiceAmount": 10
+    },
+    "createdAt": "2026-10-10T14:26:50.510Z"
+  },
+  {
+    "id": "audit_1791642342718_8zl2",
+    "restaurantId": "rest_1791364026166_z8z2",
+    "action": "platform_settlement_corrected",
+    "entityType": "order_audit_events",
+    "entityId": "ext_talabat_96fcec4f3f337273f9d2287a",
+    "performedById": "staff_1791364134512_f9zk",
+    "performedByName": "mo",
+    "authorizedById": null,
+    "authorizedByName": null,
+    "metadata": {
+      "previousPayment": "Cash",
+      "paymentMethod": "KNET",
+      "previousTotal": 8.5,
+      "invoiceAmount": 8.5
+    },
+    "createdAt": "2026-10-10T14:25:42.718Z"
+  },
+  {
+    "id": "audit_1791642313490_po50",
+    "restaurantId": "rest_1791364026166_z8z2",
+    "action": "platform_settlement_corrected",
+    "entityType": "order_audit_events",
+    "entityId": "ext_talabat_e654c490b1f38bc4033a8fb2",
+    "performedById": "staff_1791364134512_f9zk",
+    "performedByName": "mo",
+    "authorizedById": null,
+    "authorizedByName": null,
+    "metadata": {
+      "previousPayment": "Cash",
+      "paymentMethod": "KNET",
+      "previousTotal": 18.52,
+      "invoiceAmount": 18.52
+    },
+    "createdAt": "2026-10-10T14:25:13.490Z"
+  },
+  {
+    "id": "audit_1791642273049_fmb4",
+    "restaurantId": "rest_1791364026166_z8z2",
+    "action": "platform_settlement_corrected",
+    "entityType": "order_audit_events",
+    "entityId": "ext_talabat_080071f8ae15b5740022df1f",
+    "performedById": "staff_1791364134512_f9zk",
+    "performedByName": "mo",
+    "authorizedById": null,
+    "authorizedByName": null,
+    "metadata": {
+      "previousPayment": "Cash",
+      "paymentMethod": "KNET",
+      "previousTotal": 3.95,
+      "invoiceAmount": 3.95
+    },
+    "createdAt": "2026-10-10T14:24:33.049Z"
+  },
+  {
+    "id": "audit_1791640869116_vq6v",
+    "restaurantId": "rest_1791364026166_z8z2",
+    "action": "delivery_contact_updated",
+    "entityType": "order_audit_events",
+    "entityId": "ext_talabat_981a0aded0048b06a71c1109",
+    "performedById": "staff_1791364134512_f9zk",
+    "performedByName": "mo",
+    "authorizedById": null,
+    "authorizedByName": null,
+    "metadata": {
+      "address": "شارع 73,8,Farwaniya",
+      "phone": "+96594022231",
+      "deliveryInstructions": "",
+      "deliveryZoneId": "zone_1791480440274_x272",
+      "targetKitchenId": "kitchen_ardiya__rest_1791364026166_z8z2",
+      "financialsUnchanged": true
+    },
+    "createdAt": "2026-10-10T14:01:09.116Z"
+  },
+  {
+    "id": "audit_1791640624125_m19z",
+    "restaurantId": "rest_1791364026166_z8z2",
+    "action": "platform_settlement_corrected",
+    "entityType": "order_audit_events",
+    "entityId": "ext_talabat_708e1eb0e2c51e8cab13714f",
+    "performedById": "staff_1791364134512_f9zk",
+    "performedByName": "mo",
+    "authorizedById": null,
+    "authorizedByName": null,
+    "metadata": {
+      "previousPayment": "Cash",
+      "paymentMethod": "KNET",
+      "previousTotal": 3,
+      "invoiceAmount": 3
+    },
+    "createdAt": "2026-10-10T13:57:04.125Z"
+  },
+  {
+    "id": "audit_1791640222864_vm3w",
+    "restaurantId": "rest_1791364026166_z8z2",
+    "action": "platform_settlement_corrected",
+    "entityType": "order_audit_events",
+    "entityId": "ext_talabat_83d5cd339e0d455e93d7660f",
+    "performedById": "staff_1791364134512_f9zk",
+    "performedByName": "mo",
+    "authorizedById": null,
+    "authorizedByName": null,
+    "metadata": {
+      "previousPayment": "Cash",
+      "paymentMethod": "KNET",
+      "previousTotal": 3,
+      "invoiceAmount": 3
+    },
+    "createdAt": "2026-10-10T13:50:22.864Z"
+  },
+  {
+    "id": "audit_1791639551526_werx",
+    "restaurantId": "rest_1791364026166_z8z2",
+    "action": "platform_settlement_corrected",
+    "entityType": "order_audit_events",
+    "entityId": "ext_talabat_86448f0cdbb07e79188551a1",
+    "performedById": "staff_1791364134512_f9zk",
+    "performedByName": "mo",
+    "authorizedById": null,
+    "authorizedByName": null,
+    "metadata": {
+      "previousPayment": "Cash",
+      "paymentMethod": "KNET",
+      "previousTotal": 7.45,
+      "invoiceAmount": 7.45
+    },
+    "createdAt": "2026-10-10T13:39:11.526Z"
+  },
+  {
+    "id": "audit_1791639544111_ifxz",
+    "restaurantId": "rest_1791364026166_z8z2",
+    "action": "platform_settlement_corrected",
+    "entityType": "order_audit_events",
+    "entityId": "ext_talabat_b50fb6772203b054035756a1",
+    "performedById": "staff_1791364134512_f9zk",
+    "performedByName": "mo",
+    "authorizedById": null,
+    "authorizedByName": null,
+    "metadata": {
+      "previousPayment": "KNET",
+      "paymentMethod": "KNET",
+      "previousTotal": 3.95,
+      "invoiceAmount": 3.95
+    },
+    "createdAt": "2026-10-10T13:39:04.111Z"
+  },
+  {
+    "id": "audit_1791639536923_pex3",
+    "restaurantId": "rest_1791364026166_z8z2",
+    "action": "platform_settlement_corrected",
+    "entityType": "order_audit_events",
+    "entityId": "ext_talabat_3281876fb10c13388157b2bc",
+    "performedById": "staff_1791364134512_f9zk",
+    "performedByName": "mo",
+    "authorizedById": null,
+    "authorizedByName": null,
+    "metadata": {
+      "previousPayment": "Cash",
+      "paymentMethod": "KNET",
+      "previousTotal": 4.15,
+      "invoiceAmount": 4.15
+    },
+    "createdAt": "2026-10-10T13:38:56.923Z"
+  },
+  {
+    "id": "audit_1791639507054_w4cr",
+    "restaurantId": "rest_1791364026166_z8z2",
+    "action": "platform_settlement_corrected",
+    "entityType": "order_audit_events",
+    "entityId": "ext_talabat_b50fb6772203b054035756a1",
+    "performedById": "staff_1791364134512_f9zk",
+    "performedByName": "mo",
+    "authorizedById": null,
+    "authorizedByName": null,
+    "metadata": {
+      "previousPayment": "Cash",
+      "paymentMethod": "KNET",
+      "previousTotal": 3.95,
+      "invoiceAmount": 3.95
+    },
+    "createdAt": "2026-10-10T13:38:27.054Z"
+  },
+  {
+    "id": "audit_1791633803077_5nyr",
+    "restaurantId": "rest_1791364026166_z8z2",
+    "action": "platform_settlement_corrected",
+    "entityType": "order_audit_events",
+    "entityId": "ext_talabat_b0264dcf2a1d3291a10ed737",
+    "performedById": "staff_1791364134512_f9zk",
+    "performedByName": "mo",
+    "authorizedById": null,
+    "authorizedByName": null,
+    "metadata": {
+      "previousPayment": "Cash",
+      "paymentMethod": "KNET",
+      "previousTotal": 5.45,
+      "invoiceAmount": 5.45
+    },
+    "createdAt": "2026-10-10T12:03:23.077Z"
+  },
+  {
+    "id": "audit_1791630285267_gl7i",
+    "restaurantId": "rest_1791364026166_z8z2",
+    "action": "delivery_contact_updated",
+    "entityType": "order_audit_events",
+    "entityId": "ext_talabat_c594b9bd8b6024e04e7e0a1d",
+    "performedById": "staff_1791364134512_f9zk",
+    "performedByName": "mo",
+    "authorizedById": null,
+    "authorizedByName": null,
+    "metadata": {
+      "address": "121,house 94,Farwaniya",
+      "phone": "+96551448881",
+      "deliveryInstructions": "",
+      "deliveryZoneId": "zone_1791480440274_x272",
+      "targetKitchenId": "kitchen_ardiya__rest_1791364026166_z8z2",
+      "financialsUnchanged": true
+    },
+    "createdAt": "2026-10-10T11:04:45.267Z"
+  },
+  {
+    "id": "audit_1791580498996_i0lg",
+    "restaurantId": "rest_1791364026166_z8z2",
+    "action": "delivery_contact_updated",
+    "entityType": "order_audit_events",
+    "entityId": "ext_talabat_9c61483e08536c2ab2179a66",
+    "performedById": "staff_1791364134512_f9zk",
+    "performedByName": "mo",
+    "authorizedById": null,
+    "authorizedByName": null,
+    "metadata": {
+      "address": "شارع 309,khaldi,Farwaniya",
+      "phone": "+96599340336",
+      "deliveryInstructions": "",
+      "deliveryZoneId": "zone_1791480440274_x272",
+      "targetKitchenId": "kitchen_ardiya__rest_1791364026166_z8z2",
+      "financialsUnchanged": true
+    },
+    "createdAt": "2026-10-09T21:14:58.996Z"
+  },
+  {
+    "id": "audit_1791575755410_w15d",
+    "restaurantId": "rest_1791364026166_z8z2",
+    "action": "shift_open",
+    "entityType": "shift",
+    "entityId": "shift_1791575755408_jlg0",
+    "performedById": "staff_1791364134512_f9zk",
+    "performedByName": "mo",
+    "authorizedById": null,
+    "authorizedByName": null,
+    "metadata": {
+      "openingFloat": 0
+    },
+    "createdAt": "2026-10-09T19:55:55.410Z"
+  },
+  {
+    "id": "audit_1791573699086_8xvv",
+    "restaurantId": "rest_1791364026166_z8z2",
+    "action": "shift_open",
+    "entityType": "shift",
+    "entityId": "shift_1791573699084_i9ww",
+    "performedById": "staff_1791364134512_f9zk",
+    "performedByName": "mo",
+    "authorizedById": null,
+    "authorizedByName": null,
+    "metadata": {
+      "openingFloat": 0
+    },
+    "createdAt": "2026-10-09T19:21:39.086Z"
+  },
+  {
+    "id": "audit_1791571470807_jva3",
+    "restaurantId": "rest_1791364026166_z8z2",
+    "action": "shift_open",
+    "entityType": "shift",
+    "entityId": "shift_1791571470805_m3e7",
+    "performedById": "staff_1791364134512_f9zk",
+    "performedByName": "mo",
+    "authorizedById": null,
+    "authorizedByName": null,
+    "metadata": {
+      "openingFloat": 0
+    },
+    "createdAt": "2026-10-09T18:44:30.807Z"
+  },
+  {
+    "id": "audit_1791570320951_g59c",
+    "restaurantId": "rest_1791364026166_z8z2",
+    "action": "shift_open",
+    "entityType": "shift",
+    "entityId": "shift_1791570320949_q942",
+    "performedById": "staff_1791364134512_f9zk",
+    "performedByName": "mo",
+    "authorizedById": null,
+    "authorizedByName": null,
+    "metadata": {
+      "openingFloat": 0
+    },
+    "createdAt": "2026-10-09T18:25:20.951Z"
+  },
+  {
+    "id": "audit_1791567508486_9zea",
+    "restaurantId": "rest_1791364026166_z8z2",
+    "action": "shift_open",
+    "entityType": "shift",
+    "entityId": "shift_1791567508484_7xrr",
+    "performedById": "staff_1791364134512_f9zk",
+    "performedByName": "mo",
+    "authorizedById": null,
+    "authorizedByName": null,
+    "metadata": {
+      "openingFloat": 0
+    },
+    "createdAt": "2026-10-09T17:38:28.486Z"
+  },
+  {
+    "id": "audit_1791565053652_492f",
+    "restaurantId": "rest_1791364026166_z8z2",
+    "action": "shift_open",
+    "entityType": "shift",
+    "entityId": "shift_1791565053649_in80",
+    "performedById": "staff_1791364134512_f9zk",
+    "performedByName": "mo",
+    "authorizedById": null,
+    "authorizedByName": null,
+    "metadata": {
+      "openingFloat": 0
+    },
+    "createdAt": "2026-10-09T16:57:33.652Z"
+  },
+  {
+    "id": "audit_1791559841410_xkbm",
+    "restaurantId": "rest_1791364026166_z8z2",
+    "action": "shift_open",
+    "entityType": "shift",
+    "entityId": "shift_1791559841408_n9cp",
+    "performedById": "staff_1791364134512_f9zk",
+    "performedByName": "mo",
+    "authorizedById": null,
+    "authorizedByName": null,
+    "metadata": {
+      "openingFloat": 0
+    },
+    "createdAt": "2026-10-09T15:30:41.410Z"
+  },
+  {
+    "id": "audit_1791489657862_9tom",
+    "restaurantId": "rest_1791364026166_z8z2",
+    "action": "delivery_contact_updated",
+    "entityType": "order_audit_events",
+    "entityId": "ext_talabat_9f7b1f4533cfd778465634ba",
+    "performedById": "staff_1791364134512_f9zk",
+    "performedByName": "mo",
+    "authorizedById": null,
+    "authorizedByName": null,
+    "metadata": {
+      "address": "شارع 920,هبه ,Farwaniya",
+      "phone": "+96590961150",
+      "deliveryInstructions": "",
+      "deliveryZoneId": "zone_1791480440274_x272",
+      "targetKitchenId": "kitchen_ardiya__rest_1791364026166_z8z2",
+      "financialsUnchanged": true
+    },
+    "createdAt": "2026-10-08T20:00:57.862Z"
+  },
+  {
+    "id": "audit_1791489638189_g0u5",
+    "restaurantId": "rest_1791364026166_z8z2",
+    "action": "shift_open",
+    "entityType": "shift",
+    "entityId": "shift_1791489638189_49e2",
+    "performedById": "staff_1791364134512_f9zk",
+    "performedByName": "mo",
+    "authorizedById": null,
+    "authorizedByName": null,
+    "metadata": {
+      "openingFloat": 0
+    },
+    "createdAt": "2026-10-08T20:00:38.189Z"
+  },
+  {
+    "id": "audit_1791489575007_ctio",
+    "restaurantId": "rest_1791364026166_z8z2",
+    "action": "delivery_contact_updated",
+    "entityType": "order_audit_events",
+    "entityId": "ext_talabat_9f7b1f4533cfd778465634ba",
+    "performedById": "admin:rest_1791364026166_z8z2",
+    "performedByName": "Beit Wadha",
+    "authorizedById": null,
+    "authorizedByName": null,
+    "metadata": {
+      "address": "شارع 920,هبه ,Farwaniya",
+      "phone": "+96590961150",
+      "deliveryInstructions": "",
+      "deliveryZoneId": "zone_1791480440274_x272",
+      "targetKitchenId": "kitchen_ardiya__rest_1791364026166_z8z2",
+      "financialsUnchanged": true
+    },
+    "createdAt": "2026-10-08T19:59:35.007Z"
+  },
+  {
+    "id": "audit_1791488830756_yiv4",
+    "restaurantId": "rest_1791364026166_z8z2",
+    "action": "delivery_contact_updated",
+    "entityType": "order_audit_events",
+    "entityId": "ext_talabat_7fbaee97df3dee4039d55eaa",
+    "performedById": "staff_1791364134512_f9zk",
+    "performedByName": "mo",
+    "authorizedById": null,
+    "authorizedByName": null,
+    "metadata": {
+      "address": "20 Street,500,Farwaniya",
+      "phone": "+96565194777",
+      "deliveryInstructions": "",
+      "deliveryZoneId": "zone_1791480440274_x272",
+      "targetKitchenId": "kitchen_ardiya__rest_1791364026166_z8z2",
+      "financialsUnchanged": true
+    },
+    "createdAt": "2026-10-08T19:47:10.756Z"
+  },
+  {
+    "id": "audit_1791485707945_o4lk",
+    "restaurantId": "rest_1791364026166_z8z2",
+    "action": "delivery_contact_updated",
+    "entityType": "order_audit_events",
+    "entityId": "ext_talabat_72cb2e9e9fd2d296f68d3759",
+    "performedById": "staff_1791364134512_f9zk",
+    "performedByName": "mo",
+    "authorizedById": null,
+    "authorizedByName": null,
+    "metadata": {
+      "address": "شارع 128,63,Farwaniya",
+      "phone": "+966556420326",
+      "deliveryInstructions": "",
+      "deliveryZoneId": "zone_1791480440274_x272",
+      "targetKitchenId": "kitchen_ardiya__rest_1791364026166_z8z2",
+      "financialsUnchanged": true
+    },
+    "createdAt": "2026-10-08T18:55:07.945Z"
+  },
+  {
+    "id": "audit_1791483393431_ar4t",
+    "restaurantId": "rest_1791364026166_z8z2",
+    "action": "delivery_contact_updated",
+    "entityType": "order_audit_events",
+    "entityId": "ext_keeta_ae714c3685d76e16f1a1241c",
+    "performedById": "staff_1791364134512_f9zk",
+    "performedByName": "mo",
+    "authorizedById": null,
+    "authorizedByName": null,
+    "metadata": {
+      "address": "حولي، ميدان حوالي",
+      "phone": "55****35",
+      "deliveryInstructions": "",
+      "deliveryZoneId": "zone_1791480440274_x272",
+      "targetKitchenId": "kitchen_ardiya__rest_1791364026166_z8z2",
+      "financialsUnchanged": true
+    },
+    "createdAt": "2026-10-08T18:16:33.431Z"
+  },
+  {
+    "id": "audit_1791483358081_w3z9",
+    "restaurantId": "rest_1791364026166_z8z2",
+    "action": "delivery_contact_updated",
+    "entityType": "order_audit_events",
+    "entityId": "ext_keeta_ae714c3685d76e16f1a1241c",
+    "performedById": "admin:rest_1791364026166_z8z2",
+    "performedByName": "Beit Wadha",
+    "authorizedById": null,
+    "authorizedByName": null,
+    "metadata": {
+      "address": "حولي، ميدان حوالي",
+      "phone": "55****35",
+      "deliveryInstructions": "",
+      "deliveryZoneId": "zone_1791480472025_nry9",
+      "targetKitchenId": "kitchen_sabah__rest_1791364026166_z8z2",
+      "financialsUnchanged": true
+    },
+    "createdAt": "2026-10-08T18:15:58.081Z"
+  },
+  {
+    "id": "audit_1791482980493_i9d9",
+    "restaurantId": "rest_1791364026166_z8z2",
+    "action": "shift_open",
+    "entityType": "shift",
+    "entityId": "shift_1791482980491_2woe",
+    "performedById": "staff_1791364134512_f9zk",
+    "performedByName": "mo",
+    "authorizedById": null,
+    "authorizedByName": null,
+    "metadata": {
+      "openingFloat": 0
+    },
+    "createdAt": "2026-10-08T18:09:40.493Z"
+  },
+  {
+    "id": "audit_1791481582824_bgwm",
+    "restaurantId": "rest_1791364026166_z8z2",
+    "action": "delivery_contact_updated",
+    "entityType": "order_audit_events",
+    "entityId": "ext_talabat_2573178340a760ad8ba35ccb",
+    "performedById": "staff_1791364134512_f9zk",
+    "performedByName": "mo",
+    "authorizedById": null,
+    "authorizedByName": null,
+    "metadata": {
+      "address": "حولي، ميدان حوالي",
+      "phone": "96597587274",
+      "deliveryInstructions": "",
+      "deliveryZoneId": "zone_1791480472025_nry9",
+      "targetKitchenId": "kitchen_sabah__rest_1791364026166_z8z2",
+      "financialsUnchanged": true
+    },
+    "createdAt": "2026-10-08T17:46:22.824Z"
+  },
+  {
+    "id": "audit_1791481279855_3f62",
+    "restaurantId": "rest_1791364026166_z8z2",
+    "action": "delivery_contact_updated",
+    "entityType": "order_audit_events",
+    "entityId": "ext_keeta_79210daceacb67a09669dc50",
+    "performedById": "staff_1791364134512_f9zk",
+    "performedByName": "mo",
+    "authorizedById": null,
+    "authorizedByName": null,
+    "metadata": {
+      "address": "حولي، حوالي",
+      "phone": "97****09",
+      "deliveryInstructions": "",
+      "deliveryZoneId": "zone_1791480440274_x272",
+      "targetKitchenId": "kitchen_ardiya__rest_1791364026166_z8z2",
+      "financialsUnchanged": true
+    },
+    "createdAt": "2026-10-08T17:41:19.855Z"
+  },
+  {
+    "id": "audit_1791480748216_rkmy",
+    "restaurantId": "rest_1791364026166_z8z2",
+    "action": "delivery_contact_updated",
+    "entityType": "order_audit_events",
+    "entityId": "ext_talabat_f02a510769edb2379d82a1fd",
+    "performedById": "staff_1791364134512_f9zk",
+    "performedByName": "mo",
+    "authorizedById": null,
+    "authorizedByName": null,
+    "metadata": {
+      "address": "7 Street,30,Farwaniya",
+      "phone": "+96566566116",
+      "deliveryInstructions": "",
+      "deliveryZoneId": "zone_1791480472025_nry9",
+      "targetKitchenId": "kitchen_sabah__rest_1791364026166_z8z2",
+      "financialsUnchanged": true
+    },
+    "createdAt": "2026-10-08T17:32:28.217Z"
+  },
+  {
+    "id": "audit_1791480554107_yira",
+    "restaurantId": "rest_1791364026166_z8z2",
+    "action": "delivery_contact_updated",
+    "entityType": "order_audit_events",
+    "entityId": "ext_talabat_f02a510769edb2379d82a1fd",
+    "performedById": "staff_1791364134512_f9zk",
+    "performedByName": "mo",
+    "authorizedById": null,
+    "authorizedByName": null,
+    "metadata": {
+      "address": "7 Street,30,Farwaniya",
+      "phone": "+96566566116",
+      "deliveryInstructions": "",
+      "deliveryZoneId": "zone_1791480440274_x272",
+      "targetKitchenId": "kitchen_ardiya__rest_1791364026166_z8z2",
+      "financialsUnchanged": true
+    },
+    "createdAt": "2026-10-08T17:29:14.107Z"
+  },
+  {
+    "id": "audit_1791480521469_djkg",
+    "restaurantId": "rest_1791364026166_z8z2",
+    "action": "delivery_contact_updated",
+    "entityType": "order_audit_events",
+    "entityId": "ext_keeta_41278601882795cb32f9ba36",
+    "performedById": "staff_1791364134512_f9zk",
+    "performedByName": "mo",
+    "authorizedById": null,
+    "authorizedByName": null,
+    "metadata": {
+      "address": "حولي، ميدان حوالي",
+      "phone": "55****93",
+      "deliveryInstructions": "",
+      "deliveryZoneId": "zone_1791480472025_nry9",
+      "targetKitchenId": "kitchen_sabah__rest_1791364026166_z8z2",
+      "financialsUnchanged": true
+    },
+    "createdAt": "2026-10-08T17:28:41.469Z"
+  },
+  {
+    "id": "audit_1791480297753_jnhs",
+    "restaurantId": "rest_1791364026166_z8z2",
+    "action": "shift_open",
+    "entityType": "shift",
+    "entityId": "shift_1791480297745_r9lp",
+    "performedById": "staff_1791364134512_f9zk",
+    "performedByName": "mo",
+    "authorizedById": null,
+    "authorizedByName": null,
+    "metadata": {
+      "openingFloat": 0
+    },
+    "createdAt": "2026-10-08T17:24:57.753Z"
+  },
+  {
+    "id": "audit_1791478473257_erux",
+    "restaurantId": "rest_1791364026166_z8z2",
+    "action": "shift_open",
+    "entityType": "shift",
+    "entityId": "shift_1791478473256_qlmy",
+    "performedById": "staff_1791364134512_f9zk",
+    "performedByName": "mo",
+    "authorizedById": null,
+    "authorizedByName": null,
+    "metadata": {
+      "openingFloat": 0
+    },
+    "createdAt": "2026-10-08T16:54:33.257Z"
+  },
+  {
+    "id": "audit_1791475347277_xld2",
+    "restaurantId": "rest_1791364026166_z8z2",
+    "action": "delivery_contact_updated",
+    "entityType": "order_audit_events",
+    "entityId": "ext_talabat_3b5fc6457a8135a1d5d4b7e7",
+    "performedById": "admin:rest_1791364026166_z8z2",
+    "performedByName": "Beit Wadha",
+    "authorizedById": null,
+    "authorizedByName": null,
+    "metadata": {
+      "address": "1,منزل شبيب,العارضيه",
+      "phone": "+96596666045",
+      "deliveryInstructions": ""
+    },
+    "createdAt": "2026-10-08T16:02:27.277Z"
+  },
+  {
+    "id": "audit_1791456297700_0qnl",
+    "restaurantId": "rest_1791364026166_z8z2",
+    "action": "shift_open",
+    "entityType": "shift",
+    "entityId": "shift_1791456297699_hy2a",
+    "performedById": "staff_1791364134512_f9zk",
+    "performedByName": "mo",
+    "authorizedById": null,
+    "authorizedByName": null,
+    "metadata": {
+      "openingFloat": 0
+    },
+    "createdAt": "2026-10-08T10:44:57.700Z"
+  },
+  {
+    "id": "audit_1791402718278_zqx2",
+    "restaurantId": "rest_1791364026166_z8z2",
+    "action": "shift_open",
+    "entityType": "shift",
+    "entityId": "shift_1791402718275_fave",
+    "performedById": "staff_1791364134512_f9zk",
+    "performedByName": "mo",
+    "authorizedById": null,
+    "authorizedByName": null,
+    "metadata": {
+      "openingFloat": 0
+    },
+    "createdAt": "2026-10-07T19:51:58.278Z"
+  },
+  {
+    "id": "audit_1791399611629_1mt5",
+    "restaurantId": "rest_1791364026166_z8z2",
+    "action": "shift_open",
+    "entityType": "shift",
+    "entityId": "shift_1791399611626_4m5a",
+    "performedById": "staff_1791364134512_f9zk",
+    "performedByName": "mo",
+    "authorizedById": null,
+    "authorizedByName": null,
+    "metadata": {
+      "openingFloat": 0
+    },
+    "createdAt": "2026-10-07T19:00:11.629Z"
+  },
+  {
+    "id": "audit_1791398597160_zajy",
+    "restaurantId": "rest_1791364026166_z8z2",
+    "action": "shift_open",
+    "entityType": "shift",
+    "entityId": "shift_1791398597157_c297",
+    "performedById": "staff_1791364134512_f9zk",
+    "performedByName": "mo",
+    "authorizedById": null,
+    "authorizedByName": null,
+    "metadata": {
+      "openingFloat": 0
+    },
+    "createdAt": "2026-10-07T18:43:17.160Z"
+  },
+  {
+    "id": "audit_1791397290383_amap",
+    "restaurantId": "rest_1791364026166_z8z2",
+    "action": "shift_open",
+    "entityType": "shift",
+    "entityId": "shift_1791397290381_mmsw",
+    "performedById": "staff_1791364134512_f9zk",
+    "performedByName": "mo",
+    "authorizedById": null,
+    "authorizedByName": null,
+    "metadata": {
+      "openingFloat": 0
+    },
+    "createdAt": "2026-10-07T18:21:30.383Z"
+  },
+  {
+    "id": "audit_1791393421084_azd5",
+    "restaurantId": "rest_1791364026166_z8z2",
+    "action": "shift_open",
+    "entityType": "shift",
+    "entityId": "shift_1791393421081_pjje",
+    "performedById": "staff_1791364134512_f9zk",
+    "performedByName": "mo",
+    "authorizedById": null,
+    "authorizedByName": null,
+    "metadata": {
+      "openingFloat": 0
+    },
+    "createdAt": "2026-10-07T17:17:01.084Z"
+  },
+  {
+    "id": "audit_1791389026717_vdpm",
+    "restaurantId": "rest_1791364026166_z8z2",
+    "action": "shift_open",
+    "entityType": "shift",
+    "entityId": "shift_1791389026699_9nn2",
+    "performedById": "staff_1791364134512_f9zk",
+    "performedByName": "mo",
+    "authorizedById": null,
+    "authorizedByName": null,
+    "metadata": {
+      "openingFloat": 0
+    },
+    "createdAt": "2026-10-07T16:03:46.717Z"
+  },
+  {
+    "id": "audit_1791373983155_5tfz",
+    "restaurantId": "rest_1791364026166_z8z2",
+    "action": "shift_open",
+    "entityType": "shift",
+    "entityId": "shift_1791373983152_zevg",
+    "performedById": "staff_1791364134512_f9zk",
+    "performedByName": "mo",
+    "authorizedById": null,
+    "authorizedByName": null,
+    "metadata": {
+      "openingFloat": 0
+    },
+    "createdAt": "2026-10-07T11:53:03.155Z"
+  },
+  {
+    "id": "audit_1791365303703_28l0",
+    "restaurantId": "rest_1791364026166_z8z2",
+    "action": "shift_open",
+    "entityType": "shift",
+    "entityId": "shift_1791365303701_rjds",
+    "performedById": "staff_1791364134512_f9zk",
+    "performedByName": "mo",
+    "authorizedById": null,
+    "authorizedByName": null,
+    "metadata": {
+      "openingFloat": 0
+    },
+    "createdAt": "2026-10-07T09:28:23.703Z"
+  },
+  {
+    "id": "audit_1791364182246_7i8n",
+    "restaurantId": "rest_1791364026166_z8z2",
+    "action": "shift_open",
+    "entityType": "shift",
+    "entityId": "shift_1791364182245_koj5",
+    "performedById": "staff_1791364134512_f9zk",
+    "performedByName": "mo",
+    "authorizedById": null,
+    "authorizedByName": null,
+    "metadata": {
+      "openingFloat": 0
+    },
+    "createdAt": "2026-10-07T09:09:42.246Z"
+  },
+  {
+    "id": "audit_1791363646839_cns6",
+    "restaurantId": "rest_molton",
+    "action": "shift_open",
+    "entityType": "shift",
+    "entityId": "shift_1791363646838_gt7e",
+    "performedById": "staff_1791218442624_autm",
+    "performedByName": "mo",
+    "authorizedById": null,
+    "authorizedByName": null,
+    "metadata": {
+      "openingFloat": 0
+    },
+    "createdAt": "2026-10-07T09:00:46.839Z"
+  },
+  {
+    "id": "audit_1791305278448_1nhu",
+    "restaurantId": "rest_molton",
+    "action": "shift_open",
+    "entityType": "shift",
+    "entityId": "shift_1791305278448_nmno",
+    "performedById": "staff_1791218442624_autm",
+    "performedByName": "mo",
+    "authorizedById": null,
+    "authorizedByName": null,
+    "metadata": {
+      "openingFloat": 0
+    },
+    "createdAt": "2026-10-06T16:47:58.448Z"
+  },
+  {
+    "id": "audit_1791287459625_b9v8",
+    "restaurantId": "rest_molton",
+    "action": "shift_open",
+    "entityType": "shift",
+    "entityId": "shift_1791287459622_ol65",
+    "performedById": "staff_1791218442624_autm",
+    "performedByName": "mo",
+    "authorizedById": null,
+    "authorizedByName": null,
+    "metadata": {
+      "openingFloat": 0
+    },
+    "createdAt": "2026-10-06T11:50:59.625Z"
+  },
+  {
+    "id": "audit_1791286390839_n85a",
+    "restaurantId": "rest_molton",
+    "action": "shift_open",
+    "entityType": "shift",
+    "entityId": "shift_1791286390837_5gca",
+    "performedById": "staff_1791218442624_autm",
+    "performedByName": "mo",
+    "authorizedById": null,
+    "authorizedByName": null,
+    "metadata": {
+      "openingFloat": 0
+    },
+    "createdAt": "2026-10-06T11:33:10.840Z"
+  },
+  {
+    "id": "audit_1791286083975_xtab",
+    "restaurantId": "rest_molton",
+    "action": "shift_open",
+    "entityType": "shift",
+    "entityId": "shift_1791286083973_81ew",
+    "performedById": "staff_1791218442624_autm",
+    "performedByName": "mo",
+    "authorizedById": null,
+    "authorizedByName": null,
+    "metadata": {
+      "openingFloat": 0
+    },
+    "createdAt": "2026-10-06T11:28:03.975Z"
+  },
+  {
+    "id": "audit_1791285402110_x9nh",
+    "restaurantId": "rest_molton",
+    "action": "shift_open",
+    "entityType": "shift",
+    "entityId": "shift_1791285402108_iw4c",
+    "performedById": "staff_1791218442624_autm",
+    "performedByName": "mo",
+    "authorizedById": null,
+    "authorizedByName": null,
+    "metadata": {
+      "openingFloat": 0
+    },
+    "createdAt": "2026-10-06T11:16:42.110Z"
+  },
+  {
+    "id": "audit_1791283394113_ukl8",
+    "restaurantId": "rest_molton",
+    "action": "shift_open",
+    "entityType": "shift",
+    "entityId": "shift_1791283394111_9xaz",
+    "performedById": "staff_1791218442624_autm",
+    "performedByName": "mo",
+    "authorizedById": null,
+    "authorizedByName": null,
+    "metadata": {
+      "openingFloat": 0
+    },
+    "createdAt": "2026-10-06T10:43:14.113Z"
+  },
+  {
+    "id": "audit_1791277365152_lc5d",
+    "restaurantId": "rest_molton",
+    "action": "shift_open",
+    "entityType": "shift",
+    "entityId": "shift_1791277365152_bl09",
+    "performedById": "staff_1791218442624_autm",
+    "performedByName": "mo",
+    "authorizedById": null,
+    "authorizedByName": null,
+    "metadata": {
+      "openingFloat": 0
+    },
+    "createdAt": "2026-10-06T09:02:45.152Z"
+  },
+  {
+    "id": "audit_1791231749066_vnt2",
+    "restaurantId": "rest_molton",
+    "action": "shift_open",
+    "entityType": "shift",
+    "entityId": "shift_1791231749063_u9ti",
+    "performedById": "staff_1791218442624_autm",
+    "performedByName": "mo",
+    "authorizedById": null,
+    "authorizedByName": null,
+    "metadata": {
+      "openingFloat": 0
+    },
+    "createdAt": "2026-10-05T20:22:29.066Z"
+  },
+  {
+    "id": "audit_1791226322304_du4g",
+    "restaurantId": "rest_molton",
+    "action": "shift_open",
+    "entityType": "shift",
+    "entityId": "shift_1791226322301_6ark",
+    "performedById": "staff_1791218442624_autm",
+    "performedByName": "mo",
+    "authorizedById": null,
+    "authorizedByName": null,
+    "metadata": {
+      "openingFloat": 0
+    },
+    "createdAt": "2026-10-05T18:52:02.304Z"
+  },
+  {
+    "id": "audit_1791225767859_gtce",
+    "restaurantId": "rest_molton",
+    "action": "shift_open",
+    "entityType": "shift",
+    "entityId": "shift_1791225767855_4jp5",
+    "performedById": "staff_1791218442624_autm",
+    "performedByName": "mo",
+    "authorizedById": null,
+    "authorizedByName": null,
+    "metadata": {
+      "openingFloat": 0
+    },
+    "createdAt": "2026-10-05T18:42:47.859Z"
+  },
+  {
+    "id": "audit_1791218493366_2syb",
+    "restaurantId": "rest_molton",
+    "action": "shift_open",
+    "entityType": "shift",
+    "entityId": "shift_1791218493366_9blh",
+    "performedById": "staff_1791218442624_autm",
+    "performedByName": "mo",
+    "authorizedById": null,
+    "authorizedByName": null,
+    "metadata": {
+      "openingFloat": 0
+    },
+    "createdAt": "2026-10-05T16:41:33.366Z"
+  },
+  {
+    "id": "audit_1791217589645_ng4c",
+    "restaurantId": "rest_molton",
+    "action": "shift_close",
+    "entityType": "shift",
+    "entityId": "shift_1791217535920_igeq",
+    "performedById": "e2e-cashier",
+    "performedByName": "E2E Cashier",
+    "authorizedById": null,
+    "authorizedByName": null,
+    "metadata": {
+      "orderCount": 0,
+      "voidCount": 0,
+      "refundCount": 0,
+      "cashSales": 0,
+      "knetSales": 0,
+      "electronicSales": 0,
+      "grossSales": 0,
+      "discountTotal": 0,
+      "refundTotal": 0,
+      "expectedCash": 0,
+      "deliveryExpenses": 0,
+      "actualCash": 0,
+      "discrepancy": 0,
+      "discrepancyType": "balanced",
+      "dineInSales": 0,
+      "dineInCount": 0,
+      "takeawaySales": 0,
+      "takeawayCount": 0,
+      "deliverySales": 0,
+      "deliveryCount": 0,
+      "websiteSales": 0,
+      "websiteCount": 0,
+      "posSales": 0,
+      "posCount": 0
+    },
+    "createdAt": "2026-10-05T16:26:29.645Z"
+  },
+  {
+    "id": "audit_1791217535921_59mm",
+    "restaurantId": "rest_molton",
+    "action": "shift_open",
+    "entityType": "shift",
+    "entityId": "shift_1791217535920_igeq",
+    "performedById": "e2e-cashier",
+    "performedByName": "E2E Cashier",
+    "authorizedById": null,
+    "authorizedByName": null,
+    "metadata": {
+      "openingFloat": 0
+    },
+    "createdAt": "2026-10-05T16:25:35.921Z"
+  }
+]

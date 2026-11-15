@@ -21,6 +21,7 @@ class AdminAuthService {
   bool get isRestaurantAdmin => _session?.isRestaurantAdmin ?? false;
   bool get isCashier => _session?.isCashier ?? false;
   bool get isKitchen => _session?.isKitchen ?? false;
+  bool get isDriver => _session?.isDriver ?? false;
   String? get restaurantId => _session?.restaurantId;
   String? get restaurantName => _session?.restaurantName;
   String? get kitchenId => _session?.kitchenId;
@@ -101,13 +102,22 @@ class AdminAuthService {
       pin: password,
     );
     await _persist(result.session);
-    if (!result.session.isKitchen) {
+    if (!result.session.isKitchen && !result.session.isDriver) {
       await persistCashierPermissions(
         result.cashierSession.permissions,
         roleId: result.cashierSession.roleId,
       );
     }
     return result;
+  }
+
+  Future<AdminSession> loginDriver({
+    required String phone,
+    required String pin,
+  }) async {
+    final session = await ApiService.instance.loginDriver(phone: phone, pin: pin);
+    await _persist(session);
+    return session;
   }
 
   Future<void> logout() async {

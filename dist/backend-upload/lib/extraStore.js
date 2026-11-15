@@ -1,0 +1,148 @@
+'use strict';
+
+const fs = require('fs');
+const path = require('path');
+const dataStore = require('./dataStore');
+
+const DATA_DIR = path.join(__dirname, '..', 'data');
+const IS_VERCEL = Boolean(process.env.VERCEL);
+
+const FILES = {
+  customers: path.join(DATA_DIR, 'customers.json'),
+  deliveryZones: path.join(DATA_DIR, 'delivery_zones.json'),
+  offers: path.join(DATA_DIR, 'offers.json'),
+  staffUsers: path.join(DATA_DIR, 'staff_users.json'),
+  shiftSessions: path.join(DATA_DIR, 'shift_sessions.json'),
+  auditEvents: path.join(DATA_DIR, 'audit_events.json'),
+  upsellEvents: path.join(DATA_DIR, 'upsell_events.json'),
+};
+
+const memory = {
+  customers: [],
+  deliveryZones: [],
+  offers: [],
+  staffUsers: [],
+  shiftSessions: [],
+  auditEvents: [],
+  upsellEvents: [],
+};
+
+function loadJson(filePath, fallback) {
+  try {
+    if (!fs.existsSync(filePath)) return fallback;
+    const parsed = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+    return parsed ?? fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function writeJson(filePath, value) {
+  if (IS_VERCEL) return;
+  const dir = path.dirname(filePath);
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+  fs.writeFileSync(filePath, JSON.stringify(value, null, 2), 'utf8');
+}
+
+function seed() {
+  memory.customers = loadJson(FILES.customers, []);
+  memory.deliveryZones = loadJson(FILES.deliveryZones, []);
+  memory.offers = loadJson(FILES.offers, []);
+  memory.staffUsers = loadJson(FILES.staffUsers, []);
+  memory.shiftSessions = loadJson(FILES.shiftSessions, []);
+  memory.auditEvents = loadJson(FILES.auditEvents, []);
+  memory.upsellEvents = loadJson(FILES.upsellEvents, []);
+}
+
+function collection(name) {
+  if (name === 'deliveryZones') {
+    return {
+      async read() {
+        return dataStore.readDeliveryZones();
+      },
+      async write(data) {
+        return dataStore.writeDeliveryZones(data);
+      },
+    };
+  }
+
+  if (name === 'offers') {
+    return {
+      async read() {
+        return dataStore.readOffers();
+      },
+      async write(data) {
+        return dataStore.writeOffers(data);
+      },
+    };
+  }
+
+  if (name === 'staffUsers') {
+    return {
+      async read() {
+        return dataStore.readStaffUsers();
+      },
+      async write(data) {
+        return dataStore.writeStaffUsers(data);
+      },
+    };
+  }
+
+  if (name === 'shiftSessions') {
+    return {
+      async read() {
+        return dataStore.readShiftSessions();
+      },
+      async write(data) {
+        return dataStore.writeShiftSessions(data);
+      },
+    };
+  }
+
+  const docIds = {
+    customers: 'customers',
+    auditEvents: 'audit_events',
+    upsellEvents: 'upsell_events',
+  };
+  const docId = docIds[name];
+
+  return {
+    async read() {
+      if (docId && dataStore.usesPersistent()) {
+        const stored = await dataStore.readNamedDoc(docId, memory[name]);
+        if (Array.isArray(stored)) {
+          memory[name] = stored;
+          return memory[name];
+        }
+      }
+      if (!IS_VERCEL) {
+        memory[name] = loadJson(FILES[name], memory[name] || []);
+      }
+      return Array.isArray(memory[name]) ? memory[name] : [];
+    },
+    async write(data) {
+      memory[name] = Array.isArray(data) ? data : [];
+      if (docId && dataStore.usesPersistent()) {
+        await dataStore.writeNamedDoc(docId, memory[name]);
+        return memory[name];
+      }
+      writeJson(FILES[name], memory[name]);
+      return memory[name];
+    },
+  };
+}
+
+seed();
+
+module.exports = {
+  seed,
+  customers: collection('customers'),
+  deliveryZones: collection('deliveryZones'),
+  offers: collection('offers'),
+  staffUsers: collection('staffUsers'),
+  shiftSessions: collection('shiftSessions'),
+  auditEvents: collection('auditEvents'),
+  upsellEvents: collection('upsellEvents'),
+};

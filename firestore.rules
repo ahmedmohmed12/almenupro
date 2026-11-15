@@ -98,5 +98,28 @@ service cloud.firestore {
       allow read: if true;
       allow write: if docId == 'restaurant_info';
     }
+
+    match /drivers/{driverId} {
+      allow read: if request.auth != null;
+      allow create, update: if request.auth != null
+        && request.resource.data.keys().hasAny(['fcm_token', 'current_location', 'is_online', 'is_busy', 'allowed_delivery_regions', 'assigned_regions']);
+      allow delete: if false;
+    }
+
+    match /delivery_requests/{requestId} {
+      allow read: if request.auth != null;
+      allow create, update: if request.auth != null;
+      allow delete: if false;
+    }
+
+    match /table_floor/{docId} {
+      allow read: if true;
+      allow create, update: if request.resource.data.restaurantId is string
+        && request.resource.data.tableId is string
+        && request.resource.data.status in [
+          'available', 'occupied', 'reserved', 'awaiting_check', 'waiter_call'
+        ];
+      allow delete: if false;
+    }
   }
 }

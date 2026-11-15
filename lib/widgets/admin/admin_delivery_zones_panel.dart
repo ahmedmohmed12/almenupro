@@ -3,9 +3,11 @@ import 'package:flutter/services.dart';
 
 import '../../data/kuwait_governorates.dart';
 import '../../models/delivery_zone.dart';
+import '../../models/kitchen.dart';
 import '../../services/admin_auth_service.dart';
 import '../../services/api_service.dart';
 import '../../services/super_admin_scope_service.dart';
+import 'admin_kitchens_panel.dart';
 import 'admin_responsive_layout.dart';
 
 /// Admin UI for managing per-restaurant delivery zones and fees.
@@ -14,10 +16,12 @@ class AdminDeliveryZonesPanel extends StatefulWidget {
     super.key,
     this.restaurantId,
     this.canManage = true,
+    this.kitchenManagementEnabled = false,
   });
 
   final String? restaurantId;
   final bool canManage;
+  final bool kitchenManagementEnabled;
 
   @override
   State<AdminDeliveryZonesPanel> createState() => _AdminDeliveryZonesPanelState();
@@ -27,6 +31,7 @@ class _AdminDeliveryZonesPanelState extends State<AdminDeliveryZonesPanel> {
   var _loading = true;
   var _saving = false;
   List<DeliveryZone> _zones = [];
+  List<Kitchen> _kitchens = [];
   String? _error;
 
   static const _burgundy = Color(0xFF6B1124);
@@ -98,12 +103,21 @@ class _AdminDeliveryZonesPanelState extends State<AdminDeliveryZonesPanel> {
     });
 
     try {
-      final zones = await ApiService.instance.fetchDeliveryZones(
-        restaurantId: _restaurantId,
-        activeOnly: false,
-      );
+      final results = await Future.wait([
+        ApiService.instance.fetchDeliveryZones(
+          restaurantId: _restaurantId,
+          activeOnly: false,
+        ),
+        ApiService.instance.fetchKitchens(
+          restaurantId: _restaurantId,
+          includeInactive: true,
+        ),
+      ]);
       if (!mounted) return;
+      final zones = results[0] as List<DeliveryZone>;
+      final kitchens = results[1] as List<Kitchen>;
       setState(() {
+        _kitchens = kitchens;
         _zones = zones
           ..sort((a, b) {
             final gov = a.governorate.compareTo(b.governorate);
@@ -131,6 +145,15 @@ class _AdminDeliveryZonesPanelState extends State<AdminDeliveryZonesPanel> {
     final feeController = TextEditingController(
       text: existing != null ? existing.deliveryFee.toStringAsFixed(3) : '',
     );
+    final minOrderController = TextEditingController(
+      text: existing != null && existing.minOrder > 0
+          ? existing.minOrder.toStringAsFixed(3)
+          : '',
+    );
+    final driverFeeController = TextEditingController(
+      text: existing?.driverDeliveryFee?.toStringAsFixed(3) ?? '',
+    );
+    String? selectedKitchenId = existing?.defaultKitchenId;
     final formKey = GlobalKey<FormState>();
 
     final saved = await showDialog<bool>(
@@ -141,7 +164,8 @@ class _AdminDeliveryZonesPanelState extends State<AdminDeliveryZonesPanel> {
           width: 420,
           child: Form(
             key: formKey,
-            child: Column(
+            child: SingleChildScrollView(
+              child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
                 DropdownButtonFormField<String>(
@@ -188,7 +212,61 @@ class _AdminDeliveryZonesPanelState extends State<AdminDeliveryZonesPanel> {
                     return null;
                   },
                 ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: minOrderController,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  inputFormatters: [
+                    FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,3}')),
+                  ],
+                  decoration: const InputDecoration(
+                    labelText: 'الحد الأدنى للطلب (د.ك)',
+                    border: OutlineInputBorder(),
+                    hintText: '0 = بدون حد أدنى',
+                  ),
+                  validator: (value) {
+                    if (value == null || value.trim().isEmpty) return null;
+                    final parsed = double.tryParse(value.trim());
+                    if (parsed == null || parsed < 0) return 'قيمة غير صالحة';
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: driverFeeController,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  inputFormatters: [
+                    FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,3}')),
+                  ],
+                  decoration: const InputDecoration(
+                    labelText: 'حصة السائق (د.ك)',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                if (widget.kitchenManagementEnabled)
+                  DropdownButtonFormField<String>(
+                    initialValue: _kitchens.any((k) => k.id == selectedKitchenId)
+                        ? selectedKitchenId
+                        : null,
+                    decoration: const InputDecoration(
+                      labelText: 'المطبخ المسؤول عن المنطقة *',
+                      border: OutlineInputBorder(),
+                    ),
+                    items: _kitchens
+                        .map(
+                          (kitchen) => DropdownMenuItem(
+                            value: kitchen.id,
+                            child: Text(kitchen.displayName),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: (value) => selectedKitchenId = value,
+                    validator: (value) =>
+                        value == null || value.isEmpty ? 'يجب اختيار مطبخ' : null,
+                  ),
               ],
+              ),
             ),
           ),
         ),
@@ -212,13 +290,19 @@ class _AdminDeliveryZonesPanelState extends State<AdminDeliveryZonesPanel> {
     if (saved != true || !mounted) {
       areaController.dispose();
       feeController.dispose();
+      minOrderController.dispose();
+      driverFeeController.dispose();
       return;
     }
 
     final areaName = areaController.text.trim();
     final deliveryFee = double.parse(feeController.text.trim());
+    final minOrder = double.tryParse(minOrderController.text.trim()) ?? 0;
+    final driverFee = double.tryParse(driverFeeController.text.trim());
     areaController.dispose();
     feeController.dispose();
+    minOrderController.dispose();
+    driverFeeController.dispose();
 
     setState(() => _saving = true);
     try {
@@ -227,7 +311,11 @@ class _AdminDeliveryZonesPanelState extends State<AdminDeliveryZonesPanel> {
         governorate: selectedGovernorate,
         areaName: areaName,
         deliveryFee: deliveryFee,
+        minOrder: minOrder,
+        driverDeliveryFee: driverFee,
+        platformMargin: driverFee == null ? null : (deliveryFee - driverFee),
         restaurantId: _restaurantId,
+        defaultKitchenId: selectedKitchenId,
       );
 
       if (existing == null) {
@@ -306,11 +394,25 @@ class _AdminDeliveryZonesPanelState extends State<AdminDeliveryZonesPanel> {
             icon: Icons.local_shipping_outlined,
             title: 'مناطق التوصيل ورسومها',
             subtitle: widget.canManage
-                ? 'إدارة مناطق ورسوم التوصيل للمطعم: $_restaurantLabel'
+                ? 'المطابخ ومناطق التوصيل للمطعم: $_restaurantLabel'
                 : 'اختر مطعماً من القائمة أعلاه لإدارة مناطقه.',
           ),
           if (widget.canManage) ...[
-            const SizedBox(height: 12),
+            const SizedBox(height: 16),
+            if (widget.kitchenManagementEnabled)
+              AdminKitchensPanel(
+                restaurantId: _restaurantId,
+                canManage: widget.canManage,
+                onChanged: _loadZones,
+              )
+            else
+              _messageCard(
+                color: Colors.grey.shade100,
+                icon: Icons.lock_outline,
+                message:
+                    'إدارة المطابخ وشاشات المطبخ غير مضمّنة في اشتراك هذا المطعم. يفعّلها السوبر أدمن من تبويب المطاعم.',
+              ),
+            const SizedBox(height: 20),
             Align(
               alignment: AlignmentDirectional.centerStart,
               child: FilledButton.icon(
@@ -390,6 +492,13 @@ class _AdminDeliveryZonesPanelState extends State<AdminDeliveryZonesPanel> {
           for (final zone in entry.value) ...[
             _ZoneCard(
               zone: zone,
+              kitchenName: _kitchens
+                      .where((kitchen) => kitchen.id == zone.defaultKitchenId)
+                      .isEmpty
+                  ? null
+                  : _kitchens
+                      .firstWhere((kitchen) => kitchen.id == zone.defaultKitchenId)
+                      .displayName,
               saving: _saving,
               onEdit: () => _showZoneDialog(existing: zone),
               onDelete: () => _deleteZone(zone),
@@ -434,12 +543,14 @@ class _ZoneCard extends StatelessWidget {
     required this.saving,
     required this.onEdit,
     required this.onDelete,
+    this.kitchenName,
   });
 
   final DeliveryZone zone;
   final bool saving;
   final VoidCallback onEdit;
   final VoidCallback onDelete;
+  final String? kitchenName;
 
   static const _burgundy = Color(0xFF6B1124);
 
@@ -447,7 +558,10 @@ class _ZoneCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final name = zone.displayName;
     final governorate = zone.displayGovernorate;
-    final fee = '${zone.deliveryFee.toStringAsFixed(3)} د.ك';
+    final fee = 'توصيل: ${zone.deliveryFee.toStringAsFixed(3)} د.ك';
+    final minOrderLabel = zone.minOrder > 0
+        ? 'حد أدنى: ${zone.minOrder.toStringAsFixed(3)} د.ك'
+        : null;
 
     return Material(
       color: Colors.white,
@@ -489,26 +603,57 @@ class _ZoneCard extends StatelessWidget {
                           height: 1.35,
                         ),
                       ),
-                      const SizedBox(height: 8),
-                      Align(
-                        alignment: AlignmentDirectional.centerStart,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 10,
-                            vertical: 6,
-                          ),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFFFF4E5),
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: Text(
-                            fee,
-                            style: const TextStyle(
-                              fontWeight: FontWeight.w800,
-                              color: _burgundy,
-                            ),
+                      if (kitchenName != null && kitchenName!.isNotEmpty) ...[
+                        const SizedBox(height: 4),
+                        Text(
+                          'المطبخ: $kitchenName',
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w700,
+                            color: _burgundy,
                           ),
                         ),
+                      ],
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 6,
+                            ),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFFF4E5),
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: Text(
+                              fee,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w800,
+                                color: _burgundy,
+                              ),
+                            ),
+                          ),
+                          if (minOrderLabel != null)
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 6,
+                              ),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFE8F5E9),
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: Text(
+                                minOrderLabel,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w800,
+                                  color: Color(0xFF1B5E20),
+                                ),
+                              ),
+                            ),
+                        ],
                       ),
                     ],
                   ),

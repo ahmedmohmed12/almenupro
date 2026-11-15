@@ -54,16 +54,15 @@ class DiningTablesService {
     List<CartItem> cartItems = const [],
     String notes = '',
   }) async {
-    final decoded = await ApiService.instance.postJson(
-      '/tables/$tableId/open-session',
-      {
-        'staffId': AdminAuthService.instance.session?.staffId,
-        'staffName': AdminAuthService.instance.session?.staffName ??
-            AdminAuthService.instance.restaurantName,
-        'cartItems': cartItems.map(cartItemToSessionMap).toList(),
-        'notes': notes,
-      },
-    );
+    final decoded = await ApiService.instance
+        .postJson('/tables/$tableId/open-session', {
+          'staffId': AdminAuthService.instance.session?.staffId,
+          'staffName':
+              AdminAuthService.instance.session?.staffName ??
+              AdminAuthService.instance.restaurantName,
+          'cartItems': cartItems.map(cartItemToSessionMap).toList(),
+          'notes': notes,
+        });
     final tableRaw = decoded['table'];
     if (tableRaw is Map) {
       return DiningTable.fromJson(Map<String, dynamic>.from(tableRaw));
@@ -77,14 +76,69 @@ class DiningTablesService {
     String? notes,
     String? customerName,
     String? phone,
+    bool? checkRequested,
+    bool? waiterRequested,
+    String? waiterNote,
   }) async {
-    final decoded = await ApiService.instance.putJson('/tables/$tableId/session', {
-      'cartItems': cartItems.map(cartItemToSessionMap).toList(),
-      if (notes != null) 'notes': notes,
-      if (customerName != null) 'customerName': customerName,
-      if (phone != null) 'phone': phone,
-    });
+    final decoded = await ApiService.instance
+        .putJson('/tables/$tableId/session', {
+          'cartItems': cartItems.map(cartItemToSessionMap).toList(),
+          if (notes != null) 'notes': notes,
+          if (customerName != null) 'customerName': customerName,
+          if (phone != null) 'phone': phone,
+          if (checkRequested != null) 'checkRequested': checkRequested,
+          if (checkRequested == true) 'status': 'awaiting_check',
+          if (waiterRequested != null) 'waiterRequested': waiterRequested,
+          if (waiterNote != null) 'waiterNote': waiterNote,
+        });
     return DiningTable.fromJson(decoded);
+  }
+
+  Future<({DiningTable table, Map<String, dynamic> restaurant})>
+  fetchPublicTable({required String branchId, required String tableId}) async {
+    final decoded = await ApiService.instance.getPublicJson(
+      '/public/tables/${Uri.encodeComponent(branchId)}/${Uri.encodeComponent(tableId)}',
+    );
+    final tableRaw = decoded['table'];
+    final restaurantRaw = decoded['restaurant'];
+    if (tableRaw is! Map) {
+      throw Exception('الطاولة غير موجودة');
+    }
+    return (
+      table: DiningTable.fromJson(Map<String, dynamic>.from(tableRaw)),
+      restaurant: restaurantRaw is Map
+          ? Map<String, dynamic>.from(restaurantRaw)
+          : <String, dynamic>{},
+    );
+  }
+
+  Future<DiningTable> callWaiterPublic({
+    required String branchId,
+    required String tableId,
+    String note = '',
+  }) async {
+    final decoded = await ApiService.instance.postPublicJson(
+      '/public/tables/${Uri.encodeComponent(branchId)}/${Uri.encodeComponent(tableId)}/call-waiter',
+      {'note': note},
+    );
+    return DiningTable.fromJson(
+      Map<String, dynamic>.from(decoded['table'] as Map),
+    );
+  }
+
+  Future<DiningTable> requestCheckPublic({
+    required String branchId,
+    required String tableId,
+    required double tipAmount,
+    required String paymentMethod,
+  }) async {
+    final decoded = await ApiService.instance.postPublicJson(
+      '/public/tables/${Uri.encodeComponent(branchId)}/${Uri.encodeComponent(tableId)}/request-check',
+      {'tipAmount': tipAmount, 'paymentMethod': paymentMethod},
+    );
+    return DiningTable.fromJson(
+      Map<String, dynamic>.from(decoded['table'] as Map),
+    );
   }
 
   Future<({Order order, DiningTable table})> sendKitchen(
@@ -92,15 +146,16 @@ class DiningTablesService {
     required List<CartItem> cartItems,
     String? customerName,
     String? phone,
+    String? paymentMethod,
   }) async {
-    final decoded = await ApiService.instance.postJson(
-      '/tables/$tableId/send-kitchen',
-      {
-        'cartItems': cartItems.map(cartItemToSessionMap).toList(),
-        if (customerName != null) 'customerName': customerName,
-        if (phone != null) 'phone': phone,
-      },
-    );
+    final decoded = await ApiService.instance
+        .postJson('/tables/$tableId/send-kitchen', {
+          'cartItems': cartItems.map(cartItemToSessionMap).toList(),
+          if (customerName != null) 'customerName': customerName,
+          if (phone != null) 'phone': phone,
+          if (paymentMethod != null && paymentMethod.isNotEmpty)
+            'paymentMethod': paymentMethod,
+        });
     return _parseOrderTable(decoded);
   }
 
@@ -111,17 +166,29 @@ class DiningTablesService {
     String? customerName,
     String? phone,
     String? invoiceNumber,
+    String? orderId,
+    String? offlineTxId,
+    String? shiftId,
+    String? cashierId,
+    String? cashierName,
+    double? tipAmount,
   }) async {
-    final decoded = await ApiService.instance.postJson(
-      '/tables/$tableId/checkout',
-      {
-        'cartItems': cartItems.map(cartItemToSessionMap).toList(),
-        'paymentMethod': paymentMethod,
-        if (customerName != null) 'customerName': customerName,
-        if (phone != null) 'phone': phone,
-        if (invoiceNumber != null) 'invoiceNumber': invoiceNumber,
-      },
-    );
+    final decoded = await ApiService.instance
+        .postJson('/tables/$tableId/checkout', {
+          'cartItems': cartItems.map(cartItemToSessionMap).toList(),
+          'paymentMethod': paymentMethod,
+          if (customerName != null) 'customerName': customerName,
+          if (phone != null) 'phone': phone,
+          if (invoiceNumber != null) 'invoiceNumber': invoiceNumber,
+          if (orderId != null) 'id': orderId,
+          if (offlineTxId != null) 'offline_tx_id': offlineTxId,
+          if (offlineTxId != null) 'offlineTxId': offlineTxId,
+          if (shiftId != null && shiftId.isNotEmpty) 'shiftId': shiftId,
+          if (cashierId != null && cashierId.isNotEmpty) 'cashierId': cashierId,
+          if (cashierName != null && cashierName.isNotEmpty)
+            'cashierName': cashierName,
+          if (tipAmount != null) 'tipAmount': tipAmount,
+        });
     return _parseOrderTable(decoded);
   }
 
@@ -144,10 +211,13 @@ class DiningTablesService {
       'name': item.menuItem.name,
       'unitPrice': item.unitPrice,
       'quantity': item.quantity,
-      'selectedOptions': item.selectedOptions.map((option) => option.toMap()).toList(),
+      'selectedOptions': item.selectedOptions
+          .map((option) => option.toMap())
+          .toList(),
       if (item.specialNotes != null && item.specialNotes!.isNotEmpty)
         'specialNotes': item.specialNotes,
-      if (item.offerId != null && item.offerId!.isNotEmpty) 'offerId': item.offerId,
+      if (item.offerId != null && item.offerId!.isNotEmpty)
+        'offerId': item.offerId,
       'lineTotal': item.totalPrice,
       'menuItem': item.menuItem.toMap(),
     };
@@ -164,7 +234,8 @@ class DiningTablesService {
         menuItem = MenuItem.fromJson(Map<String, dynamic>.from(nested));
       } else {
         final id =
-            entry['menuItemId']?.toString() ?? entry['menu_item_id']?.toString();
+            entry['menuItemId']?.toString() ??
+            entry['menu_item_id']?.toString();
         if (id != null) {
           for (final item in catalog) {
             if (item.id.toString() == id) {
@@ -181,12 +252,16 @@ class DiningTablesService {
       });
       final rawOptions = entry['selectedOptions'] as List<dynamic>? ?? [];
       return CartItem(
-        id: entry['id']?.toString() ??
+        id:
+            entry['id']?.toString() ??
             '${menuItem.id}_${DateTime.now().microsecondsSinceEpoch}',
         menuItem: menuItem,
         selectedOptions: rawOptions
             .whereType<Map>()
-            .map((option) => SelectedOption.fromMap(Map<String, dynamic>.from(option)))
+            .map(
+              (option) =>
+                  SelectedOption.fromMap(Map<String, dynamic>.from(option)),
+            )
             .toList(),
         quantity: (entry['quantity'] as num?)?.toInt() ?? 1,
         specialNotes: entry['specialNotes']?.toString(),
@@ -195,7 +270,9 @@ class DiningTablesService {
     }).toList();
   }
 
-  ({Order order, DiningTable table}) _parseOrderTable(Map<String, dynamic> decoded) {
+  ({Order order, DiningTable table}) _parseOrderTable(
+    Map<String, dynamic> decoded,
+  ) {
     final orderRaw = decoded['order'];
     final tableRaw = decoded['table'];
     if (orderRaw is! Map || tableRaw is! Map) {

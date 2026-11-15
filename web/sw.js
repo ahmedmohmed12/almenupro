@@ -1,4 +1,4 @@
-const CACHE_NAME = 'almenupro-pos-v2';
+const CACHE_NAME = 'almenupro-pos-v3';
 const PRECACHE_URLS = [
   '/',
   '/admin',
@@ -125,6 +125,27 @@ self.addEventListener('fetch', (event) => {
   }
 
   if (!isStaticAsset(url.pathname)) return;
+
+  // Executable assets must be network-first. Serving a cached debug
+  // main.dart.js beside a newer release bootstrap leaves Flutter blank.
+  if (
+    url.pathname.endsWith('.js') ||
+    url.pathname.endsWith('.wasm') ||
+    url.pathname.endsWith('.css')
+  ) {
+    event.respondWith(
+      fetch(request)
+        .then((response) => {
+          if (response && response.ok) {
+            const copy = response.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
+          }
+          return response;
+        })
+        .catch(() => caches.match(request)),
+    );
+    return;
+  }
 
   // Static cashier assets: cache-first for instant POS loads.
   event.respondWith(

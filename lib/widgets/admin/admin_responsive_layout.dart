@@ -48,8 +48,6 @@ class AdminSectionHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final narrow = AdminBreakpoints.isNarrowContent(context);
-
     final titleBlock = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -75,39 +73,25 @@ class AdminSectionHeader extends StatelessWidget {
       ],
     );
 
-    if (narrow) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              if (icon != null) ...[
-                _iconBox(icon!, iconColor),
-                const SizedBox(width: 12),
-              ],
-              Expanded(child: titleBlock),
-            ],
-          ),
-          if (actions.isNotEmpty) ...[
-            const SizedBox(height: 10),
-            Wrap(spacing: 8, runSpacing: 8, children: actions),
-          ],
-        ],
-      );
-    }
-
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        if (icon != null) ...[
-          _iconBox(icon!, iconColor),
-          const SizedBox(width: 12),
-        ],
-        Expanded(child: titleBlock),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (icon != null) ...[
+              _iconBox(icon!, iconColor),
+              const SizedBox(width: 12),
+            ],
+            Expanded(child: titleBlock),
+          ],
+        ),
         if (actions.isNotEmpty) ...[
-          const SizedBox(width: 8),
-          Wrap(spacing: 4, runSpacing: 4, children: actions),
+          const SizedBox(height: 12),
+          Align(
+            alignment: AlignmentDirectional.centerStart,
+            child: Wrap(spacing: 8, runSpacing: 8, children: actions),
+          ),
         ],
       ],
     );

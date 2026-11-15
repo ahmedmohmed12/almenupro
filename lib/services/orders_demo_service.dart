@@ -4,7 +4,11 @@ import '../models/cart_item.dart';
 import '../models/delivery_address_details.dart';
 import '../models/menu_item.dart';
 import '../models/order.dart';
+import 'admin_auth_service.dart';
 import 'api_service.dart';
+import 'offline/offline_tx_id.dart';
+import 'platform_customer_crm.dart';
+import 'super_admin_scope_service.dart';
 
 /// Local/demo orders shown when Firebase is not configured.
 class OrdersDemoService {
@@ -13,7 +17,7 @@ class OrdersDemoService {
   static final _controller = StreamController<List<Order>>.broadcast();
   static List<Order> _orders = [];
   static var _initialized = false;
-  static var isDemoData = true;
+  static var isDemoData = false;
   static Timer? _pollTimer;
   static Timer? _simulationTimer;
   static Future<void>? _refreshInFlight;
@@ -41,32 +45,22 @@ class OrdersDemoService {
 
   static bool get hasOrders => _orders.isNotEmpty;
 
+  static List<Order> get loadedOrders => List<Order>.unmodifiable(_orders);
+
   static Future<void> _ensureInitialized() async {
     if (_initialized) return;
     _initialized = true;
 
     await _refreshFromApi();
 
-    if (_orders.isEmpty) {
-      try {
-        final menuItems = await ApiService.instance.fetchMenuItems();
-        _orders = _buildMockOrders(menuItems);
-      } catch (_) {
-        _orders = _buildMockOrders(const []);
-      }
-      isDemoData = true;
-      _emit();
-      _scheduleDemoSimulation();
-    }
-
-    _pollTimer ??= Timer.periodic(const Duration(seconds: 8), (_) {
+    _pollTimer ??= Timer.periodic(const Duration(seconds: 4), (_) {
       unawaited(_refreshFromApi());
     });
   }
 
   static Future<void> resumeRealtime() async {
     _pollTimer?.cancel();
-    _pollTimer = Timer.periodic(const Duration(seconds: 8), (_) {
+    _pollTimer = Timer.periodic(const Duration(seconds: 4), (_) {
       unawaited(_refreshFromApi());
     });
     await _refreshFromApi();
@@ -78,7 +72,7 @@ class OrdersDemoService {
     return orders
         .map(
           (order) =>
-              '${order.id}:${order.status.name}:${order.cashierId}:${order.shiftId}:${order.totalPrice}:${order.targetKitchenId}',
+              '${order.id}:${order.status.name}:${order.assignedDriverId}:${order.deliveryStatus}:${order.statusTimeline.driverAssignedAt}:${order.statusTimeline.pickedUpAt}:${order.statusTimeline.onTheWayAt}:${order.cashierId}:${order.shiftId}:${order.totalPrice}:${order.paymentMethod}:${order.targetKitchenId}',
         )
         .join('|');
   }
@@ -97,13 +91,18 @@ class OrdersDemoService {
     try {
       final apiOrders = await ApiService.instance.fetchOrders();
       if (apiOrders.isEmpty) {
-        if (_orders.isEmpty) return;
-        if (!isDemoData) {
-          _orders = [];
-          isDemoData = true;
-          _ordersFingerprint = '';
-          _emit();
-        }
+        final keepLocal = _orders
+            .where(
+              (order) =>
+                  !order.id.startsWith('demo-') &&
+                  DateTime.now().difference(order.createdAt) <
+                      const Duration(minutes: 10),
+            )
+            .toList();
+        _orders = keepLocal;
+        isDemoData = false;
+        _ordersFingerprint = _fingerprint(_orders);
+        _emit();
         return;
       }
 
@@ -113,9 +112,20 @@ class OrdersDemoService {
       }
 
       isDemoData = false;
-      _orders = _overlayInFlightStatus(apiOrders);
+      final apiIds = {for (final order in apiOrders) order.id};
+      final unsynced = _orders
+          .where(
+            (order) =>
+                !order.id.startsWith('demo-') &&
+                !apiIds.contains(order.id) &&
+                DateTime.now().difference(order.createdAt) <
+                    const Duration(minutes: 10),
+          )
+          .toList();
+      _orders = _overlayInFlightStatus([...unsynced, ...apiOrders]);
       _ordersFingerprint = _fingerprint(_orders);
       _emit();
+      unawaited(_rememberPlatformCustomers(_orders));
     } catch (_) {}
   }
 
@@ -128,6 +138,20 @@ class OrdersDemoService {
     }).toList();
   }
 
+  static Future<void> _rememberPlatformCustomers(List<Order> orders) async {
+    final restaurantId = SuperAdminScopeService.instance.effectiveRestaurantId.trim();
+    if (restaurantId.isEmpty) return;
+    await PlatformCustomerCrmStore.instance.ingestOrders(
+      restaurantId: restaurantId,
+      orders: orders,
+    );
+  }
+
+  static void applyServerOrder(Order order) {
+    _replaceOrder(order.id, order);
+    unawaited(_rememberPlatformCustomers([order]));
+  }
+
   static void _replaceOrder(String orderId, Order next) {
     final index = _orders.indexWhere((order) => order.id == orderId);
     if (index == -1) {
@@ -137,6 +161,11 @@ class OrdersDemoService {
     }
     _ordersFingerprint = _fingerprint(_orders);
     _emit();
+  }
+
+  /// Keeps a schedule edit on screen until the next successful save.
+  static void replaceVisibleOrder(Order order) {
+    _replaceOrder(order.id, order);
   }
 
   static Future<void> updateOrderStatus(
@@ -155,6 +184,11 @@ class OrdersDemoService {
     if (index == -1) return;
 
     final previous = _orders[index];
+    if (previous.isHeldByDriver &&
+        status != previous.status &&
+        !AdminAuthService.instance.isSuperAdmin) {
+      throw Exception(Order.driverCustodyLockMessage);
+    }
     final optimistic = previous.copyWith(
       status: status,
       shiftId: shiftId,
@@ -162,6 +196,10 @@ class OrdersDemoService {
       cashierName: cashierName,
       acceptedBy: acceptedBy,
       acceptedByName: acceptedByName,
+      statusTimeline: previous.statusTimeline.stampForOrderStatus(
+        status,
+        createdAt: previous.createdAt,
+      ),
     );
 
     if (orderId.startsWith('demo-')) {
@@ -196,7 +234,7 @@ class OrdersDemoService {
 
   static Future<void> registerOrder(Order order) async {
     _initialized = true;
-    _pollTimer ??= Timer.periodic(const Duration(seconds: 8), (_) {
+    _pollTimer ??= Timer.periodic(const Duration(seconds: 4), (_) {
       unawaited(_refreshFromApi());
     });
 
@@ -366,16 +404,37 @@ class OrdersDemoService {
     String? offerTitle,
     String? targetKitchenId,
     String? targetKitchenName,
+    String? id,
+    String? shiftId,
+    String? cashierId,
+    String? cashierName,
+    String? tableId,
+    OrderStatus initialStatus = OrderStatus.pending,
+    bool createdFromPos = false,
+    DateTime? deliveryDate,
+    DateTime? targetDeliveryTime,
+    int? prepTimeMinutes,
+    int? routeTimeMinutes,
+    int? cashierBufferMinutes,
+    DateTime? autoReleaseTime,
+    String? paymentStatus,
+    String? heldShiftId,
+    DateTime? paidAt,
   }) {
     final items = cartItems.map(OrderLineItem.fromCartItem).toList();
-    final charged =
-        cartItems.fold<double>(0, (sum, item) => sum + item.totalPrice);
-    final listed =
-        cartItems.fold<double>(0, (sum, item) => sum + item.listedTotalPrice);
+    final charged = cartItems.fold<double>(
+      0,
+      (sum, item) => sum + item.totalPrice,
+    );
+    final listed = cartItems.fold<double>(
+      0,
+      (sum, item) => sum + item.listedTotalPrice,
+    );
     final fee = deliveryFee ?? 0;
-    final discount = discountAmount ??
-        ((listed > charged) ? listed - charged : 0);
-    final resolvedOfferId = offerId ??
+    final discount =
+        discountAmount ?? ((listed > charged) ? listed - charged : 0);
+    final resolvedOfferId =
+        offerId ??
         cartItems
             .map((item) => item.offerId)
             .whereType<String>()
@@ -383,8 +442,12 @@ class OrdersDemoService {
             .fold<String?>(null, (prev, id) => prev ?? id);
     final netSubtotal = (subtotal ?? charged);
 
+    final localId = (id != null && id.trim().isNotEmpty)
+        ? id.trim()
+        : generateOfflineTxId();
     return Order(
-      id: 'pending',
+      id: localId,
+      offlineTxId: localId,
       customerName: customerName,
       phone: phone,
       address: address,
@@ -396,7 +459,7 @@ class OrdersDemoService {
       offerTitle: offerTitle,
       totalPrice: netSubtotal + fee,
       orderType: orderType ?? OrderType.delivery,
-      status: OrderStatus.pending,
+      status: initialStatus,
       createdAt: DateTime.now(),
       invoiceNumber: invoiceNumber,
       paymentMethod: paymentMethod,
@@ -405,11 +468,25 @@ class OrdersDemoService {
       deliveryZoneId: deliveryZoneId,
       addressDetails: addressDetails ?? const DeliveryAddressDetails(),
       orderSource: orderSource,
+      createdFromPos: createdFromPos,
       walletRedeemAmount: walletRedeemAmount,
       externalOrderId: externalOrderId,
       platformCommission: platformCommission,
       targetKitchenId: targetKitchenId,
       targetKitchenName: targetKitchenName,
+      shiftId: shiftId,
+      cashierId: cashierId,
+      cashierName: cashierName,
+      tableId: tableId,
+      deliveryDate: deliveryDate,
+      targetDeliveryTime: targetDeliveryTime,
+      prepTimeMinutes: prepTimeMinutes,
+      routeTimeMinutes: routeTimeMinutes,
+      cashierBufferMinutes: cashierBufferMinutes,
+      autoReleaseTime: autoReleaseTime,
+      paymentStatus: paymentStatus,
+      heldShiftId: heldShiftId,
+      paidAt: paidAt,
     );
   }
 }

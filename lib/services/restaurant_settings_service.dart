@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/invoice_language.dart';
+import '../models/link_hub_config.dart';
 import '../models/loyalty_cashback.dart';
 import '../models/payment_method_config.dart';
 import '../models/restaurant_settings.dart';
@@ -15,24 +16,34 @@ import '../utils/whatsapp_phone.dart';
 import 'api_service.dart';
 import 'super_admin_scope_service.dart';
 
-const _cacheKey = 'restaurant_settings_cache';
-
-class RestaurantSettingsService {
+class RestaurantSettingsService extends ChangeNotifier {
   RestaurantSettingsService._();
 
   static final RestaurantSettingsService instance = RestaurantSettingsService._();
 
   RestaurantSettings? _cached;
+  String? _cachedRestaurantId;
 
   RestaurantSettings? get cached => _cached;
+  String? get cachedRestaurantId => _cachedRestaurantId;
+
+  String _prefsKey(String? restaurantId) {
+    final id = (restaurantId ?? '').trim();
+    return id.isEmpty
+        ? 'restaurant_settings_cache'
+        : 'restaurant_settings_cache_$id';
+  }
 
   Future<RestaurantSettings> load({String? restaurantId}) async {
+    final scopedId = (restaurantId ??
+            SuperAdminScopeService.instance.effectiveRestaurantId)
+        .trim();
     try {
       final remote = await ApiService.instance.fetchSettings(
-        restaurantId: restaurantId,
+        restaurantId: scopedId.isEmpty ? restaurantId : scopedId,
       );
-      _cached = remote;
-      await _saveCache(remote);
+      _setCache(remote, scopedId);
+      await _saveCache(remote, scopedId);
       return remote;
     } catch (error) {
       if (kDebugMode) {
@@ -40,9 +51,9 @@ class RestaurantSettingsService {
       }
     }
 
-    final local = await _loadCache();
+    final local = await _loadCache(scopedId);
     if (local != null) {
-      _cached = local;
+      _setCache(local, scopedId);
       return local;
     }
 
@@ -50,14 +61,14 @@ class RestaurantSettingsService {
       try {
         final doc = await FirebaseFirestore.instance
             .collection('restaurants')
-            .doc(restaurantId)
+            .doc(scopedId.isEmpty ? restaurantId : scopedId)
             .collection('settings')
             .doc('restaurant_info')
             .get();
         if (doc.exists && doc.data() != null) {
           final settings = RestaurantSettings.fromJson(doc.data()!);
-          _cached = settings;
-          await _saveCache(settings);
+          _setCache(settings, scopedId);
+          await _saveCache(settings, scopedId);
           return settings;
         }
       } catch (error) {
@@ -67,8 +78,9 @@ class RestaurantSettingsService {
       }
     }
 
-    _cached = RestaurantSettings.defaults();
-    return _cached!;
+    final fallback = RestaurantSettings.defaults();
+    _setCache(fallback, scopedId);
+    return fallback;
   }
 
   Future<void> saveWorkingHours(WorkingHoursSettings workingHours) async {
@@ -191,7 +203,7 @@ class RestaurantSettingsService {
     required List<SalesPlatformConfig> salesPlatforms,
     String? restaurantId,
   }) async {
-    final current = _cached ?? await load(restaurantId: restaurantId);
+    final current = await load(restaurantId: restaurantId);
     await _persist(
       current.copyWith(
         salesPlatforms: salesPlatforms,
@@ -213,6 +225,7 @@ class RestaurantSettingsService {
 
   Future<void> saveStoreProfile({
     required String logoUrl,
+    required String heroImageUrl,
     required String restaurantDescription,
     String? restaurantId,
   }) async {
@@ -220,10 +233,27 @@ class RestaurantSettingsService {
     await _persist(
       current.copyWith(
         logoUrl: logoUrl.trim(),
+        heroImageUrl: heroImageUrl.trim(),
         restaurantDescription: restaurantDescription.trim(),
         updatedAt: DateTime.now().toUtc(),
       ),
       restaurantId: restaurantId,
+    );
+  }
+
+  Future<void> saveLinkHub({
+    required LinkHubConfig linkHub,
+    String? restaurantId,
+  }) async {
+    final scopedRestaurantId = restaurantId ??
+        SuperAdminScopeService.instance.effectiveRestaurantId;
+    final current = _cached ?? await load(restaurantId: scopedRestaurantId);
+    await _persist(
+      current.copyWith(
+        linkHub: linkHub,
+        updatedAt: DateTime.now().toUtc(),
+      ),
+      restaurantId: scopedRestaurantId,
     );
   }
 
@@ -261,23 +291,54 @@ class RestaurantSettingsService {
     );
   }
 
+  Future<void> saveDynamicMenuSettings({
+    required bool dynamicMenuSortingEnabled,
+    required int paydayStartDay,
+    String? restaurantId,
+  }) async {
+    final scopedRestaurantId = restaurantId ??
+        SuperAdminScopeService.instance.effectiveRestaurantId;
+    final current = _cached ?? await load(restaurantId: scopedRestaurantId);
+    await _persist(
+      current.copyWith(
+        dynamicMenuSortingEnabled: dynamicMenuSortingEnabled,
+        paydayStartDay: paydayStartDay,
+        updatedAt: DateTime.now().toUtc(),
+      ),
+      restaurantId: scopedRestaurantId,
+    );
+  }
+
   Future<void> clearCache() async {
+    final restaurantId = _cachedRestaurantId;
     _cached = null;
+    _cachedRestaurantId = null;
     final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_cacheKey);
+    await prefs.remove(_prefsKey(restaurantId));
+    await prefs.remove('restaurant_settings_cache');
+    notifyListeners();
+  }
+
+  void _setCache(RestaurantSettings settings, String restaurantId) {
+    _cached = settings;
+    _cachedRestaurantId = restaurantId;
+    notifyListeners();
   }
 
   Future<void> _persist(
     RestaurantSettings settings, {
     String? restaurantId,
   }) async {
-    await ApiService.instance.updateSettings(
+    final scopedId = (restaurantId ??
+            SuperAdminScopeService.instance.effectiveRestaurantId)
+        .trim();
+    final saved = await ApiService.instance.updateSettings(
       settings,
-      restaurantId: restaurantId,
+      restaurantId: scopedId.isEmpty ? restaurantId : scopedId,
     );
-    _cached = settings;
-    await _saveCache(settings);
-    await _syncFirebase(settings);
+    _setCache(saved, scopedId);
+    await _saveCache(saved, scopedId);
+    await _syncFirebase(saved);
   }
 
   Future<void> _syncFirebase(RestaurantSettings settings) async {
@@ -294,14 +355,23 @@ class RestaurantSettingsService {
     }
   }
 
-  Future<void> _saveCache(RestaurantSettings settings) async {
+  Future<void> _saveCache(
+    RestaurantSettings settings,
+    String restaurantId,
+  ) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_cacheKey, jsonEncode(settings.toJson()));
+    await prefs.setString(
+      _prefsKey(restaurantId),
+      jsonEncode(settings.toJson()),
+    );
   }
 
-  Future<RestaurantSettings?> _loadCache() async {
+  Future<RestaurantSettings?> _loadCache(String restaurantId) async {
     final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getString(_cacheKey);
+    final raw = prefs.getString(_prefsKey(restaurantId)) ??
+        (restaurantId.isEmpty
+            ? null
+            : prefs.getString('restaurant_settings_cache'));
     if (raw == null || raw.isEmpty) return null;
 
     try {

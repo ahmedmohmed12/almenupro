@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
+import '../../l10n/app_strings.dart';
 import '../../providers/customer_session_provider.dart';
 import '../../theme/app_theme.dart';
+import '../language_toggle_button.dart';
 
 class CustomerPhoneGate extends StatefulWidget {
   const CustomerPhoneGate({super.key, this.restaurantId});
@@ -27,15 +29,13 @@ class _CustomerPhoneGateState extends State<CustomerPhoneGate> {
   Future<void> _submit() async {
     if (!(_formKey.currentState?.validate() ?? false)) return;
     final session = context.read<CustomerSessionProvider>();
-    await session.identify(
-      _controller.text,
-      restaurantId: widget.restaurantId,
-    );
+    await session.identify(_controller.text, restaurantId: widget.restaurantId);
   }
 
   @override
   Widget build(BuildContext context) {
     final session = context.watch<CustomerSessionProvider>();
+    final strings = AppStrings.of(context);
     final media = MediaQuery.of(context);
     final compact = media.size.width < 420 || media.size.height < 620;
 
@@ -77,12 +77,17 @@ class _CustomerPhoneGateState extends State<CustomerPhoneGate> {
                             child: Column(
                               mainAxisSize: MainAxisSize.min,
                               children: [
+                                const Align(
+                                  alignment: AlignmentDirectional.centerEnd,
+                                  child: LanguageToggleButton(compact: true),
+                                ),
                                 Container(
                                   width: compact ? 52 : 64,
                                   height: compact ? 52 : 64,
                                   decoration: BoxDecoration(
-                                    color: AppTheme.brandMaroon
-                                        .withValues(alpha: 0.1),
+                                    color: AppTheme.brandMaroon.withValues(
+                                      alpha: 0.1,
+                                    ),
                                     shape: BoxShape.circle,
                                   ),
                                   child: Icon(
@@ -93,7 +98,7 @@ class _CustomerPhoneGateState extends State<CustomerPhoneGate> {
                                 ),
                                 SizedBox(height: compact ? 10 : 14),
                                 Text(
-                                  'أهلاً بك',
+                                  strings.tr('أهلاً بك', 'Welcome'),
                                   textAlign: TextAlign.center,
                                   style: TextStyle(
                                     fontSize: compact ? 20 : 22,
@@ -102,10 +107,13 @@ class _CustomerPhoneGateState extends State<CustomerPhoneGate> {
                                   ),
                                 ),
                                 const SizedBox(height: 6),
-                                const Text(
-                                  'أدخل رقم هاتفك للمتابعة وعرض رصيد الكاش باك',
+                                Text(
+                                  strings.tr(
+                                    'أدخل رقم هاتفك للمتابعة وعرض رصيد الكاش باك',
+                                    'Enter your phone number to continue and view your cashback balance',
+                                  ),
                                   textAlign: TextAlign.center,
-                                  style: TextStyle(
+                                  style: const TextStyle(
                                     color: Color(0xFF5C4A42),
                                     height: 1.35,
                                   ),
@@ -119,17 +127,22 @@ class _CustomerPhoneGateState extends State<CustomerPhoneGate> {
                                     FilteringTextInputFormatter.digitsOnly,
                                   ],
                                   decoration: InputDecoration(
-                                    labelText: 'رقم الهاتف',
+                                    labelText: strings.phone,
                                     hintText: '9xxxxxxx',
                                     isDense: compact,
                                     prefixIcon: const Icon(Icons.phone),
                                     border: const OutlineInputBorder(),
                                   ),
                                   validator: (value) {
-                                    final digits = (value ?? '')
-                                        .replaceAll(RegExp(r'\D'), '');
+                                    final digits = (value ?? '').replaceAll(
+                                      RegExp(r'\D'),
+                                      '',
+                                    );
                                     if (digits.length < 8) {
-                                      return 'أدخل رقم هاتف صحيح';
+                                      return strings.tr(
+                                        'أدخل رقم هاتف صحيح',
+                                        'Enter a valid phone number',
+                                      );
                                     }
                                     return null;
                                   },
@@ -154,8 +167,7 @@ class _CustomerPhoneGateState extends State<CustomerPhoneGate> {
                                     style: FilledButton.styleFrom(
                                       backgroundColor: AppTheme.brandMaroon,
                                     ),
-                                    onPressed:
-                                        session.loading ? null : _submit,
+                                    onPressed: session.loading ? null : _submit,
                                     child: session.loading
                                         ? const SizedBox(
                                             width: 22,
@@ -165,9 +177,9 @@ class _CustomerPhoneGateState extends State<CustomerPhoneGate> {
                                               color: Colors.white,
                                             ),
                                           )
-                                        : const Text(
-                                            'دخول',
-                                            style: TextStyle(
+                                        : Text(
+                                            strings.tr('دخول', 'Continue'),
+                                            style: const TextStyle(
                                               fontWeight: FontWeight.w800,
                                             ),
                                           ),

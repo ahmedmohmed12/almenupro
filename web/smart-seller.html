@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl" data-title-key="sellerTitle" data-desc-key="sellerDesc">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="البياع الشاطر في المنيو برو: اقتراحات ذكية تكمل السلة في الكاشير وشاشة الدفع — مشروبات، مقبلات، حلويات، وتوصيل مجاني." />
+  <meta name="theme-color" content="#6B1124" />
+  <title>البياع الشاطر | المنيو برو</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&display=swap" rel="stylesheet" />
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              orange: '#E39000',
+              maroon: '#6B1124',
+              surface: '#FAF7F4',
+              bg: '#F7F4F1',
+              black: '#1A1A1A',
+            },
+          },
+          fontFamily: { sans: ['Cairo', 'system-ui', 'sans-serif'] },
+          boxShadow: {
+            card: '0 8px 30px rgba(26, 26, 26, 0.08)',
+            glow: '0 18px 50px rgba(107, 17, 36, 0.18)',
+          },
+        },
+      },
+    };
+  </script>
+  <style>
+    html { scroll-behavior: smooth; }
+    body { font-family: 'Cairo', system-ui, sans-serif; }
+    .nav-blur { backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); }
+    .pulse-dot { animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .45; } }
+  </style>
+</head>
+<body class="min-h-screen bg-white text-brand-black antialiased">
+  <header class="nav-blur sticky top-0 z-50 border-b border-stone-100 bg-white/90">
+    <nav class="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3 sm:px-6">
+      <a href="/" class="flex shrink-0 items-center">
+        <img src="/logo.png" alt="Almenupro" class="h-16 w-auto object-contain sm:h-20" />
+      </a>
+      <div class="hidden items-center gap-7 text-sm font-bold text-stone-600 md:flex">
+        <a href="/#features" class="hover:text-brand-maroon" data-i18n="navSolutions">الحلول</a>
+        <a href="/smart-seller" class="text-brand-maroon" data-i18n="navSeller">البياع الشاطر</a>
+        <a href="/customers" class="hover:text-brand-maroon" data-i18n="navCustomers">عملاؤنا</a>
+        <a href="/#powers" class="hover:text-brand-maroon" data-i18n="navPowers">القدرات</a>
+      </div>
+      <div class="flex items-center gap-2">
+        <button type="button" class="lang-toggle rounded-full border border-stone-200 px-3 py-2 text-xs font-black text-stone-600 hover:border-brand-maroon hover:text-brand-maroon" data-i18n="langSwitch">English</button>
+        <a href="/login" class="hidden rounded-full border border-brand-maroon px-4 py-2 text-sm font-bold text-brand-maroon sm:inline-flex" data-i18n="navLogin">الدخول</a>
+        <a href="/create" class="rounded-full bg-brand-maroon px-5 py-2 text-sm font-bold text-white hover:bg-[#57101d]" data-i18n="navStart">ابدأ مجاناً</a>
+      </div>
+    </nav>
+  </header>
+
+  <main>
+    <section class="mx-auto max-w-6xl px-4 pb-8 pt-12 sm:px-6 sm:pt-16">
+      <div class="grid items-center gap-12 lg:grid-cols-2">
+        <div>
+          <p class="mb-4 inline-flex items-center gap-2 rounded-full bg-brand-orange/10 px-3 py-1 text-xs font-black text-brand-orange" data-i18n="sellerBadge">البياع الشاطر · Smart Upsell</p>
+          <h1 class="text-3xl font-black leading-[1.35] text-stone-800 sm:text-5xl" data-i18n="sellerHero">البياع اللي يكمّل الطلب… بدون ما يضغط على الزبون</h1>
+          <p class="mt-5 max-w-xl text-base leading-8 text-stone-500 sm:text-lg" data-i18n="sellerHeroSub">
+            يظهر في الكاشير وفي سلة العميل: يقترح مشروب إذا الطلب بدون مشروب، مقبلات إذا ناقصة، وحلويات إذا وصلت القيمة — وشريط يخبر الزبون كم باقي للتوصيل المجاني. ضغطة واحدة تضيف الصنف.
+          </p>
+          <div class="mt-8 flex flex-col gap-3 sm:flex-row">
+            <a href="/admin" class="inline-flex items-center justify-center rounded-full bg-brand-maroon px-7 py-3.5 text-base font-black text-white shadow-glow hover:bg-[#57101d]" data-i18n="enableAdmin">فعّله من لوحة الإدارة</a>
+            <a href="#how" class="inline-flex items-center justify-center rounded-full border border-brand-maroon px-7 py-3.5 text-base font-black text-brand-maroon" data-i18n="howItWorks">كيف يشتغل؟</a>
+          </div>
+        </div>
+
+        <div class="rounded-[2rem] bg-brand-bg p-5 shadow-card sm:p-7">
+          <div class="mb-4 flex items-center justify-between">
+            <p class="font-black text-brand-maroon" data-i18n="yourCart">سلتك — البياع الشاطر</p>
+            <span class="flex items-center gap-1 rounded-full bg-white px-3 py-1 text-[11px] font-bold text-emerald-700"><span class="h-2 w-2 rounded-full bg-emerald-500 pulse-dot"></span><span data-i18n="live">مباشر</span></span>
+          </div>
+          <div class="rounded-2xl bg-white p-4 shadow-card">
+            <p class="text-sm font-black" data-i18n="classicBurger">برجر كلاسيك × 1</p>
+            <p class="text-xs text-stone-400">2.750 د.ك</p>
+          </div>
+          <div class="mt-3 rounded-2xl bg-brand-maroon/90 px-4 py-3 text-white">
+            <p class="text-xs font-bold text-brand-orange" data-i18n="remainingDelivery">باقي 1.250 د.ك للتوصيل المجاني</p>
+            <div class="mt-2 h-1.5 overflow-hidden rounded-full bg-white/20"><div class="h-full w-2/3 rounded-full bg-brand-orange"></div></div>
+          </div>
+          <p class="mt-4 text-xs font-black text-stone-500" data-i18n="completesOrder">يكمل طلبك</p>
+          <div class="mt-2 grid gap-2">
+            <div class="flex items-center justify-between rounded-2xl bg-white p-3 shadow-card">
+              <div><p class="text-sm font-black" data-i18n="cola">كولا</p><p class="text-[11px] text-brand-orange" data-i18n="drinkAdd">مشروب مكمل</p></div>
+              <span class="rounded-full bg-brand-maroon px-3 py-1 text-xs font-black text-white" data-i18n="add">+ أضف</span>
+            </div>
+            <div class="flex items-center justify-between rounded-2xl bg-white p-3 shadow-card">
+              <div><p class="text-sm font-black" data-i18n="fries">بطاطس</p><p class="text-[11px] text-brand-orange" data-i18n="sideAdd">مقبلات / سلطة</p></div>
+              <span class="rounded-full bg-brand-maroon px-3 py-1 text-xs font-black text-white" data-i18n="add">+ أضف</span>
+            </div>
+            <div class="flex items-center justify-between rounded-2xl bg-white p-3 shadow-card">
+              <div><p class="text-sm font-black" data-i18n="brownie">براوني</p><p class="text-[11px] text-brand-orange" data-i18n="dessertAdd">حلويات · السلة وصلت الحد</p></div>
+              <span class="rounded-full bg-brand-orange px-3 py-1 text-xs font-black text-white" data-i18n="add">+ أضف</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="features" class="border-y border-stone-100 bg-brand-bg py-16">
+      <div class="mx-auto max-w-6xl px-4 sm:px-6">
+        <p class="text-sm font-bold text-brand-orange" data-i18n="whyAvg">لماذا يرفع متوسط الفاتورة؟</p>
+        <h2 class="mt-2 max-w-3xl text-3xl font-black text-stone-800 sm:text-4xl" data-i18n="sellerFeatures">مميزات البياع الشاطر في المنيو برو</h2>
+        <div class="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+          <article class="rounded-3xl bg-white p-6 shadow-card">
+            <h3 class="text-lg font-black" data-i18n="f1t">تكملة السلة بضغطة</h3>
+            <p class="mt-3 text-sm leading-7 text-stone-500" data-i18n="f1b">اقتراح واحد في الكاشير وفي Checkout. الزبون أو الكاشير يضيف الصنف فوراً بدون الرجوع للمنيو.</p>
+          </article>
+          <article class="rounded-3xl bg-white p-6 shadow-card">
+            <h3 class="text-lg font-black" data-i18n="f2t">مشروب إذا الطلب ناقص</h3>
+            <p class="mt-3 text-sm leading-7 text-stone-500" data-i18n="f2b">إذا فيه طبق رئيسي بدون مشروب، البياع يقترح مشروباً مكمّلاً — نفس منطق البياع الحقيقي في الصالة.</p>
+          </article>
+          <article class="rounded-3xl bg-white p-6 shadow-card">
+            <h3 class="text-lg font-black" data-i18n="f3t">مقبلات وشوربة وسلطة</h3>
+            <p class="mt-3 text-sm leading-7 text-stone-500" data-i18n="f3b">إذا الطلب فيه رئيسي بدون جانب، يظهر مقترح بطاطس أو سلطة أو شوربة لرفع قيمة الطلب بلطف.</p>
+          </article>
+          <article class="rounded-3xl bg-white p-6 shadow-card">
+            <h3 class="text-lg font-black" data-i18n="f4t">حلويات عند حد القيمة</h3>
+            <p class="mt-3 text-sm leading-7 text-stone-500" data-i18n="f4b">تحدد أنت حد الدينار (مثلاً 5 د.ك). لما السلة توصله وما في حلى، يظهر اقتراح حلويات في الوقت المناسب.</p>
+          </article>
+          <article class="rounded-3xl bg-white p-6 shadow-card">
+            <h3 class="text-lg font-black" data-i18n="f5t">شريط التوصيل المجاني</h3>
+            <p class="mt-3 text-sm leading-7 text-stone-500" data-i18n="f5b">«باقي X د.ك للتوصيل المجاني» يدفع الزبون يضيف صنفاً رخيصاً بدل ما يلغي أو يدفع رسوم التوصيل.</p>
+          </article>
+          <article class="rounded-3xl bg-white p-6 shadow-card">
+            <h3 class="text-lg font-black" data-i18n="f6t">إضافات سريعة (Impulse)</h3>
+            <p class="mt-3 text-sm leading-7 text-stone-500" data-i18n="f6b">أصناف رخيصة تختارها من الإدارة تظهر كإضافة سريعة عند الدفع — مثالية للكوكيز والصوصات.</p>
+          </article>
+          <article class="rounded-3xl bg-white p-6 shadow-card">
+            <h3 class="text-lg font-black" data-i18n="f7t">يُطلب معاً والأكثر طلباً</h3>
+            <p class="mt-3 text-sm leading-7 text-stone-500" data-i18n="f7b">توصيات ذكية: مع طلبك، يكمل طلبك، يُطلب معاً، أو الأكثر طلباً — حسب سلة الزبون الحقيقية.</p>
+          </article>
+          <article class="rounded-3xl bg-white p-6 shadow-card">
+            <h3 class="text-lg font-black" data-i18n="f8t">في الكاشير وعند العميل</h3>
+            <p class="mt-3 text-sm leading-7 text-stone-500" data-i18n="f8b">نفس البياع يشتغل في POS للكاشير وفي سلة المنيو الإلكتروني للضيف — بدون تدريب فريق على البيع الإضافي.</p>
+          </article>
+          <article class="rounded-3xl bg-white p-6 shadow-card">
+            <h3 class="text-lg font-black" data-i18n="f9t">تحليلات البياع</h3>
+            <p class="mt-3 text-sm leading-7 text-stone-500" data-i18n="f9b">لوحة تعرض أي اقتراح انعرض، وأي صنف انضاف. تضبط المشروبات والمقبلات والحلويات من الإعدادات.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section id="how" class="mx-auto max-w-6xl px-4 py-16 sm:px-6">
+      <h2 class="text-center text-3xl font-black text-stone-800 sm:text-4xl" data-i18n="howTitle">كيف يشتغل مع فريقك؟</h2>
+      <div class="mt-10 grid gap-6 md:grid-cols-3">
+        <article class="rounded-[1.8rem] border border-stone-100 p-6">
+          <p class="text-sm font-black text-brand-orange">1</p>
+          <h3 class="mt-2 text-xl font-black" data-i18n="how1t">تفعّله من الإدارة</h3>
+          <p class="mt-3 text-sm leading-7 text-stone-500" data-i18n="how1b">من قائمة «البياع الشاطر»: حد التوصيل المجاني، أصناف الإضافة السريعة، ومفاتيح المشروبات والمقبلات والحلويات.</p>
+        </article>
+        <article class="rounded-[1.8rem] border border-stone-100 p-6">
+          <p class="text-sm font-black text-brand-orange">2</p>
+          <h3 class="mt-2 text-xl font-black" data-i18n="how2t">يقرأ السلة لحظياً</h3>
+          <p class="mt-3 text-sm leading-7 text-stone-500" data-i18n="how2b">إذا فيه برجر بدون مشروب يقترح كولا. إذا وصلت القيمة يقترح حلى. ما يقترح شيء الزبون أصلاً حاطه.</p>
+        </article>
+        <article class="rounded-[1.8rem] border border-stone-100 p-6">
+          <p class="text-sm font-black text-brand-orange">3</p>
+          <h3 class="mt-2 text-xl font-black" data-i18n="how3t">فاتورة أعلى بهدوء</h3>
+          <p class="mt-3 text-sm leading-7 text-stone-500" data-i18n="how3b">الكاشير يضغط «أضف» أو الزبون يكمّل من الجوال. المطبخ يستلم التذكرة كالمعتاد — بدون عمولة على الزيادة.</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="bg-brand-maroon py-16 text-white">
+      <div class="mx-auto max-w-6xl px-4 sm:px-6">
+        <div class="grid items-center gap-10 lg:grid-cols-2">
+          <div>
+            <p class="text-sm font-bold text-brand-orange" data-i18n="sellLabel">يبيع بدون ما يزعج</p>
+            <h2 class="mt-2 text-3xl font-black sm:text-4xl" data-i18n="sellTitle">بياع شاطر… مو إعلانات مزعجة</h2>
+            <p class="mt-4 text-base leading-8 text-white/80" data-i18n="sellSub">
+              الاقتراح يظهر فقط لما ينقص الطلب شيء منطقي. تقدر تطفيه بالكامل، أو تطفي الحلويات لوحدها، أو تغيّر حد الدينار. أنت تتحكم — البياع ينفّذ.
+            </p>
+          </div>
+          <div class="grid gap-3 sm:grid-cols-2">
+            <div class="rounded-3xl bg-white/10 p-5 ring-1 ring-white/15"><p class="font-black">POS</p><p class="mt-2 text-sm text-white/75" data-i18n="posHint">اقتراحات بجانب السلة للكاشير</p></div>
+            <div class="rounded-3xl bg-white/10 p-5 ring-1 ring-white/15"><p class="font-black">Checkout</p><p class="mt-2 text-sm text-white/75" data-i18n="checkoutHint">شريط في سلة الضيف على الجوال</p></div>
+            <div class="rounded-3xl bg-white/10 p-5 ring-1 ring-white/15"><p class="font-black" data-i18n="dessertLimit">حد الحلويات</p><p class="mt-2 text-sm text-white/75" data-i18n="dessertLimitHint">تظهر بعد مبلغ تحدده أنت</p></div>
+            <div class="rounded-3xl bg-white/10 p-5 ring-1 ring-white/15"><p class="font-black" data-i18n="zeroPct">0% عمولة</p><p class="mt-2 text-sm text-white/75" data-i18n="zeroHint">كل دينار إضافي يبقى للمطعم</p></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="px-4 py-16 sm:px-6">
+      <div class="mx-auto max-w-4xl rounded-[2rem] bg-brand-bg px-6 py-12 text-center sm:px-12">
+        <h2 class="text-3xl font-black text-brand-maroon sm:text-4xl" data-i18n="sellerCta">خلّ البياع الشاطر يشتغل في مطعمك اليوم</h2>
+        <p class="mx-auto mt-4 max-w-2xl text-base leading-8 text-stone-500" data-i18n="sellerCtaSub">افتح لوحة الإدارة، فعّل البياع الشاطر، وحدّد المشروبات والمقبلات والحلويات. الزيادة في الفاتورة بدون عمولة.</p>
+        <a href="/create" class="mt-8 inline-flex rounded-full bg-brand-maroon px-8 py-3.5 text-base font-black text-white shadow-glow hover:bg-[#57101d]" data-i18n="startNow">ابدأ مجاناً الآن</a>
+      </div>
+    </section>
+  </main>
+
+  <footer class="border-t border-stone-100 bg-white">
+    <div class="mx-auto flex max-w-6xl flex-col gap-6 px-4 py-10 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+      <div>
+        <a href="/" class="inline-flex"><img src="/logo.png" alt="Almenupro" class="h-20 w-auto object-contain" /></a>
+        <p class="mt-2 text-sm text-stone-500" data-i18n="footerSeller">نقاط بيع + منيو إلكتروني + البياع الشاطر.</p>
+      </div>
+      <div class="flex flex-wrap gap-4 text-sm font-bold text-stone-600">
+        <a href="/#features" class="hover:text-brand-maroon" data-i18n="navSolutions">الحلول</a>
+        <a href="/smart-seller" class="text-brand-maroon" data-i18n="navSeller">البياع الشاطر</a>
+        <a href="/customers" class="hover:text-brand-maroon" data-i18n="navCustomers">عملاؤنا</a>
+        <a href="/admin" class="hover:text-brand-maroon" data-i18n="navAdmin">لوحة الإدارة</a>
+      </div>
+    </div>
+  </footer>
+  <script src="/i18n.js"></script>
+</body>
+</html>

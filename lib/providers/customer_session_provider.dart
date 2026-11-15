@@ -19,6 +19,11 @@ class CustomerSessionProvider extends ChangeNotifier {
   double _cashbackValue = 0;
   bool _loyaltyEnabled = false;
 
+  String? _dineInTableId;
+  String? _dineInTableName;
+  String? _dineInRestaurantId;
+  String? _dineInTableZone;
+
   String get phone => _phone;
   CustomerCheckoutProfile? get profile => _profile;
   bool get isNew => _isNew;
@@ -35,6 +40,12 @@ class CustomerSessionProvider extends ChangeNotifier {
   CashbackType get cashbackType => _cashbackType;
   double get cashbackValue => _cashbackValue;
   bool get loyaltyEnabled => _loyaltyEnabled;
+  String? get dineInTableId => _dineInTableId;
+  String? get dineInTableName => _dineInTableName;
+  String? get dineInRestaurantId => _dineInRestaurantId;
+  String? get dineInTableZone => _dineInTableZone;
+  bool get isQrDineIn =>
+      _dineInTableId != null && _dineInTableId!.trim().isNotEmpty;
 
   String get welcomeName {
     final name = _profile?.customerName.trim() ?? '';
@@ -105,6 +116,27 @@ class CustomerSessionProvider extends ChangeNotifier {
       notifyListeners();
       return false;
     }
+  }
+
+  void bindDineInTable({
+    required String tableId,
+    String tableName = '',
+    String? restaurantId,
+    String tableZone = '',
+  }) {
+    _dineInTableId = tableId.trim();
+    _dineInTableName = tableName.trim();
+    _dineInRestaurantId = restaurantId?.trim();
+    _dineInTableZone = tableZone.trim();
+    notifyListeners();
+  }
+
+  void clearDineInTable() {
+    _dineInTableId = null;
+    _dineInTableName = null;
+    _dineInRestaurantId = null;
+    _dineInTableZone = null;
+    notifyListeners();
   }
 
   void applyWalletDebit(double amount) {

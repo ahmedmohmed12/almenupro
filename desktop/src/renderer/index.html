@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+  <head>
+    <meta charset="utf-8">
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:;"
+    >
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>AlMenuPro Desktop</title>
+    <link rel="stylesheet" href="./shell.css">
+  </head>
+  <body>
+    <header class="toolbar">
+      <div class="brand" aria-label="AlMenuPro Desktop">AlMenuPro</div>
+      <nav aria-label="Desktop views">
+        <button type="button" data-view="pos" class="active">POS</button>
+      </nav>
+      <div class="actions">
+        <button
+          type="button"
+          id="ingestion-status"
+          class="ingestion-status login"
+          title="حالة سحب طلبات Talabat"
+        >🔒 التوكن غير مضبوط</button>
+        <span id="api-status" class="api-status" title="Talabat API credentials">API: غير مضبوط</span>
+        <span id="queue-status" title="Persistent submit queue">Queue: 0</span>
+        <button type="button" id="api-credentials" title="Talabat Vendor API credentials">
+          توكن API
+        </button>
+        <button type="button" id="manage-stores" title="Add or disable platform stores">المتاجر</button>
+        <button type="button" id="force-sync" title="Check platform order history now">Force Sync Orders</button>
+        <button type="button" id="home" title="Open configured home URL">Home</button>
+        <button type="button" id="reload" title="Reload current view">Reload</button>
+      </div>
+    </header>
+    <div id="ingestion-warning" class="ingestion-warning" hidden role="status" aria-live="polite"></div>
+    <div id="error" role="status" aria-live="polite"></div>
+
+    <div id="credentials-modal" class="modal" hidden>
+      <div class="modal-backdrop" data-close-modal></div>
+      <section class="modal-card" role="dialog" aria-modal="true" aria-labelledby="credentials-title">
+        <header class="modal-header">
+          <div>
+            <h2 id="credentials-title">توكن Talabat Vendor API</h2>
+            <p class="modal-subtitle">
+              Vendor ID والتوكن الرسمي يُحفظان مشفّرين ولا يظهر التوكن بعد الحفظ.
+              إذا كانت الحالة «محفوظ»، اضغط إعادة الفحص — أو الصق JWT جديد فقط عند التجديد.
+            </p>
+          </div>
+          <button type="button" class="icon-btn" data-close-modal aria-label="إغلاق">×</button>
+        </header>
+        <form id="credentials-form" class="modal-body" autocomplete="off">
+          <label>
+            <span>Vendor ID</span>
+            <input
+              id="vendor-id"
+              name="vendorId"
+              type="text"
+              inputmode="numeric"
+              placeholder="مثال: 651304"
+              required
+              maxlength="100"
+            >
+          </label>
+          <label>
+            <span>JWT Token</span>
+            <textarea
+              id="vendor-token"
+              name="token"
+              rows="5"
+              placeholder="محفوظ مسبقًا — اتركه فارغًا لإعادة الفحص، أو الصق JWT جديد للتحديث"
+              spellcheck="false"
+            ></textarea>
+          </label>
+          <div class="token-copy-guide" id="token-copy-guide">
+            <p class="token-copy-title">مكان نسخ التوكن (يدويًا)</p>
+            <ol class="token-copy-steps">
+              <li>اضغط «فتح Network» — يفتح أدوات المطوّر على Talabat.</li>
+              <li>في Network الصق الفلتر أدناه واضغط Enter.</li>
+              <li>اختَر طلب فيه <code>/vendors/…/orders</code>.</li>
+              <li>من Headers انسخ بعد <code>Bearer</code> والصقه فوق.</li>
+            </ol>
+            <div class="token-filter-row">
+              <code id="token-filter-value">vendor-portal-api</code>
+              <button type="button" id="copy-token-filter">نسخ الفلتر</button>
+              <button type="button" id="open-talabat-devtools">فتح Network</button>
+            </div>
+            <p class="token-copy-note">
+              التطبيق لا يعرض توكن الجلسة تلقائيًا — انسخه أنت من Network فقط.
+            </p>
+          </div>
+          <p id="credentials-status" class="credentials-status">الحالة: غير مضبوط</p>
+          <div class="modal-actions">
+            <button type="button" id="clear-credentials" class="danger">مسح التوكن</button>
+            <div class="modal-actions-end">
+              <button type="button" data-close-modal>إلغاء</button>
+              <button type="submit" id="save-credentials" class="primary">حفظ وتشغيل الفحص</button>
+            </div>
+          </div>
+        </form>
+      </section>
+    </div>
+
+    <div id="stores-modal" class="modal" hidden>
+      <div class="modal-backdrop" data-close-stores></div>
+      <section class="modal-card" role="dialog" aria-modal="true" aria-labelledby="stores-title">
+        <header class="modal-header">
+          <div>
+            <h2 id="stores-title">متاجر المنصات</h2>
+            <p class="modal-subtitle">كل متجر مفعّل يفتح نافذة معزولة ويسحب طلباته إلى الكاشير.</p>
+          </div>
+          <button type="button" class="icon-btn" data-close-stores aria-label="إغلاق">×</button>
+        </header>
+        <div class="modal-body">
+          <ul id="stores-list" class="stores-list"></ul>
+          <form id="stores-form">
+            <label>
+              <span>الاسم</span>
+              <input id="store-name" required maxlength="80" placeholder="Talabat Branch 2">
+            </label>
+            <label>
+              <span>المنصة</span>
+              <select id="store-type">
+                <option value="talabat">Talabat</option>
+                <option value="keeta">Keeta</option>
+                <option value="jahez">Jahez</option>
+              </select>
+            </label>
+            <label>
+              <span>رابط البوابة</span>
+              <input id="store-url" type="text" inputmode="url" required spellcheck="false" autocomplete="off" placeholder="https://partner-app.talabat.com/">
+            </label>
+            <p id="stores-message" class="credentials-status"></p>
+            <div class="modal-actions">
+              <button type="button" data-close-stores>إغلاق</button>
+              <button type="submit" class="primary">إضافة متجر</button>
+            </div>
+          </form>
+        </div>
+      </section>
+    </div>
+
+    <script src="./shell.js"></script>
+  </body>
+</html>

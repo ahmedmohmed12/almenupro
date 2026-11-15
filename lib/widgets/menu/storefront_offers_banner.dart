@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import '../../models/offer.dart';
+import '../../providers/locale_provider.dart';
 import '../../theme/app_theme.dart';
 import '../network_menu_image.dart';
 
@@ -18,15 +20,16 @@ class StorefrontOffersBanner extends StatelessWidget {
   Widget build(BuildContext context) {
     if (offers.isEmpty) return const SizedBox.shrink();
     final wide = MediaQuery.sizeOf(context).width >= 720;
+    final isArabic = context.watch<LocaleProvider>().isArabic;
 
     return Padding(
       padding: EdgeInsets.fromLTRB(wide ? 20 : 10, 6, wide ? 20 : 10, 2),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const Text(
-            'العروض والخصومات',
-            style: TextStyle(
+          Text(
+            isArabic ? 'العروض والخصومات' : 'Offers & discounts',
+            style: const TextStyle(
               fontWeight: FontWeight.w800,
               fontSize: 15,
               color: AppTheme.brandMaroon,
@@ -68,18 +71,28 @@ class StorefrontOfferCard extends StatelessWidget {
   final VoidCallback? onTap;
   final bool compact;
 
-  String? get _terms {
+  String? _terms(bool isArabic) {
     final parts = <String>[];
     if (offer.minSubtotal > 0) {
-      parts.add('الحد الأدنى ${offer.minSubtotal.toStringAsFixed(3)} د.ك');
+      parts.add(
+        isArabic
+            ? 'الحد الأدنى ${offer.minSubtotal.toStringAsFixed(3)} د.ك'
+            : 'Minimum ${offer.minSubtotal.toStringAsFixed(3)} KWD',
+      );
     }
     if (offer.hasUsageCap) {
-      parts.add('حتى ${offer.usageLimitPerCustomer} مرة لكل عميل');
+      parts.add(
+        isArabic
+            ? 'حتى ${offer.usageLimitPerCustomer} مرة لكل عميل'
+            : 'Up to ${offer.usageLimitPerCustomer} per customer',
+      );
     }
     if (offer.endsAt != null) {
       final end = offer.endsAt!.toLocal();
       parts.add(
-        'حتى ${end.year}/${end.month.toString().padLeft(2, '0')}/${end.day.toString().padLeft(2, '0')}',
+        isArabic
+            ? 'حتى ${end.year}/${end.month.toString().padLeft(2, '0')}/${end.day.toString().padLeft(2, '0')}'
+            : 'Until ${end.year}/${end.month.toString().padLeft(2, '0')}/${end.day.toString().padLeft(2, '0')}',
       );
     }
     if (parts.isEmpty && offer.description.trim().isEmpty) return null;
@@ -88,7 +101,9 @@ class StorefrontOfferCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final terms = _terms;
+    final isArabic = context.watch<LocaleProvider>().isArabic;
+    final terms = _terms(isArabic);
+    final currency = isArabic ? 'د.ك' : 'KWD';
 
     return Material(
       color: Colors.white,
@@ -179,7 +194,9 @@ class StorefrontOfferCard extends StatelessWidget {
                     const Spacer(),
                     if (offer.type == OfferType.percentage)
                       Text(
-                        'خصم ${offer.discountValue.toStringAsFixed(0)}%',
+                        isArabic
+                            ? 'خصم ${offer.discountValue.toStringAsFixed(0)}%'
+                            : '${offer.discountValue.toStringAsFixed(0)}% off',
                         style: const TextStyle(
                           color: AppTheme.brandMaroon,
                           fontWeight: FontWeight.w800,
@@ -187,7 +204,9 @@ class StorefrontOfferCard extends StatelessWidget {
                       )
                     else if (offer.type == OfferType.fixed)
                       Text(
-                        'خصم ${offer.discountValue.toStringAsFixed(3)} د.ك',
+                        isArabic
+                            ? 'خصم ${offer.discountValue.toStringAsFixed(3)} د.ك'
+                            : '${offer.discountValue.toStringAsFixed(3)} KWD off',
                         style: const TextStyle(
                           color: AppTheme.brandMaroon,
                           fontWeight: FontWeight.w800,
@@ -195,7 +214,7 @@ class StorefrontOfferCard extends StatelessWidget {
                       )
                     else if (offer.hasPricePair)
                       Text(
-                        '${offer.salePrice.toStringAsFixed(3)} د.ك بدل ${offer.listPrice.toStringAsFixed(3)}',
+                        '${offer.salePrice.toStringAsFixed(3)} $currency ${isArabic ? 'بدل' : 'instead of'} ${offer.listPrice.toStringAsFixed(3)}',
                         style: const TextStyle(
                           color: AppTheme.brandMaroon,
                           fontWeight: FontWeight.w800,

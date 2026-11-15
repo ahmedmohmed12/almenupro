@@ -6,13 +6,17 @@
   "scripts": {
     "start": "node apiServer.js",
     "seed": "node seedFromTalabat.js",
-    "test:cors": "node scripts/cors-smoke.js"
+    "test:cors": "node scripts/cors-smoke.js",
+    "test:external-orders": "node --test test/externalOrders.test.js",
+    "test:mysql": "node scripts/mysql-smoke.js",
+    "process:platform-sales:today": "node scripts/process-todays-platform-orders.js",
+    "export:mysql": "node scripts/export-mysql-dump.js"
   },
   "engines": {
     "node": "22.x"
   },
   "dependencies": {
-    "@langchain/anthropic": "^1.5.4",
-    "mongodb": "^6.16.0"
+    "mongodb": "^6.16.0",
+    "mysql2": "^3.24.5"
   }
 }

@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl" data-title-key="createTitle" data-desc-key="createDesc">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="أنشئ مطعمك على المنيو برو: أرسل طلب الاشتراك وسنفعّل حسابك." />
+  <meta name="theme-color" content="#6B1124" />
+  <title>إنشاء مطعم | المنيو برو</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&display=swap" rel="stylesheet" />
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              orange: '#E39000',
+              maroon: '#6B1124',
+              surface: '#FAF7F4',
+              bg: '#F7F4F1',
+              black: '#1A1A1A',
+            },
+          },
+          fontFamily: { sans: ['Cairo', 'system-ui', 'sans-serif'] },
+          boxShadow: {
+            card: '0 8px 30px rgba(26, 26, 26, 0.08)',
+            glow: '0 18px 50px rgba(107, 17, 36, 0.18)',
+          },
+        },
+      },
+    };
+  </script>
+  <style>
+    body { font-family: 'Cairo', system-ui, sans-serif; }
+    .nav-blur { backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); }
+    input, select { font-family: inherit; }
+  </style>
+</head>
+<body class="min-h-screen bg-white text-brand-black antialiased">
+  <header class="nav-blur sticky top-0 z-50 border-b border-stone-100 bg-white/90">
+    <nav class="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3 sm:px-6">
+      <a href="/" class="flex shrink-0 items-center">
+        <img src="/logo.png" alt="Almenupro" class="h-16 w-auto object-contain sm:h-20" />
+      </a>
+      <div class="hidden items-center gap-6 text-sm font-bold text-stone-600 md:flex">
+        <a href="/#features" class="hover:text-brand-maroon" data-i18n="navSolutions">الحلول</a>
+        <a href="/smart-seller" class="hover:text-brand-maroon" data-i18n="navSeller">البياع الشاطر</a>
+        <a href="/customers" class="hover:text-brand-maroon" data-i18n="navCustomers">عملاؤنا</a>
+        <a href="/#powers" class="hover:text-brand-maroon" data-i18n="navPowers">القدرات</a>
+      </div>
+      <div class="flex items-center gap-2">
+        <button type="button" class="lang-toggle rounded-full border border-stone-200 px-3 py-2 text-xs font-black text-stone-600 hover:border-brand-maroon hover:text-brand-maroon" data-i18n="langSwitch">English</button>
+        <a href="/login" class="hidden rounded-full border border-brand-maroon px-4 py-2 text-sm font-bold text-brand-maroon sm:inline-flex" data-i18n="navLogin">الدخول</a>
+        <a href="/create" class="rounded-full bg-brand-maroon px-5 py-2 text-sm font-bold text-white hover:bg-[#57101d]" data-i18n="navStart">ابدأ مجاناً</a>
+      </div>
+    </nav>
+  </header>
+
+  <main class="mx-auto grid max-w-6xl items-center gap-10 px-4 py-10 sm:px-6 lg:grid-cols-2 lg:py-16">
+    <div>
+      <h1 class="text-3xl font-black text-brand-maroon sm:text-5xl" data-i18n="createHero">إنشاء مطعم</h1>
+      <p class="mt-4 max-w-md text-base leading-8 text-stone-500 sm:text-lg" data-i18n="createHeroSub">هل لديك استفسارات؟ نحن هنا للمساعدة — أرسل الطلب وسنتواصل معك لتفعيل حسابك.</p>
+      <div class="mt-8 hidden overflow-hidden rounded-[2rem] bg-brand-bg p-8 lg:block">
+        <p class="text-sm font-black text-brand-orange" data-i18n="createProduct">المنيو برو — نقاط البيع والمنيو الإلكتروني</p>
+        <p class="mt-3 text-sm leading-7 text-stone-500" data-i18n="createProductSub">منيو للضيوف، كاشير، مطبخ حراري، وواتساب — بدون عمولة على الطلبات.</p>
+      </div>
+    </div>
+
+    <form id="signup-form" class="rounded-[1.8rem] bg-brand-bg p-6 shadow-card sm:p-8">
+      <label class="mb-3 block">
+        <span class="sr-only" data-i18n="createName">الاسم</span>
+        <input name="ownerName" required maxlength="120" class="w-full rounded-2xl border-0 bg-white px-4 py-3.5 text-sm font-bold outline-none ring-1 ring-stone-200 focus:ring-2 focus:ring-brand-maroon" data-i18n-placeholder="createName" placeholder="الاسم" />
+      </label>
+      <label class="mb-3 block">
+        <span class="sr-only" data-i18n="createEmail">البريد الإلكتروني</span>
+        <input name="email" type="email" required class="w-full rounded-2xl border-0 bg-white px-4 py-3.5 text-sm font-bold outline-none ring-1 ring-stone-200 focus:ring-2 focus:ring-brand-maroon" data-i18n-placeholder="createEmail" placeholder="البريد الإلكتروني" />
+      </label>
+      <div class="mb-3 flex overflow-hidden rounded-2xl bg-white ring-1 ring-stone-200 focus-within:ring-2 focus-within:ring-brand-maroon">
+        <span class="flex items-center bg-brand-maroon px-3 text-sm font-black text-white">965</span>
+        <input name="phone" required inputmode="tel" class="w-full border-0 bg-transparent px-4 py-3.5 text-sm font-bold outline-none" data-i18n-placeholder="createMobile" placeholder="الموبايل" />
+      </div>
+      <label class="mb-3 block">
+        <span class="sr-only" data-i18n="createStoreEn">اسم المطعم (بالانجليزية)</span>
+        <input id="restaurant-name" name="restaurantName" required maxlength="120" class="w-full rounded-2xl border-0 bg-white px-4 py-3.5 text-sm font-bold outline-none ring-1 ring-stone-200 focus:ring-2 focus:ring-brand-maroon" data-i18n-placeholder="createStoreEn" placeholder="اسم المطعم (بالانجليزية)" />
+      </label>
+      <label class="mb-3 block">
+        <span class="sr-only" data-i18n="createSlug">دليل المتجر</span>
+        <input id="store-slug" name="slug" required maxlength="48" class="w-full rounded-2xl border-0 bg-white px-4 py-3.5 text-sm font-bold outline-none ring-1 ring-stone-200 focus:ring-2 focus:ring-brand-maroon" data-i18n-placeholder="createSlug" placeholder="دليل المتجر" />
+      </label>
+      <div class="mb-3 rounded-2xl bg-white px-4 py-3.5 text-sm font-black text-brand-maroon ring-1 ring-stone-200" data-i18n="createProduct">المنيو برو — نقاط البيع والمنيو الإلكتروني</div>
+      <label class="mb-4 block">
+        <span class="sr-only" data-i18n="createInstagram">حساب الانستقرام</span>
+        <input name="instagram" maxlength="80" class="w-full rounded-2xl border-0 bg-white px-4 py-3.5 text-sm font-bold outline-none ring-1 ring-stone-200 focus:ring-2 focus:ring-brand-maroon" data-i18n-placeholder="createInstagram" placeholder="حساب الانستقرام" />
+      </label>
+      <label class="mb-5 flex items-start gap-3 text-sm font-bold text-stone-600">
+        <input name="terms" type="checkbox" required class="mt-1 h-4 w-4 accent-brand-maroon" />
+        <span data-i18n="createTerms">أوافق على الشروط والاحكام</span>
+      </label>
+      <p id="form-error" class="mb-3 hidden text-sm font-bold text-red-700"></p>
+      <p id="form-ok" class="mb-3 hidden text-sm font-bold text-emerald-700"></p>
+      <button id="submit-btn" type="submit" class="w-full rounded-2xl bg-brand-maroon py-3.5 text-base font-black text-white shadow-glow hover:bg-[#57101d]" data-i18n="createSubmit">ارسل الطلب</button>
+    </form>
+  </main>
+
+  <footer class="border-t border-stone-100 bg-white">
+    <div class="mx-auto flex max-w-6xl flex-col gap-6 px-4 py-10 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+      <div>
+        <a href="/" class="inline-flex"><img src="/logo.png" alt="Almenupro" class="h-20 w-auto object-contain" /></a>
+        <p class="mt-2 text-sm text-stone-500" data-i18n="footerTag">نقاط بيع + منيو إلكتروني + مطبخ بدون عمولات.</p>
+      </div>
+      <div class="flex flex-wrap gap-4 text-sm font-bold text-stone-600">
+        <a href="/#features" class="hover:text-brand-maroon" data-i18n="navSolutions">الحلول</a>
+        <a href="/login" class="hover:text-brand-maroon" data-i18n="navLogin">الدخول</a>
+        <a href="/admin" class="hover:text-brand-maroon" data-i18n="navAdmin">لوحة الإدارة</a>
+      </div>
+    </div>
+  </footer>
+
+  <script src="/i18n.js"></script>
+  <script>
+    const API_BASE = 'https://backend-henna-chi-76.vercel.app/api';
+
+    (function extendI18nPlaceholders() {
+      document.addEventListener('amp-lang', applyPlaceholders);
+      applyPlaceholders();
+      function applyPlaceholders() {
+        document.querySelectorAll('[data-i18n-placeholder]').forEach((el) => {
+          const key = el.getAttribute('data-i18n-placeholder');
+          if (key && window.AMP_I18N) el.setAttribute('placeholder', AMP_I18N.t(key));
+        });
+      }
+    })();
+
+    function slugify(value) {
+      return String(value || '')
+        .trim()
+        .toLowerCase()
+        .replace(/\s+/g, '-')
+        .replace(/[^a-z0-9-]/g, '')
+        .replace(/-+/g, '-')
+        .replace(/^-|-$/g, '')
+        .slice(0, 48);
+    }
+
+    const nameInput = document.getElementById('restaurant-name');
+    const slugInput = document.getElementById('store-slug');
+    let slugTouched = false;
+    slugInput.addEventListener('input', () => { slugTouched = true; });
+    nameInput.addEventListener('input', () => {
+      if (!slugTouched) slugInput.value = slugify(nameInput.value);
+    });
+
+    document.getElementById('signup-form').addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const form = event.target;
+      const errorEl = document.getElementById('form-error');
+      const okEl = document.getElementById('form-ok');
+      const btn = document.getElementById('submit-btn');
+      errorEl.classList.add('hidden');
+      okEl.classList.add('hidden');
+      const payload = {
+        ownerName: form.ownerName.value.trim(),
+        email: form.email.value.trim(),
+        phone: form.phone.value.trim(),
+        countryCode: '965',
+        restaurantName: form.restaurantName.value.trim(),
+        slug: slugify(form.slug.value),
+        instagram: form.instagram.value.trim(),
+        terms: form.terms.checked,
+      };
+      btn.disabled = true;
+      try {
+        const res = await fetch(API_BASE + '/public/signup-requests', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || 'تعذر إرسال الطلب');
+        okEl.textContent = window.AMP_I18N ? AMP_I18N.t('createSuccess') : 'تم إرسال الطلب. سنتواصل معك قريباً.';
+        okEl.classList.remove('hidden');
+        form.reset();
+        slugTouched = false;
+      } catch (err) {
+        errorEl.textContent = err.message || 'تعذر إرسال الطلب';
+        errorEl.classList.remove('hidden');
+      } finally {
+        btn.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>

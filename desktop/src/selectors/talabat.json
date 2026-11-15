@@ -1,0 +1,36 @@
+{
+  "observerRoot": "main, [role='main'], #root, body",
+  "authenticatedRoot": "[data-testid='app-shell'], [data-testid='sidebar'], nav, aside",
+  "observationModes": [
+    {
+      "id": "live",
+      "root": "[data-testid='live-orders'], [data-test='live-orders'], [data-testid='orders-list'], .live-orders, .orders-list",
+      "order": "[data-testid='order-card'], [data-test='order-card'], .order-card",
+      "maxRows": 100
+    },
+    {
+      "id": "history",
+      "root": "[data-testid='order-history'], [data-test='order-history'], .MuiDataGrid-virtualScroller, [class*='virtualScroller' i], [role='grid'], .order-history, .orders-history, table",
+      "order": "[role='row'][data-id], [role='row'][data-rowindex], tbody tr[data-order-id], tbody tr[data-id], tbody tr, [data-testid='order-history-row'], .order-history-row",
+      "maxRows": 500
+    }
+  ],
+  "order": "[data-testid='order-card'], [data-test='order-card'], .order-card",
+  "historyDetailRoot": "[data-testid='order-details'], [data-testid='order-details-drawer'], [data-test='order-details'], [role='dialog'], .MuiDrawer-paper, .MuiModal-root",
+  "historyDetailClose": "[data-testid='close-button'], [data-testid='close-order-details'], [data-test='close-order-details'], [role='dialog'] button[aria-label='Close'], [role='dialog'] button[aria-label='إغلاق'], .MuiDrawer-paper button[aria-label='Close'], .MuiDrawer-paper button[aria-label='إغلاق']",
+  "invoiceNumber": "[data-testid='details-order-id']",
+  "id": "[data-testid='order-id'], [data-testid*='order-number' i], [data-test='order-number'], [data-column='order-id'], [data-field='order-id'], [data-field='orderId'], [role='gridcell'][data-field='order-id'], [role='gridcell'][data-field='orderId'], .order-id, .order-number, td:first-child, [role='gridcell']:first-child",
+  "customerName": "[data-testid='customer-name'], [data-testid='details-customer-name'], [data-testid*='customer'][data-testid*='name'], [data-column='customer-name'], .customer-name",
+  "phone": "[data-testid='customer-phone'], [data-testid='details-customer-phone'], [data-testid*='customer'][data-testid*='phone'], .customer-phone",
+  "address": "[data-testid='delivery-address'], [data-testid='customer-address'], [data-testid*='delivery'][data-testid*='address'], .delivery-address",
+  "item": "[data-testid^='existing-product__'], [data-testid='order-item'], [data-order-item], .order-item",
+  "itemName": "[data-testid='item-name'], .item-name",
+  "itemQuantity": "[data-testid='item-quantity'], .item-quantity",
+  "itemPrice": "[data-testid='item-price'], .item-price",
+  "itemOptions": "[data-testid='item-option'], .item-option",
+  "subtotal": "[data-testid='subtotal'], .subtotal",
+  "total": "[data-testid='order-total'], .order-total",
+  "paymentMethod": "[data-testid='payment-method'], .payment-method",
+  "deliveryType": "[data-testid='delivery-type'], .delivery-type",
+  "createdAt": "time[datetime], [data-testid='order-created-at']"
+}

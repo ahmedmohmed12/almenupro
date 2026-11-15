@@ -4,10 +4,26 @@ import 'package:intl/intl.dart' hide TextDirection;
 import '../../models/customer.dart';
 import '../../models/order.dart';
 import '../../services/api_service.dart';
+import '../../services/orders_demo_service.dart';
+import '../../services/platform_customer_crm.dart';
+import '../../services/platform_directory_refresh.dart';
 import '../../services/super_admin_scope_service.dart';
 import '../../theme/app_theme.dart';
 import 'admin_breakpoints.dart';
 import 'order_status_chip.dart';
+
+String _platformLabel(Order order) {
+  final source = (order.orderSource ?? '').trim().toLowerCase();
+  if (source.contains('talabat')) return 'طلبات';
+  if (source.contains('keeta') || source.contains('keta')) return 'كيتا';
+  if (source.contains('jahez')) return 'جاهز';
+  if (source.contains('website') || source == 'menu' || source == 'online') {
+    return 'الموقع';
+  }
+  if (source.contains('hall') || source.contains('dine')) return 'الصالة';
+  if (source.isEmpty || source == 'pos' || source == 'local') return 'المنيو برو';
+  return source;
+}
 
 class AdminCustomersPanel extends StatefulWidget {
   const AdminCustomersPanel({super.key});
@@ -25,15 +41,36 @@ class _AdminCustomersPanelState extends State<AdminCustomersPanel> {
   @override
   void initState() {
     super.initState();
-    _customersFuture = ApiService.instance.fetchCustomers(restaurantId: _restaurantId);
+    _customersFuture = _loadCustomers();
+    PlatformDirectoryRefresh.tick.addListener(_onDirectoryRefresh);
+  }
+
+  @override
+  void dispose() {
+    PlatformDirectoryRefresh.tick.removeListener(_onDirectoryRefresh);
+    super.dispose();
+  }
+
+  void _onDirectoryRefresh() {
+    if (!mounted) return;
+    _reloadCustomers();
   }
 
   Future<void> _reloadCustomers() async {
     setState(() {
-      _customersFuture = ApiService.instance.fetchCustomers(restaurantId: _restaurantId);
+      _customersFuture = _loadCustomers();
       _selectedCustomerId = null;
     });
     await _customersFuture;
+  }
+
+  Future<List<Customer>> _loadCustomers() async {
+    final apiCustomers = await ApiService.instance.fetchCustomers(restaurantId: _restaurantId);
+    final profiles = await PlatformCustomerCrmStore.instance.ingestOrders(
+      restaurantId: _restaurantId,
+      orders: OrdersDemoService.loadedOrders,
+    );
+    return PlatformCustomerCrm.mergeIntoAdminList(apiCustomers, profiles);
   }
 
   void _openCustomer(String customerId) {
@@ -156,18 +193,35 @@ class _AdminCustomerDetailViewState extends State<AdminCustomerDetailView> {
   @override
   void initState() {
     super.initState();
-    _detailFuture = ApiService.instance.fetchCustomerDetail(
+    _detailFuture = _loadDetail();
+  }
+
+  Future<CustomerDetailData> _loadDetail() async {
+    final local = await PlatformCustomerCrmStore.instance.findById(
+      _restaurantId,
       widget.customerId,
-      restaurantId: _restaurantId,
     );
+    try {
+      final detail = await ApiService.instance.fetchCustomerDetail(
+        widget.customerId,
+        restaurantId: _restaurantId,
+      );
+      final profile = local ??
+          await PlatformCustomerCrmStore.instance.findByPhone(
+            _restaurantId,
+            detail.customer.phone,
+          );
+      if (profile == null) return detail;
+      return PlatformCustomerCrm.overlayDetail(detail, profile);
+    } catch (error) {
+      if (local != null) return local.toDetail();
+      throw error;
+    }
   }
 
   Future<void> _reload() async {
     setState(() {
-      _detailFuture = ApiService.instance.fetchCustomerDetail(
-        widget.customerId,
-        restaurantId: _restaurantId,
-      );
+      _detailFuture = _loadDetail();
     });
     await _detailFuture;
   }
@@ -377,7 +431,7 @@ class _CustomerListCard extends StatelessWidget {
                     Text(
                       customer.customerName.trim().isNotEmpty
                           ? customer.customerName
-                          : 'عميل بدون اسم',
+                          : 'عميل منصات',
                       style: const TextStyle(
                         fontSize: 17,
                         fontWeight: FontWeight.bold,
@@ -452,7 +506,7 @@ class _CustomerProfileCard extends StatelessWidget {
             Text(
               customer.customerName.trim().isNotEmpty
                   ? customer.customerName
-                  : 'عميل بدون اسم',
+                  : 'عميل منصات',
               style: const TextStyle(
                 fontSize: 22,
                 fontWeight: FontWeight.bold,
@@ -461,7 +515,45 @@ class _CustomerProfileCard extends StatelessWidget {
             ),
             const SizedBox(height: 12),
             _ProfileRow(icon: Icons.phone, label: 'الهاتف', value: customer.phone),
-            if (customer.formattedAddress.trim().isNotEmpty)
+            if (customer.addresses.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Icon(Icons.location_on_outlined, size: 18, color: AppTheme.brandOrange),
+                    const SizedBox(width: 8),
+                    SizedBox(
+                      width: 90,
+                      child: Text(
+                        customer.addresses.length > 1 ? 'العناوين' : 'العنوان',
+                        style: TextStyle(
+                          color: Colors.grey.shade700,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          for (var i = 0; i < customer.addresses.length; i++)
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 4),
+                              child: Text(
+                                customer.addresses.length > 1
+                                    ? '${i + 1}. ${customer.addresses[i]}'
+                                    : customer.addresses[i],
+                                style: const TextStyle(fontWeight: FontWeight.w500, height: 1.35),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              )
+            else if (customer.formattedAddress.trim().isNotEmpty)
               _ProfileRow(
                 icon: Icons.location_on_outlined,
                 label: 'العنوان',
@@ -574,7 +666,7 @@ class _CustomerOrderCard extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             Text(
-              dateFormat.format(order.createdAt.toLocal()),
+              '${_platformLabel(order)} • ${dateFormat.format(order.createdAt.toLocal())}',
               style: TextStyle(color: Colors.grey.shade600),
             ),
             if (order.address.trim().isNotEmpty) ...[

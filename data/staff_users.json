@@ -1,0 +1,28 @@
+[
+  {
+    "id": "staff_1791364134512_f9zk",
+    "restaurantId": "rest_1791364026166_z8z2",
+    "restaurant_id": "rest_1791364026166_z8z2",
+    "name": "mo",
+    "roleId": "cashier",
+    "kitchenId": null,
+    "kitchen_id": null,
+    "pinHash": "8bd7780aa49333b552f2a0b0b4f163994dba3d576f15806a5c7c03c28a801e83",
+    "isActive": true,
+    "createdAt": "2026-10-07T09:08:54.512Z",
+    "updatedAt": "2026-10-07T09:08:54.512Z"
+  },
+  {
+    "id": "staff_1791218442624_autm",
+    "restaurantId": "rest_molton",
+    "restaurant_id": "rest_molton",
+    "name": "mo",
+    "roleId": "cashier",
+    "kitchenId": null,
+    "kitchen_id": null,
+    "pinHash": "1af23bb877fd202e965799820913ece3c2af6165705281ce47bc5533ac356024",
+    "isActive": true,
+    "createdAt": "2026-10-05T16:40:42.624Z",
+    "updatedAt": "2026-10-05T16:40:42.624Z"
+  }
+]

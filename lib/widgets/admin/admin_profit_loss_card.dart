@@ -3,8 +3,11 @@ import 'package:flutter/material.dart';
 import '../../models/expense.dart';
 import '../../services/admin_auth_service.dart';
 import '../../services/api_service.dart';
+import '../../services/expense_ledger_service.dart';
 import '../../services/super_admin_scope_service.dart';
 import '../../theme/app_theme.dart';
+import 'admin_breakpoints.dart';
+import 'admin_responsive_layout.dart';
 
 class AdminProfitLossCard extends StatefulWidget {
   const AdminProfitLossCard({super.key});
@@ -24,6 +27,7 @@ class _AdminProfitLossCardState extends State<AdminProfitLossCard> {
   void initState() {
     super.initState();
     SuperAdminScopeService.instance.addListener(_onScopeChanged);
+    ExpenseLedgerService.instance.addListener(_onLedgerChanged);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _load();
     });
@@ -32,10 +36,13 @@ class _AdminProfitLossCardState extends State<AdminProfitLossCard> {
   @override
   void dispose() {
     SuperAdminScopeService.instance.removeListener(_onScopeChanged);
+    ExpenseLedgerService.instance.removeListener(_onLedgerChanged);
     super.dispose();
   }
 
   void _onScopeChanged() => _load();
+
+  void _onLedgerChanged() => _load(showSpinner: false);
 
   String get _restaurantId {
     if (AdminAuthService.instance.isRestaurantAdmin) {
@@ -52,7 +59,7 @@ class _AdminProfitLossCardState extends State<AdminProfitLossCard> {
     return _restaurantId.isNotEmpty;
   }
 
-  Future<void> _load() async {
+  Future<void> _load({bool showSpinner = true}) async {
     if (!_canLoad) {
       if (!mounted) return;
       setState(() {
@@ -63,7 +70,7 @@ class _AdminProfitLossCardState extends State<AdminProfitLossCard> {
       return;
     }
     setState(() {
-      _loading = true;
+      if (showSpinner) _loading = true;
       _error = null;
     });
     try {
@@ -113,8 +120,9 @@ class _AdminProfitLossCardState extends State<AdminProfitLossCard> {
 
   @override
   Widget build(BuildContext context) {
+    final compact = AdminBreakpoints.isCompact(context);
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: EdgeInsets.all(compact ? 12 : 16),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
@@ -123,17 +131,20 @@ class _AdminProfitLossCardState extends State<AdminProfitLossCard> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const Text(
+          Text(
             'الأرباح والخسائر (Net P&L)',
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
             style: TextStyle(
               fontWeight: FontWeight.w800,
-              fontSize: 18,
+              fontSize: compact ? 16 : 18,
               color: burgundy,
             ),
           ),
           const SizedBox(height: 8),
           Wrap(
             spacing: 8,
+            runSpacing: 8,
             children: [
               _PeriodChip(
                 label: 'يومي',
@@ -172,9 +183,8 @@ class _AdminProfitLossCardState extends State<AdminProfitLossCard> {
           else if (_error != null)
             Text(_error!, style: const TextStyle(color: Colors.red))
           else ...[
-            Wrap(
-              spacing: 10,
-              runSpacing: 10,
+            AdminResponsiveGrid(
+              minTileWidth: 180,
               children: [
                 _KpiTile(
                   label: 'إجمالي الإيراد',
@@ -222,11 +232,17 @@ class _AdminProfitLossCardState extends State<AdminProfitLossCard> {
                   padding: const EdgeInsets.only(bottom: 8),
                   child: Row(
                     children: [
-                      SizedBox(
-                        width: 88,
-                        child: Text(expenseCategoryLabel(row.category)),
+                      Flexible(
+                        flex: 2,
+                        child: Text(
+                          expenseCategoryLabel(row.category),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
+                      const SizedBox(width: 8),
                       Expanded(
+                        flex: 5,
                         child: LinearProgressIndicator(
                           value: (row.sharePercent / 100).clamp(0, 1),
                           minHeight: 8,
@@ -236,7 +252,15 @@ class _AdminProfitLossCardState extends State<AdminProfitLossCard> {
                         ),
                       ),
                       const SizedBox(width: 8),
-                      Text('${row.amount.toStringAsFixed(3)} د.ك'),
+                      Flexible(
+                        flex: 2,
+                        child: Text(
+                          '${row.amount.toStringAsFixed(3)} د.ك',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          textAlign: TextAlign.end,
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -288,7 +312,7 @@ class _KpiTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 180,
+      width: double.infinity,
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.08),
@@ -297,14 +321,23 @@ class _KpiTile extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label, style: TextStyle(color: color, fontSize: 12)),
-          const SizedBox(height: 4),
           Text(
-            '${value.toStringAsFixed(3)} د.ك',
-            style: TextStyle(
-              color: color,
-              fontWeight: FontWeight.w800,
-              fontSize: 18,
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(color: color, fontSize: 12),
+          ),
+          const SizedBox(height: 4),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: AlignmentDirectional.centerStart,
+            child: Text(
+              '${value.toStringAsFixed(3)} د.ك',
+              style: TextStyle(
+                color: color,
+                fontWeight: FontWeight.w800,
+                fontSize: 18,
+              ),
             ),
           ),
         ],
@@ -329,57 +362,73 @@ class _TrendBars extends StatelessWidget {
     if (points.isEmpty || maxVal <= 0) {
       return const Text('لا توجد حركة مالية كافية لعرض الرسم.');
     }
-    return SizedBox(
-      height: 140,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        itemCount: points.length,
-        separatorBuilder: (_, _) => const SizedBox(width: 8),
-        itemBuilder: (context, index) {
-          final point = points[index];
-          return SizedBox(
-            width: 36,
-            child: Column(
-              children: [
-                Expanded(
-                  child: Align(
-                    alignment: Alignment.bottomCenter,
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        Expanded(
-                          child: Container(
-                            height: 100 * (point.revenue / maxVal),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF6B1124),
-                              borderRadius: BorderRadius.circular(4),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final available = constraints.maxWidth.isFinite && constraints.maxWidth > 0
+            ? constraints.maxWidth
+            : MediaQuery.sizeOf(context).width;
+        final gap = 8.0;
+        final fitted =
+            (available - gap * (points.length - 1)) / points.length;
+        final barWidth = fitted.clamp(28.0, 64.0);
+        return SizedBox(
+          height: 140,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            primary: false,
+            itemCount: points.length,
+            separatorBuilder: (_, _) => SizedBox(width: gap),
+            itemBuilder: (context, index) {
+              final point = points[index];
+              return SizedBox(
+                width: barWidth,
+                child: Column(
+                  children: [
+                    Expanded(
+                      child: Align(
+                        alignment: Alignment.bottomCenter,
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            Expanded(
+                              child: Container(
+                                height: 100 * (point.revenue / maxVal),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF6B1124),
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                              ),
                             ),
-                          ),
-                        ),
-                        const SizedBox(width: 2),
-                        Expanded(
-                          child: Container(
-                            height: 100 * (point.expenses / maxVal),
-                            decoration: BoxDecoration(
-                              color: AppTheme.brandOrange,
-                              borderRadius: BorderRadius.circular(4),
+                            const SizedBox(width: 2),
+                            Expanded(
+                              child: Container(
+                                height: 100 * (point.expenses / maxVal),
+                                decoration: BoxDecoration(
+                                  color: AppTheme.brandOrange,
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                              ),
                             ),
-                          ),
+                          ],
                         ),
-                      ],
+                      ),
                     ),
-                  ),
+                    const SizedBox(height: 4),
+                    FittedBox(
+                      child: Text(
+                        point.date.length >= 10
+                            ? point.date.substring(5)
+                            : point.date,
+                        style: const TextStyle(fontSize: 9),
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  point.date.length >= 10 ? point.date.substring(5) : point.date,
-                  style: const TextStyle(fontSize: 9),
-                ),
-              ],
-            ),
-          );
-        },
-      ),
+              );
+            },
+          ),
+        );
+      },
     );
   }
 }

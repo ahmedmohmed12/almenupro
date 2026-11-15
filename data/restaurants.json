@@ -5,6 +5,38 @@
     "name": "Molton Cookies",
     "adminPassword": "123456",
     "status": "active",
-    "createdAt": "2026-07-24T00:00:00.000Z"
+    "createdAt": "2026-07-24T00:00:00.000Z",
+    "ownerName": "",
+    "phone": "",
+    "updatedAt": "2026-10-06T11:35:00.478Z",
+    "subscriptionNotes": "",
+    "features": {
+      "tableManagement": true,
+      "kitchenManagement": true,
+      "deliveryManagement": false
+    },
+    "subscriptionPlan": "free",
+    "subscriptionStatus": "active"
+  },
+  {
+    "id": "rest_1791364026166_z8z2",
+    "slug": "beit-wadha",
+    "name": "Beit Wadha",
+    "adminPassword": "123456",
+    "status": "active",
+    "createdAt": "2026-10-07T09:07:06.166Z",
+    "ownerName": "",
+    "phone": "",
+    "subscriptionPlan": "free",
+    "subscriptionStatus": "active",
+    "subscriptionExpiresAt": null,
+    "subscriptionNotes": "",
+    "features": {
+      "tableManagement": true,
+      "kitchenManagement": true,
+      "deliveryManagement": false
+    },
+    "location": null,
+    "updatedAt": "2026-10-07T09:07:06.166Z"
   }
 ]

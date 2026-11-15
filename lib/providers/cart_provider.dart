@@ -192,6 +192,36 @@ class CartProvider extends ChangeNotifier {
     }
   }
 
+  /// When a customer has used an offer the maximum times, charge list prices.
+  bool revertExhaustedOffers() {
+    var changed = false;
+    if (_appliedOffer != null) {
+      _appliedOffer = null;
+      changed = true;
+    }
+    for (var i = 0; i < _items.length; i++) {
+      final item = _items[i];
+      final offerId = item.offerId?.trim() ?? '';
+      if (offerId.isEmpty) continue;
+      final original = item.originalUnitPrice;
+      var menuItem = item.menuItem;
+      if (original != null && original > menuItem.price + 0.0005) {
+        menuItem = menuItem.copyWith(price: original);
+      }
+      _items[i] = CartItem(
+        id: item.id,
+        menuItem: menuItem,
+        selectedOptions: item.selectedOptions,
+        quantity: item.quantity,
+        specialNotes: item.specialNotes,
+        bundleItemIds: item.bundleItemIds,
+      );
+      changed = true;
+    }
+    if (changed) notifyListeners();
+    return changed;
+  }
+
   void clear() {
     _items.clear();
     _appliedOffer = null;

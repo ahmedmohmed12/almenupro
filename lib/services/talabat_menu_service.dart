@@ -11,7 +11,7 @@ bool isTalabatMenuUrl(String input) {
   return isWebUrl(input) && input.trim().toLowerCase().contains('talabat');
 }
 
-Future<void> processAndSaveTalabatMenu({
+Future<bool> processAndSaveTalabatMenu({
   required String url,
   required void Function(String message) onProgress,
   required void Function(int added, int skipped, int updated) onComplete,
@@ -21,14 +21,12 @@ Future<void> processAndSaveTalabatMenu({
 
   if (normalizedUrl.isEmpty) {
     onProgress('يرجى إدخال رابط صحيح أولاً');
-    onComplete(0, 0, 0);
-    return;
+    return false;
   }
 
   if (!isTalabatMenuUrl(normalizedUrl)) {
     onProgress('استخدم رابط Talabat (طلبات) الصحيح');
-    onComplete(0, 0, 0);
-    return;
+    return false;
   }
 
   final targetRestaurantId = restaurantId ?? ApiService.defaultRestaurantId;
@@ -41,10 +39,9 @@ Future<void> processAndSaveTalabatMenu({
       restaurantId: targetRestaurantId,
     );
 
-    if (result.synced == 0) {
+    if (result.synced == 0 && result.added == 0 && result.updated == 0) {
       onProgress('لم يتم العثور على أصناف في هذا الرابط');
-      onComplete(0, 0, 0);
-      return;
+      return false;
     }
 
     onProgress(
@@ -52,9 +49,10 @@ Future<void> processAndSaveTalabatMenu({
       '(${result.total} صنف في المنيو)',
     );
     onComplete(result.added, result.skipped, result.updated);
+    return true;
   } catch (error) {
     debugPrint('Talabat import error: $error');
     onProgress(error.toString().replaceFirst('Exception: ', ''));
-    onComplete(0, 0, 0);
+    return false;
   }
 }

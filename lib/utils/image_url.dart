@@ -9,6 +9,24 @@ String get menuImageApiOrigin {
   return base.replaceAll(RegExp(r'/api/?$'), '');
 }
 
+bool isInstagramPostUrl(String url) {
+  final trimmed = url.trim();
+  if (trimmed.isEmpty) return false;
+  final uri = Uri.tryParse(trimmed);
+  if (uri == null || !uri.hasScheme) return false;
+  final host = uri.host.toLowerCase();
+  if (host.contains('cdninstagram.com') || host.contains('fbcdn.net')) {
+    return false;
+  }
+  if (!host.contains('instagram.com')) return false;
+  final path = uri.path.toLowerCase();
+  return path.contains('/p/') ||
+      path.contains('/reel/') ||
+      path.contains('/reels/') ||
+      path.contains('/tv/') ||
+      path.contains('/stories/');
+}
+
 bool isLegacyTalabatImageUrl(String url) {
   final trimmed = url.trim();
   if (trimmed.isEmpty) return false;
@@ -17,6 +35,8 @@ bool isLegacyTalabatImageUrl(String url) {
   final host = uri.host.toLowerCase();
   return host.contains('deliveryhero.io') ||
       host.contains('talabat.com') ||
+      host.contains('dhmedia.io') ||
+      host.contains('dh-cdn.net') ||
       host.contains('cloudinary.com') ||
       host.contains('googleusercontent.com') ||
       host.contains('fbcdn.net') ||
@@ -61,8 +81,12 @@ Object? firstNonEmptyImageField(Map json) {
 /// Builds a browser-loadable image URL from API payloads or stored paths.
 String resolveImageUrl(String url) {
   final trimmed = url.trim();
-  if (trimmed.isEmpty || trimmed == 'null' || trimmed.startsWith('data:')) {
+  if (trimmed.isEmpty || trimmed == 'null') {
     return '';
+  }
+
+  if (trimmed.startsWith('data:image/')) {
+    return trimmed;
   }
 
   if (isBackendImageProxyPath(trimmed)) {
@@ -80,7 +104,7 @@ String resolveImageUrl(String url) {
 
   final filename = localMenuImageFilename(trimmed);
   if (filename != null && filename.isNotEmpty) {
-    return '$menuImageApiOrigin/menu-images/$filename';
+    return '$menuImageApiOrigin/api/uploads/menu/$filename';
   }
 
   if (trimmed.startsWith('/')) {

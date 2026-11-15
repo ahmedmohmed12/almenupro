@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../../../l10n/app_strings.dart';
 import '../../../models/dining_table.dart';
+import '../../../services/scheduled_orders_controller.dart';
+import '../../../services/scheduled_release_engine.dart';
 import 'pos_action_hub.dart';
 import 'pos_theme.dart';
 
@@ -19,12 +21,33 @@ class PosTableFloorMap extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    return ListenableBuilder(
+      listenable: ScheduledOrdersController.instance,
+      builder: (context, _) => _buildFloor(context),
+    );
+  }
+
+  Widget _buildFloor(BuildContext context) {
     final s = AppStrings.of(context);
     final width = MediaQuery.sizeOf(context).width;
     final desktop = width >= PosTheme.desktopMin;
     final tablet =
         width >= PosTheme.mobileBreakpoint && width < PosTheme.desktopMin;
     final mobile = width < PosTheme.mobileBreakpoint;
+
+    void openTable(DiningTable table) {
+      if (scheduledTableIsLocked(
+        ScheduledOrdersController.instance.orders,
+        table.number,
+        DateTime.now(),
+      )) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('الطاولة ${table.number} محجوزة. لا يمكن إجلاس زبون آخر عليها الآن.')),
+        );
+        return;
+      }
+      onOpenTable(table);
+    }
 
     final grouped = <String, List<DiningTable>>{};
     for (final table in tables) {
@@ -60,6 +83,7 @@ class PosTableFloorMap extends StatelessWidget {
                     children: [
                       _StatusLegend(color: PosOpsColors.ready, label: 'متاحة'),
                       _StatusLegend(color: PosOpsColors.busy, label: 'مشغولة'),
+                      _StatusLegend(color: Color(0xFF78716C), label: 'محجوزة'),
                       _StatusLegend(
                         color: PosOpsColors.waiter,
                         label: 'طلب ويتر',
@@ -90,7 +114,7 @@ class PosTableFloorMap extends StatelessWidget {
                   return _MobileZoneCard(
                     zone: entry.key,
                     tables: entry.value,
-                    onOpenTable: onOpenTable,
+                    onOpenTable: openTable,
                   );
                 },
               ),
@@ -121,7 +145,7 @@ class PosTableFloorMap extends StatelessWidget {
                   delegate: SliverChildBuilderDelegate(
                     (context, index) => _FloorTableTile(
                       table: entry.value[index],
-                      onTap: () => onOpenTable(entry.value[index]),
+                      onTap: () => openTable(entry.value[index]),
                     ),
                     childCount: entry.value.length,
                   ),
@@ -162,14 +186,14 @@ class PosTableFloorMap extends StatelessWidget {
                     label: table.waiterNote.isEmpty
                         ? 'طلب ويتر'
                         : table.waiterNote,
-                    onTap: () => onOpenTable(table),
+                    onTap: () => openTable(table),
                   ),
                 for (final table in checks)
                   _AlertTile(
                     table: table,
                     color: PosOpsColors.alert,
                     label: _billRequestLabel(table, s),
-                    onTap: () => onOpenTable(table),
+                    onTap: () => openTable(table),
                   ),
               ],
             ),
@@ -293,6 +317,13 @@ class _StatusLegend extends StatelessWidget {
 Color _floorColor(DiningTable table) {
   if (table.isAwaitingCheck) return PosOpsColors.alert;
   if (table.isWaiterCall) return PosOpsColors.waiter;
+  if (scheduledTableIsLocked(
+    ScheduledOrdersController.instance.orders,
+    table.number,
+    DateTime.now(),
+  )) {
+    return const Color(0xFF78716C);
+  }
   if (table.isOccupied) return PosOpsColors.busy;
   return PosOpsColors.ready;
 }

@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 
+import '../../services/api_service.dart';
 import '../../services/restaurant_settings_service.dart';
 import '../../services/super_admin_scope_service.dart';
 import '../../utils/image_url.dart';
+import '../../utils/pick_local_image.dart';
 import '../network_menu_image.dart';
 import 'admin_corner_toast.dart';
 import 'admin_responsive_layout.dart';
@@ -18,10 +20,12 @@ class _AdminStoreProfileCardState extends State<AdminStoreProfileCard> {
   static const burgundy = Color(0xFF6B1124);
 
   final _logoUrlController = TextEditingController();
+  final _heroImageUrlController = TextEditingController();
   final _descriptionController = TextEditingController();
 
   var _loading = true;
   var _saving = false;
+  var _uploadingHero = false;
 
   @override
   void initState() {
@@ -34,6 +38,7 @@ class _AdminStoreProfileCardState extends State<AdminStoreProfileCard> {
   void dispose() {
     SuperAdminScopeService.instance.removeListener(_onScopeChanged);
     _logoUrlController.dispose();
+    _heroImageUrlController.dispose();
     _descriptionController.dispose();
     super.dispose();
   }
@@ -49,6 +54,7 @@ class _AdminStoreProfileCardState extends State<AdminStoreProfileCard> {
       if (!mounted) return;
       setState(() {
         _logoUrlController.text = settings.logoUrl;
+        _heroImageUrlController.text = settings.heroImageUrl;
         _descriptionController.text = settings.restaurantDescription;
         _loading = false;
       });
@@ -63,6 +69,7 @@ class _AdminStoreProfileCardState extends State<AdminStoreProfileCard> {
     try {
       await RestaurantSettingsService.instance.saveStoreProfile(
         logoUrl: _logoUrlController.text,
+        heroImageUrl: _heroImageUrlController.text,
         restaurantDescription: _descriptionController.text,
         restaurantId: SuperAdminScopeService.instance.effectiveRestaurantId,
       );
@@ -76,10 +83,44 @@ class _AdminStoreProfileCardState extends State<AdminStoreProfileCard> {
     }
   }
 
-  String? _previewImageUrl() {
-    final raw = _logoUrlController.text.trim();
-    if (raw.isEmpty) return null;
-    final resolved = resolveImageUrl(raw);
+  Future<void> _pickHeroImage() async {
+    final restaurantId = SuperAdminScopeService.instance.effectiveRestaurantId;
+    if (restaurantId.isEmpty) {
+      AdminCornerToast.error(context, 'اختر مطعم أولاً');
+      return;
+    }
+    setState(() => _uploadingHero = true);
+    try {
+      final picked = await pickLocalStoreImage();
+      if (picked == null) return;
+      final url = await ApiService.instance.uploadStoreAsset(
+        restaurantId: restaurantId,
+        kind: 'hero',
+        contentType: picked.contentType,
+        base64: picked.base64,
+      );
+      if (!mounted) return;
+      setState(() {
+        _heroImageUrlController.text =
+            '$url?v=${DateTime.now().millisecondsSinceEpoch}';
+      });
+      await _save();
+    } catch (_) {
+      if (!mounted) return;
+      AdminCornerToast.error(
+        context,
+        'تعذر رفع الصورة. استخدم ملف JPG/PNG أو رابط صورة مباشر',
+      );
+    } finally {
+      if (mounted) setState(() => _uploadingHero = false);
+    }
+  }
+
+  String? _previewImageUrl(String raw) {
+    final value = raw.trim();
+    if (value.isEmpty) return null;
+    if (isInstagramPostUrl(value)) return null;
+    final resolved = resolveImageUrl(value);
     return resolved.isEmpty ? null : resolved;
   }
 
@@ -87,7 +128,8 @@ class _AdminStoreProfileCardState extends State<AdminStoreProfileCard> {
   Widget build(BuildContext context) {
     final scope = SuperAdminScopeService.instance;
     final disabled = scope.isSuperAdmin && !scope.hasSelection;
-    final previewUrl = _previewImageUrl();
+    final previewUrl = _previewImageUrl(_logoUrlController.text);
+    final heroPreviewUrl = _previewImageUrl(_heroImageUrlController.text);
 
     return Card(
       child: Padding(
@@ -106,7 +148,7 @@ class _AdminStoreProfileCardState extends State<AdminStoreProfileCard> {
                     icon: Icons.storefront,
                     title: 'بيانات المحل للمعاينة',
                     subtitle:
-                        'يُستخدم الشعار والوصف في معاينة رابط المنيو على واتساب ووسائل التواصل',
+                        'الشعار والوصف لمعاينة واتساب — وصورة الهيرو لغلاف صفحة المنيو',
                   ),
                   const SizedBox(height: 16),
                   TextField(
@@ -161,6 +203,74 @@ class _AdminStoreProfileCardState extends State<AdminStoreProfileCard> {
                               ),
                             ),
                           ],
+                        ),
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: _heroImageUrlController,
+                    enabled: !disabled,
+                    onChanged: (_) => setState(() {}),
+                    minLines: 1,
+                    maxLines: 2,
+                    decoration: const InputDecoration(
+                      labelText: 'رابط صورة الهيرو (غلاف المنيو)',
+                      hintText: 'https://example.com/hero.jpg',
+                      isDense: true,
+                      prefixIcon: Icon(Icons.wallpaper_outlined, color: burgundy),
+                      border: OutlineInputBorder(),
+                      helperText:
+                          'ارفع صورة من جهازك، أو الصق رابط الصورة نفسه وليس رابط منشور إنستجرام',
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Align(
+                    alignment: AlignmentDirectional.centerStart,
+                    child: OutlinedButton.icon(
+                      onPressed: (_uploadingHero || disabled) ? null : _pickHeroImage,
+                      icon: _uploadingHero
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.upload_file),
+                      label: Text(
+                        _uploadingHero ? 'جاري رفع الصورة...' : 'رفع صورة الهيرو من الجهاز',
+                      ),
+                    ),
+                  ),
+                  if (isInstagramPostUrl(_heroImageUrlController.text)) ...[
+                    const SizedBox(height: 12),
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFFF4E5),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: const Color(0xFFFDBA74)),
+                      ),
+                      child: const Text(
+                        'رابط منشور إنستجرام لا يُعتبر صورة. اضغط "رفع صورة الهيرو من الجهاز"، أو افتح الصورة في إنستجرام وانسخ رابط الملف (يبدأ عادة بـ scontent أو cdninstagram).',
+                        style: TextStyle(height: 1.4),
+                      ),
+                    ),
+                  ],
+                  if (heroPreviewUrl != null) ...[
+                    const SizedBox(height: 12),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(12),
+                      child: AspectRatio(
+                        aspectRatio: 16 / 6,
+                        child: NetworkMenuImage(
+                          imageUrl: heroPreviewUrl,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => Container(
+                            color: Colors.grey.shade200,
+                            child: const Center(
+                              child: Icon(Icons.broken_image_outlined, size: 32),
+                            ),
+                          ),
                         ),
                       ),
                     ),

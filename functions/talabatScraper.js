@@ -21,17 +21,72 @@ function decodeHtml(value) {
   return String(value || '')
     .replace(/&amp;/g, '&')
     .replace(/&#x27;/g, "'")
+    .replace(/&quot;/g, '"')
     .trim();
 }
 
+function coerceImageCandidate(raw) {
+  if (raw == null) return '';
+  if (typeof raw === 'string') return decodeHtml(raw);
+  if (typeof raw === 'object') {
+    return decodeHtml(
+      raw.url ||
+        raw.src ||
+        raw.href ||
+        raw.image ||
+        raw.imageUrl ||
+        raw.originalImage ||
+        raw.path ||
+        '',
+    );
+  }
+  return decodeHtml(String(raw));
+}
+
 function normalizeImageUrl(item) {
-  const raw = item.originalImage || item.image || '';
-  const cleaned = decodeHtml(raw.split('?')[0]);
+  const candidates = [
+    item?.originalImage,
+    item?.original_image,
+    item?.image,
+    item?.imageUrl,
+    item?.image_url,
+    item?.nmrImage,
+    item?.nmr_image,
+    item?.thumbnail,
+    item?.thumbnailUrl,
+    item?.thumbnail_url,
+    item?.productImage,
+    item?.product_image,
+    item?.coverImage,
+    item?.cover_image,
+    item?.photo,
+    item?.media?.url,
+    item?.media?.image,
+    Array.isArray(item?.images) ? item.images[0] : null,
+    Array.isArray(item?.dishImages) ? item.dishImages[0] : null,
+    Array.isArray(item?.dish_images) ? item.dish_images[0] : null,
+  ];
+
+  let cleaned = '';
+  for (const candidate of candidates) {
+    cleaned = coerceImageCandidate(candidate);
+    if (cleaned) break;
+  }
   if (!cleaned) return '';
+
+  if (cleaned.startsWith('//')) {
+    return `https:${cleaned}`;
+  }
   if (cleaned.startsWith('http://') || cleaned.startsWith('https://')) {
     return cleaned;
   }
-  return `https://${cleaned}`;
+  if (cleaned.startsWith('/')) {
+    return `https://images.deliveryhero.io${cleaned}`;
+  }
+  if (/^[\w.-]+\.[a-z]{2,}\//i.test(cleaned) || cleaned.includes('deliveryhero.io')) {
+    return `https://${cleaned.replace(/^\/+/, '')}`;
+  }
+  return `https://${cleaned.replace(/^\/+/, '')}`;
 }
 
 function isPromoSection(name) {
@@ -49,15 +104,20 @@ function resolveCategoryName(item, fallbackCategory) {
 function buildMenuItem(item, fallbackCategory) {
   const name = (item.name || '').trim();
   const price = Number(item.price) || 0;
+  const talabatId = item.id ?? null;
 
   return {
-    talabatId: item.id,
+    talabatId,
+    talabat_id: talabatId,
     name,
     description: (item.description || '').trim(),
     price: Math.round(price * 1000) / 1000,
     categoryName: resolveCategoryName(item, fallbackCategory),
+    category_name: resolveCategoryName(item, fallbackCategory),
     imageUrl: normalizeImageUrl(item),
+    image_url: normalizeImageUrl(item),
     isAvailable: true,
+    is_available: 1,
     source: 'Talabat',
   };
 }

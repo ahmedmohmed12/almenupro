@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 
 import '../models/order.dart';
+import '../utils/order_channel_utils.dart';
 import 'incoming_order_auto_accept_service.dart';
 import 'order_alert_sound_service.dart';
 import 'order_browser_notification_service.dart';
@@ -78,8 +79,7 @@ class AdminOrderMonitorService {
   }
 
   Future<void> _handleOrders(List<Order> orders) async {
-    final pendingOrders =
-        orders.where((order) => order.status == OrderStatus.pending).toList();
+    final pendingOrders = orders.where(isPendingOnlineMenuOrder).toList();
     final pendingIds = pendingOrders.map((order) => order.id).toSet();
 
     pendingCount.value = pendingOrders.length;
@@ -96,8 +96,11 @@ class AdminOrderMonitorService {
 
     final newlyDetected = <String>{};
 
-    for (final order in pendingOrders) {
+    for (final order in orders) {
       if (_knownOrderIds.contains(order.id)) continue;
+      if (order.isDemoOrder) continue;
+      final isHeardOnline = isPendingOnlineMenuOrder(order);
+      if (!isHeardOnline) continue;
       newlyDetected.add(order.id);
       _knownOrderIds.add(order.id);
       onNewPendingOrder?.call(order);
@@ -118,7 +121,6 @@ class AdminOrderMonitorService {
   }
 
   void _syncAlertLoopFlag() {
-    alertLoopActive.value =
-        OrderAlertSoundService.instance.isAlertLoopActive;
+    alertLoopActive.value = OrderAlertSoundService.instance.isAlertLoopActive;
   }
 }

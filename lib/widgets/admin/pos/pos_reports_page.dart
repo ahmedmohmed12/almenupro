@@ -9,7 +9,7 @@ class PosReportsPage extends StatelessWidget {
   Widget build(BuildContext context) {
     return const SingleChildScrollView(
       padding: EdgeInsets.all(16),
-      child: AdminShiftReportsCard(),
+      child: AdminShiftReportsCard(cashierOnly: true),
     );
   }
 }

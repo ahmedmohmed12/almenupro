@@ -3,8 +3,8 @@ set -euo pipefail
 
 FLUTTER_VERSION="${FLUTTER_VERSION:-stable}"
 FLUTTER_HOME="${FLUTTER_HOME:-$PWD/.flutter}"
-# Production Mongo API. Do not inherit a stale Vercel API_BASE_URL.
-API_BASE_URL="https://backend-henna-chi-76.vercel.app/api"
+# Production API. Do not inherit a stale preview API_BASE_URL.
+API_BASE_URL="https://backend.u-menus.com/api"
 
 if [ ! -x "$FLUTTER_HOME/bin/flutter" ]; then
   echo "Installing Flutter ($FLUTTER_VERSION)..."

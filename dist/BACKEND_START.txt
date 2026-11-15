@@ -1,0 +1,26 @@
+u-menus BACKEND — upload to https://backend.u-menus.com/
+
+node_modules is already inside this zip. Do not run npm on the server.
+
+Shared hosting cannot start Node by unzipping only. Do these three host actions once:
+
+1) MySQL (phpMyAdmin)
+   - Create a database + user
+   - Import data/almenupro.sql into that database
+
+2) Put this extracted folder in your Node app directory
+   - Rename env.example to .env
+   - Fill MYSQL_USER, MYSQL_PASSWORD, MYSQL_DATABASE (usually MYSQL_HOST=localhost)
+
+3) cPanel → Setup Node.js App
+   - Application URL: backend.u-menus.com
+   - Application root: this folder
+   - Startup file: apiServer.js
+   - Node version: 22 (or 20)
+   - Restart
+
+Check: https://backend.u-menus.com/api/health
+Expect: "storage":"mysql"
+
+Login UI is NOT on the backend. Open https://u-menus.com/admin
+Default superadmin is SUPER_ADMIN_USER / SUPER_ADMIN_PASSWORD from .env

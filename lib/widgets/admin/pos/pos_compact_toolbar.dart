@@ -5,11 +5,15 @@ import 'package:flutter/material.dart';
 import '../../../models/order.dart';
 import '../../../services/admin_order_monitor_service.dart';
 import '../../../services/dining_tables_service.dart';
+import '../../../services/orders_demo_service.dart';
 import '../../../services/orders_service.dart';
+import '../../../utils/order_channel_utils.dart';
+import '../../../utils/order_payment_utils.dart';
+import '../scheduled_orders_page.dart';
 import 'pos_sync_status_badge.dart';
 import 'pos_theme.dart';
 
-/// Single thin POS header (≤45px): search/barcode + order modes + ops + shift.
+/// POS header: search/barcode + Foodics-sized order modes + ops + shift.
 class PosCompactToolbar extends StatefulWidget {
   const PosCompactToolbar({
     super.key,
@@ -18,6 +22,7 @@ class PosCompactToolbar extends StatefulWidget {
     required this.onOpenSearch,
     required this.onOpenBarcode,
     this.onOpenTables,
+    this.onOpenPendingPickup,
     this.onOpenDriverHandoff,
     this.onOpenOnlineOrders,
     this.tableManagementEnabled = false,
@@ -30,6 +35,7 @@ class PosCompactToolbar extends StatefulWidget {
   final VoidCallback onOpenSearch;
   final VoidCallback onOpenBarcode;
   final VoidCallback? onOpenTables;
+  final VoidCallback? onOpenPendingPickup;
   final VoidCallback? onOpenDriverHandoff;
   final VoidCallback? onOpenOnlineOrders;
   final bool tableManagementEnabled;
@@ -149,7 +155,7 @@ class _PosCompactToolbarState extends State<PosCompactToolbar> {
                         onSelected: () =>
                             widget.onSelectOrderMode('takeaway'),
                       ),
-                      const SizedBox(width: 4),
+                      const SizedBox(width: 8),
                       _ModeChip(
                         label: 'توصيل',
                         icon: Icons.delivery_dining_rounded,
@@ -157,7 +163,15 @@ class _PosCompactToolbarState extends State<PosCompactToolbar> {
                         onSelected: () =>
                             widget.onSelectOrderMode('delivery'),
                       ),
-                      const SizedBox(width: 4),
+                      const SizedBox(width: 8),
+                      _ModeChip(
+                        label: 'طلب مجدول',
+                        icon: Icons.event_available_rounded,
+                        selected: widget.orderMode == 'scheduled',
+                        onSelected: () =>
+                            widget.onSelectOrderMode('scheduled'),
+                      ),
+                      const SizedBox(width: 8),
                       _ModeChip(
                         label: 'منصات',
                         icon: Icons.hub_outlined,
@@ -166,9 +180,29 @@ class _PosCompactToolbarState extends State<PosCompactToolbar> {
                             widget.onSelectOrderMode('platforms'),
                       ),
                     ],
+                    if (widget.onOpenPendingPickup != null) ...[
+                      const SizedBox(width: 8),
+                      StreamBuilder<List<Order>>(
+                        stream: OrdersService.instance.watchOrders(),
+                        initialData: OrdersDemoService.loadedOrders,
+                        builder: (context, snapshot) {
+                          final held =
+                              unsettledPickupOrders(snapshot.data ?? const [])
+                                  .length;
+                          return _OpsChip(
+                            label: 'معلق',
+                            icon: Icons.pause_circle_outline,
+                            count: held,
+                            tone:
+                                held > 0 ? _OpsTone.alert : _OpsTone.ready,
+                            onTap: widget.onOpenPendingPickup!,
+                          );
+                        },
+                      ),
+                    ],
                     if (widget.onOpenTables != null &&
                         widget.tableManagementEnabled) ...[
-                      if (widget.showOrderModes) const SizedBox(width: 6),
+                      if (widget.showOrderModes) const SizedBox(width: 10),
                       _OpsChip(
                         label: 'طاولات',
                         icon: Icons.table_restaurant_rounded,
@@ -177,8 +211,29 @@ class _PosCompactToolbarState extends State<PosCompactToolbar> {
                         onTap: widget.onOpenTables!,
                       ),
                     ],
+                    const SizedBox(width: 8),
+                    StreamBuilder<List<Order>>(
+                      stream: OrdersService.instance.watchOrders(),
+                      initialData: OrdersDemoService.loadedOrders,
+                      builder: (context, snapshot) {
+                        final count = scheduledHoldOrders(snapshot.data ?? const []).length;
+                        return _OpsChip(
+                          label: 'طلبات مجدولة',
+                          icon: Icons.notifications_active_outlined,
+                          count: count,
+                          tone: count > 0 ? _OpsTone.busy : _OpsTone.ready,
+                          onTap: () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute<void>(
+                                builder: (_) => const ScheduledOrdersPage(),
+                              ),
+                            );
+                          },
+                        );
+                      },
+                    ),
                     if (widget.onOpenDriverHandoff != null) ...[
-                      const SizedBox(width: 4),
+                      const SizedBox(width: 8),
                       StreamBuilder<List<Order>>(
                         stream: OrdersService.instance.watchOrders(),
                         initialData: const [],
@@ -198,7 +253,7 @@ class _PosCompactToolbarState extends State<PosCompactToolbar> {
                       ),
                     ],
                     if (widget.onOpenOnlineOrders != null) ...[
-                      const SizedBox(width: 4),
+                      const SizedBox(width: 8),
                       ValueListenableBuilder<int>(
                         valueListenable:
                             AdminOrderMonitorService.instance.pendingCount,
@@ -218,28 +273,28 @@ class _PosCompactToolbarState extends State<PosCompactToolbar> {
                   ],
                 ),
               ),
-              if (shift.isNotEmpty) ...[
-                const SizedBox(width: 6),
-                ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 120),
-                  child: Text(
-                    shift,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 11,
+              const SizedBox(width: 6),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (shift.isNotEmpty) ...[
+                    ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 120),
+                      child: Text(
+                        shift,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 11,
+                        ),
+                      ),
                     ),
-                  ),
-                ),
-              ],
-              const SizedBox(width: 4),
-              const Flexible(
-                child: Align(
-                  alignment: AlignmentDirectional.centerEnd,
-                  child: PosSyncStatusBadge(compact: true),
-                ),
+                    const SizedBox(width: 6),
+                  ],
+                  const PosSyncStatusBadge(compact: true),
+                ],
               ),
             ],
           ),
@@ -273,9 +328,9 @@ class _IconBtn extends StatelessWidget {
           onTap: onTap,
           borderRadius: BorderRadius.circular(8),
           child: SizedBox(
-            width: 34,
-            height: 34,
-            child: Icon(icon, size: 18, color: Colors.white),
+            width: 44,
+            height: 44,
+            child: Icon(icon, size: 22, color: Colors.white),
           ),
         ),
       ),
@@ -298,30 +353,37 @@ class _ModeChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: selected
-          ? PosTheme.orange
-          : Colors.white.withValues(alpha: 0.12),
-      borderRadius: BorderRadius.circular(999),
-      child: InkWell(
-        onTap: onSelected,
-        borderRadius: BorderRadius.circular(999),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(icon, size: 14, color: Colors.white),
-              const SizedBox(width: 4),
-              Text(
-                label,
-                style: const TextStyle(
-                  fontSize: 11.5,
-                  fontWeight: FontWeight.w800,
-                  color: Colors.white,
+    final radius = BorderRadius.circular(PosTheme.orderTypeButtonRadius);
+    return ConstrainedBox(
+      constraints: const BoxConstraints(
+        minHeight: PosTheme.orderTypeButtonHeight,
+      ),
+      child: Material(
+        color: selected
+            ? PosTheme.orange
+            : Colors.white.withValues(alpha: 0.12),
+        borderRadius: radius,
+        child: InkWell(
+          onTap: onSelected,
+          borderRadius: radius,
+          child: Padding(
+            padding: PosTheme.orderTypeButtonPadding,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(icon, size: 18, color: Colors.white),
+                const SizedBox(width: 8),
+                Text(
+                  label,
+                  style: const TextStyle(
+                    fontSize: PosTheme.orderTypeButtonFontSize,
+                    fontWeight: FontWeight.w800,
+                    color: Colors.white,
+                    height: 1.1,
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -354,51 +416,60 @@ class _OpsChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final active = count > 0;
-    return Material(
-      color: active ? _color : Colors.white.withValues(alpha: 0.14),
-      borderRadius: BorderRadius.circular(999),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(999),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                icon,
-                size: 14,
-                color: active ? Colors.white : _color,
-              ),
-              const SizedBox(width: 4),
-              Text(
-                label,
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
-                  color: active ? Colors.white : Colors.white.withValues(alpha: 0.92),
+    final radius = BorderRadius.circular(PosTheme.orderTypeButtonRadius);
+    return ConstrainedBox(
+      constraints: const BoxConstraints(
+        minHeight: PosTheme.orderTypeButtonHeight,
+      ),
+      child: Material(
+        color: active ? _color : Colors.white.withValues(alpha: 0.14),
+        borderRadius: radius,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: radius,
+          child: Padding(
+            padding: PosTheme.orderTypeButtonPadding,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  icon,
+                  size: 18,
+                  color: active ? Colors.white : _color,
                 ),
-              ),
-              if (active) ...[
-                const SizedBox(width: 4),
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 5, vertical: 0),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.22),
-                    borderRadius: BorderRadius.circular(999),
+                const SizedBox(width: 8),
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: PosTheme.orderTypeButtonFontSize,
+                    fontWeight: FontWeight.w800,
+                    height: 1.1,
+                    color: active
+                        ? Colors.white
+                        : Colors.white.withValues(alpha: 0.95),
                   ),
-                  child: Text(
-                    '$count',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w800,
-                      fontSize: 10,
+                ),
+                if (active) ...[
+                  const SizedBox(width: 8),
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.22),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text(
+                      '$count',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 13,
+                      ),
                     ),
                   ),
-                ),
+                ],
               ],
-            ],
+            ),
           ),
         ),
       ),

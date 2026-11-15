@@ -1,19 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../l10n/app_strings.dart';
+import '../language_toggle_button.dart';
 import 'settings/admin_settings_tab.dart';
 
 class AdminSidebarItem {
-  const AdminSidebarItem({
-    required this.icon,
-    required this.label,
-  });
+  const AdminSidebarItem({required this.icon, required this.label});
 
   final IconData icon;
   final String label;
 }
 
-/// Default admin navigation — POS first, then orders, menu, analytics, settings.
+/// Default admin navigation — live dashboard first, then POS and operations.
 class AdminSidebar extends StatefulWidget {
   const AdminSidebar({
     super.key,
@@ -33,33 +32,57 @@ class AdminSidebar extends StatefulWidget {
   static const double expandedWidth = 260;
   static const double collapsedWidth = 76;
 
-  static const int posIndex = 0;
-  static const int ordersIndex = 1;
-  static const int customersIndex = 2;
-  static const int menuIndex = 3;
-  static const int deliveryZonesIndex = 4;
-  static const int offersIndex = 5;
-  static const int analyticsIndex = 6;
-  static const int smartUpsellIndex = 7;
-  static const int staffIndex = 8;
-  static const int reviewsIndex = 9;
-  static const int expensesIndex = 10;
-  static const int settingsIndex = 11;
-  static const int tablesIndex = 12;
+  static const int analyticsIndex = 0;
+  static const int posIndex = 1;
+  static const int ordersIndex = 2;
+  static const int customersIndex = 3;
+  static const int menuIndex = 4;
+  static const int platformMappingIndex = 5;
+  static const int deliveryZonesIndex = 6;
+  static const int offersIndex = 7;
+  static const int smartUpsellIndex = 8;
+  static const int staffIndex = 9;
+  static const int reviewsIndex = 10;
+  static const int expensesIndex = 11;
+  static const int settingsIndex = 12;
+  static const int whatsappBroadcastIndex = 13;
+  static const int reservationsIndex = 14;
+  static const int hrIndex = 15;
+  static const int tablesIndex = 16;
 
-  /// Super Admin sidebar — POS plus restaurant management (no orders tab).
-  static const int superPosIndex = 0;
-  static const int superMenuIndex = 1;
-  static const int superRestaurantsIndex = 2;
-  static const int superDeliveryZonesIndex = 3;
-  static const int superOffersIndex = 4;
-  static const int superAnalyticsIndex = 5;
-  static const int superSmartUpsellIndex = 6;
-  static const int superStaffIndex = 7;
-  static const int superReviewsIndex = 8;
-  static const int superExpensesIndex = 9;
-  static const int superSettingsIndex = 10;
-  static const int superTablesIndex = 11;
+  /// Super Admin sidebar — live dashboard first, then POS and restaurants.
+  static const int superAnalyticsIndex = 0;
+  static const int superPosIndex = 1;
+  static const int superMenuIndex = 2;
+  static const int superPlatformMappingIndex = 3;
+  static const int superRestaurantsIndex = 4;
+  static const int superDeliveryZonesIndex = 5;
+  static const int superDriversIndex = 6;
+  static const int superOffersIndex = 7;
+  static const int superSmartUpsellIndex = 8;
+  static const int superStaffIndex = 9;
+  static const int superReviewsIndex = 10;
+  static const int superExpensesIndex = 11;
+  static const int superSettingsIndex = 12;
+  static const int superWhatsappBroadcastIndex = 13;
+  static const int superReservationsIndex = 14;
+  static const int superHrIndex = 15;
+  static const int superTablesIndex = 16;
+
+  static const AdminSidebarItem whatsappBroadcastItem = AdminSidebarItem(
+    icon: Icons.campaign_outlined,
+    label: 'مركز واتساب',
+  );
+
+  static const AdminSidebarItem reservationsItem = AdminSidebarItem(
+    icon: Icons.event_available_outlined,
+    label: 'الحجوزات والطلبات المجدولة',
+  );
+
+  static const AdminSidebarItem hrItem = AdminSidebarItem(
+    icon: Icons.badge_outlined,
+    label: 'شؤون الموظفين',
+  );
 
   static const AdminSidebarItem tablesItem = AdminSidebarItem(
     icon: Icons.table_restaurant,
@@ -67,22 +90,15 @@ class AdminSidebar extends StatefulWidget {
   );
 
   static const List<AdminSidebarItem> defaultItems = [
-    AdminSidebarItem(
-      icon: Icons.point_of_sale,
-      label: 'نقطة البيع POS',
-    ),
-    AdminSidebarItem(
-      icon: Icons.receipt_long_outlined,
-      label: 'الطلبات',
-    ),
-    AdminSidebarItem(
-      icon: Icons.people_outline,
-      label: 'العملاء',
-    ),
+    AdminSidebarItem(icon: Icons.dashboard_outlined, label: 'لوحة المتابعة'),
+    AdminSidebarItem(icon: Icons.point_of_sale, label: 'نقطة البيع POS'),
+    AdminSidebarItem(icon: Icons.receipt_long_outlined, label: 'الطلبات'),
+    AdminSidebarItem(icon: Icons.people_outline, label: 'العملاء'),
     AdminSidebarItem(
       icon: Icons.restaurant_menu,
       label: 'إدارة المنيو والأصناف',
     ),
+    AdminSidebarItem(icon: Icons.hub_outlined, label: 'ربط أصناف المنصات'),
     AdminSidebarItem(
       icon: Icons.local_shipping_outlined,
       label: 'مناطق التوصيل ورسومها',
@@ -91,18 +107,8 @@ class AdminSidebar extends StatefulWidget {
       icon: Icons.local_offer_outlined,
       label: 'العروض والخصومات',
     ),
-    AdminSidebarItem(
-      icon: Icons.bar_chart,
-      label: 'التحليلات والمبيعات',
-    ),
-    AdminSidebarItem(
-      icon: Icons.auto_awesome,
-      label: 'البياع الشاطر',
-    ),
-    AdminSidebarItem(
-      icon: Icons.badge_outlined,
-      label: 'الموظفين والكاشير',
-    ),
+    AdminSidebarItem(icon: Icons.auto_awesome, label: 'البياع الشاطر'),
+    AdminSidebarItem(icon: Icons.badge_outlined, label: 'الموظفين والكاشير'),
     AdminSidebarItem(
       icon: Icons.star_rate_rounded,
       label: 'التقييمات والمراجعات',
@@ -111,52 +117,33 @@ class AdminSidebar extends StatefulWidget {
       icon: Icons.account_balance_wallet_outlined,
       label: 'إدارة المصاريف',
     ),
-    AdminSidebarItem(
-      icon: Icons.store,
-      label: 'إعدادات المحل والواتساب',
-    ),
+    AdminSidebarItem(icon: Icons.store, label: 'إعدادات المحل والواتساب'),
   ];
 
   static const List<AdminSidebarItem> cashierItems = [
-    AdminSidebarItem(
-      icon: Icons.point_of_sale,
-      label: 'نقطة البيع POS',
-    ),
+    AdminSidebarItem(icon: Icons.point_of_sale, label: 'نقطة البيع POS'),
   ];
 
   static const List<AdminSidebarItem> superAdminItems = [
-    AdminSidebarItem(
-      icon: Icons.point_of_sale,
-      label: 'نقطة البيع POS',
-    ),
+    AdminSidebarItem(icon: Icons.dashboard_outlined, label: 'لوحة المتابعة'),
+    AdminSidebarItem(icon: Icons.point_of_sale, label: 'نقطة البيع POS'),
     AdminSidebarItem(
       icon: Icons.restaurant_menu,
       label: 'إدارة المنيو والأصناف',
     ),
-    AdminSidebarItem(
-      icon: Icons.apartment,
-      label: 'المطاعm والاستيراد',
-    ),
+    AdminSidebarItem(icon: Icons.hub_outlined, label: 'ربط أصناف المنصات'),
+    AdminSidebarItem(icon: Icons.apartment, label: 'المطاعم والاستيراد'),
     AdminSidebarItem(
       icon: Icons.local_shipping_outlined,
       label: 'مناطق التوصيل ورسومها',
     ),
+    AdminSidebarItem(icon: Icons.delivery_dining, label: 'مركز الأسطول'),
     AdminSidebarItem(
       icon: Icons.local_offer_outlined,
       label: 'العروض والخصومات',
     ),
-    AdminSidebarItem(
-      icon: Icons.bar_chart,
-      label: 'التحليلات والمبيعات',
-    ),
-    AdminSidebarItem(
-      icon: Icons.auto_awesome,
-      label: 'البياع الشاطر',
-    ),
-    AdminSidebarItem(
-      icon: Icons.badge_outlined,
-      label: 'الموظفين والكاشير',
-    ),
+    AdminSidebarItem(icon: Icons.auto_awesome, label: 'البياع الشاطر'),
+    AdminSidebarItem(icon: Icons.badge_outlined, label: 'الموظفين والكاشير'),
     AdminSidebarItem(
       icon: Icons.star_rate_rounded,
       label: 'التقييمات والمراجعات',
@@ -165,10 +152,7 @@ class AdminSidebar extends StatefulWidget {
       icon: Icons.account_balance_wallet_outlined,
       label: 'إدارة المصاريف',
     ),
-    AdminSidebarItem(
-      icon: Icons.settings,
-      label: 'إعدادات المنصة',
-    ),
+    AdminSidebarItem(icon: Icons.settings, label: 'إعدادات المنصة'),
   ];
 
   static const Color sidebarBg = Color(0xFF2C353F);
@@ -201,7 +185,8 @@ class _AdminSidebarState extends State<AdminSidebar> {
   @override
   void initState() {
     super.initState();
-    _settingsExpanded = widget.selectedSettingsTab != null ||
+    _settingsExpanded =
+        widget.selectedSettingsTab != null ||
         widget.selectedIndex == widget.settingsNavIndex;
     if (widget.enableCollapse) {
       _loadCollapsedPreference();
@@ -244,6 +229,51 @@ class _AdminSidebarState extends State<AdminSidebar> {
   List<AdminSettingsTab> get _settingsSubItems =>
       AdminSettingsTab.sidebarItems(isSuperAdmin: widget.isSuperAdmin);
 
+  String _itemLabel(BuildContext context, AdminSidebarItem item) {
+    final s = AppStrings.of(context);
+    const english = <String, String>{
+      'لوحة المتابعة': 'Dashboard',
+      'نقطة البيع POS': 'Point of Sale (POS)',
+      'الطلبات': 'Orders',
+      'العملاء': 'Customers',
+      'إدارة المنيو والأصناف': 'Menu & Items',
+      'ربط أصناف المنصات': 'Platform Menu Mapping',
+      'مناطق التوصيل ورسومها': 'Delivery Zones & Fees',
+      'العروض والخصومات': 'Offers & Discounts',
+      'البياع الشاطر': 'Smart Upselling',
+      'الموظفين والكاشير': 'Staff & Cashiers',
+      'التقييمات والمراجعات': 'Reviews',
+      'إدارة المصاريف': 'Expenses',
+      'إعدادات المحل والواتساب': 'Store & WhatsApp Settings',
+      'مركز واتساب': 'WhatsApp Hub',
+      'الحجوزات والطلبات المجدولة': 'Reservations & Scheduled Orders',
+      'شؤون الموظفين': 'HR & Payroll',
+      'إدارة الطاولات': 'Table Management',
+      'المطاعم والاستيراد': 'Restaurants & Import',
+      'مركز الأسطول': 'Fleet Center',
+      'إعدادات المنصة': 'Platform Settings',
+    };
+    return s.tr(item.label, english[item.label] ?? item.label);
+  }
+
+  String _settingsLabel(BuildContext context, AdminSettingsTab tab) {
+    final s = AppStrings.of(context);
+    return s.tr(tab.labelAr, switch (tab) {
+      AdminSettingsTab.whatsapp => '💬 WhatsApp Number & Integration',
+      AdminSettingsTab.store => '🏪 Store Details & Preview',
+      AdminSettingsTab.linkHub => '🔗 Link Hub / Link in Bio',
+      AdminSettingsTab.menuEngineering => '📈 Dynamic Menu Ordering',
+      AdminSettingsTab.loyalty => '🎁 Loyalty & Cashback',
+      AdminSettingsTab.email => '✉️ Email Notifications',
+      AdminSettingsTab.platforms => '🌐 Platform Settings',
+      AdminSettingsTab.paymentMethods => '💳 Payment Methods',
+      AdminSettingsTab.roles => '👥 Roles & Permissions',
+      AdminSettingsTab.workingHours => '⏰ Working Hours',
+      AdminSettingsTab.audioNotifications => '🔔 Sound Notifications',
+      AdminSettingsTab.printer => '🖨️ Printer & Invoice Settings',
+    });
+  }
+
   bool get _hasSettingsAccordion =>
       widget.settingsNavIndex != null &&
       widget.onSettingsSubItemSelected != null;
@@ -254,6 +284,10 @@ class _AdminSidebarState extends State<AdminSidebar> {
         return Icons.chat_bubble_outline;
       case AdminSettingsTab.store:
         return Icons.storefront_outlined;
+      case AdminSettingsTab.linkHub:
+        return Icons.link_rounded;
+      case AdminSettingsTab.menuEngineering:
+        return Icons.auto_awesome;
       case AdminSettingsTab.loyalty:
         return Icons.card_giftcard_outlined;
       case AdminSettingsTab.email:
@@ -309,6 +343,10 @@ class _AdminSidebarState extends State<AdminSidebar> {
             Expanded(child: _buildNavList()),
             if (widget.footerBuilder != null)
               widget.footerBuilder!(_isCollapsed),
+            LanguageToggleButton(
+              compact: _isCollapsed,
+              foregroundColor: Colors.white,
+            ),
             if (widget.onLogout != null) _buildLogoutButton(),
             if (widget.enableCollapse) _buildCollapseToggle(),
           ],
@@ -380,7 +418,9 @@ class _AdminSidebarState extends State<AdminSidebar> {
 
   Widget _buildNavItem(int index) {
     final item = widget.items[index];
-    final isActive = widget.selectedIndex == index &&
+    final label = _itemLabel(context, item);
+    final isActive =
+        widget.selectedIndex == index &&
         (widget.settingsNavIndex == null || index != widget.settingsNavIndex);
 
     return Padding(
@@ -392,7 +432,7 @@ class _AdminSidebarState extends State<AdminSidebar> {
           borderRadius: BorderRadius.circular(12),
           onTap: () => widget.onItemSelected(index),
           child: Tooltip(
-            message: _isCollapsed ? item.label : '',
+            message: _isCollapsed ? label : '',
             preferBelow: false,
             child: Padding(
               padding: EdgeInsets.symmetric(
@@ -421,14 +461,14 @@ class _AdminSidebarState extends State<AdminSidebar> {
                         const SizedBox(width: 14),
                         Expanded(
                           child: Text(
-                            item.label,
+                            label,
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
-                              color:
-                                  isActive ? Colors.white : Colors.white70,
-                              fontWeight:
-                                  isActive ? FontWeight.bold : FontWeight.w500,
+                              color: isActive ? Colors.white : Colors.white70,
+                              fontWeight: isActive
+                                  ? FontWeight.bold
+                                  : FontWeight.w500,
                               fontSize: 15,
                             ),
                           ),
@@ -453,6 +493,7 @@ class _AdminSidebarState extends State<AdminSidebar> {
 
   Widget _buildSettingsAccordion(int index) {
     final item = widget.items[index];
+    final label = _itemLabel(context, item);
     final parentActive = widget.selectedIndex == index;
     final activeChild = widget.selectedSettingsTab;
     final parentHighlighted = parentActive || activeChild != null;
@@ -461,7 +502,7 @@ class _AdminSidebarState extends State<AdminSidebar> {
       return Padding(
         padding: const EdgeInsets.only(bottom: 6),
         child: PopupMenuButton<AdminSettingsTab>(
-          tooltip: item.label,
+          tooltip: label,
           color: AdminSidebar.sidebarBg,
           onSelected: widget.onSettingsSubItemSelected,
           itemBuilder: (context) => _settingsSubItems
@@ -469,7 +510,7 @@ class _AdminSidebarState extends State<AdminSidebar> {
                 (tab) => PopupMenuItem(
                   value: tab,
                   child: Text(
-                    tab.labelAr,
+                    _settingsLabel(context, tab),
                     style: TextStyle(
                       color: tab == activeChild
                           ? AdminSidebar.activeGold
@@ -513,8 +554,8 @@ class _AdminSidebarState extends State<AdminSidebar> {
             color: parentHighlighted && activeChild == null
                 ? AdminSidebar.activeBg
                 : parentHighlighted
-                    ? AdminSidebar.activeBg.withValues(alpha: 0.55)
-                    : Colors.transparent,
+                ? AdminSidebar.activeBg.withValues(alpha: 0.55)
+                : Colors.transparent,
             borderRadius: BorderRadius.circular(12),
             child: InkWell(
               borderRadius: BorderRadius.circular(12),
@@ -525,8 +566,10 @@ class _AdminSidebarState extends State<AdminSidebar> {
                 }
               },
               child: Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 14,
+                ),
                 child: Row(
                   children: [
                     Icon(
@@ -539,7 +582,7 @@ class _AdminSidebarState extends State<AdminSidebar> {
                     const SizedBox(width: 14),
                     Expanded(
                       child: Text(
-                        item.label,
+                        label,
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
@@ -620,13 +663,12 @@ class _AdminSidebarState extends State<AdminSidebar> {
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
-                    tab.labelAr,
+                    _settingsLabel(context, tab),
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       color: isActive ? Colors.white : Colors.white70,
-                      fontWeight:
-                          isActive ? FontWeight.w700 : FontWeight.w500,
+                      fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
                       fontSize: 13,
                       height: 1.25,
                     ),
@@ -650,6 +692,7 @@ class _AdminSidebarState extends State<AdminSidebar> {
   }
 
   Widget _buildLogoutButton() {
+    final s = AppStrings.of(context);
     return Padding(
       padding: EdgeInsets.fromLTRB(
         _isCollapsed ? 8 : 12,
@@ -674,9 +717,9 @@ class _AdminSidebarState extends State<AdminSidebar> {
                 const Icon(Icons.logout, color: Colors.white, size: 20),
                 if (!_isCollapsed) ...[
                   const SizedBox(width: 8),
-                  const Flexible(
+                  Flexible(
                     child: Text(
-                      'تسجيل الخروج',
+                      s.tr('تسجيل الخروج', 'Log out'),
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         color: Colors.white,
@@ -695,6 +738,7 @@ class _AdminSidebarState extends State<AdminSidebar> {
   }
 
   Widget _buildCollapseToggle() {
+    final s = AppStrings.of(context);
     return Padding(
       padding: EdgeInsets.fromLTRB(
         _isCollapsed ? 8 : 12,
@@ -729,11 +773,11 @@ class _AdminSidebarState extends State<AdminSidebar> {
                       ? const SizedBox.shrink(
                           key: ValueKey('collapse-label-off'),
                         )
-                      : const Padding(
+                      : Padding(
                           key: ValueKey('collapse-label-on'),
                           padding: EdgeInsetsDirectional.only(start: 8),
                           child: Text(
-                            'تصغير القائمة',
+                            s.tr('تصغير القائمة', 'Collapse menu'),
                             style: TextStyle(
                               color: Colors.white70,
                               fontSize: 13,

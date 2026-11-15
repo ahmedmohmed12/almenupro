@@ -1,6 +1,23 @@
 import '../utils/discount.dart';
 import '../utils/image_url.dart';
 
+enum MenuEngineeringQuadrant { star, plowhorse, puzzle, dog }
+
+MenuEngineeringQuadrant? parseEngineeringQuadrant(String? raw) {
+  switch ((raw ?? '').trim().toLowerCase()) {
+    case 'star':
+      return MenuEngineeringQuadrant.star;
+    case 'plowhorse':
+      return MenuEngineeringQuadrant.plowhorse;
+    case 'puzzle':
+      return MenuEngineeringQuadrant.puzzle;
+    case 'dog':
+      return MenuEngineeringQuadrant.dog;
+    default:
+      return null;
+  }
+}
+
 class MenuOption {
   const MenuOption({
     required this.id,
@@ -112,10 +129,21 @@ class MenuItem {
   final String descriptionEn;
   final double price;
   final double? originalPrice;
+  /// Unit ingredient cost in KWD (food cost per serving).
+  final double? costPrice;
   final String imageUrl;
+  final String videoUrlWebm;
+  final String videoUrlMp4;
+  final bool isStory;
   final int? talabatId;
   final bool isAvailable;
+  /// When false, the item stays on POS/cashier catalogs but is hidden from the public website menu.
+  final bool showOnWebsite;
   final int displayOrder;
+  final int orderCount;
+  final MenuEngineeringQuadrant? engineeringQuadrant;
+  final String? catalogBadge;
+  final double? profitMargin;
   final List<MenuOption> options;
   final List<int> linkedItemIds;
 
@@ -132,16 +160,28 @@ class MenuItem {
     this.descriptionEn = '',
     required this.price,
     this.originalPrice,
+    this.costPrice,
     required this.imageUrl,
+    this.videoUrlWebm = '',
+    this.videoUrlMp4 = '',
+    this.isStory = false,
     this.talabatId,
     required this.isAvailable,
+    this.showOnWebsite = true,
     this.displayOrder = 0,
+    this.orderCount = 0,
+    this.engineeringQuadrant,
+    this.catalogBadge,
+    this.profitMargin,
     this.options = const [],
     this.linkedItemIds = const [],
   });
 
   bool get hasCustomizations =>
       options.any((option) => option.isAvailable);
+
+  bool get hasVideo =>
+      videoUrlWebm.trim().isNotEmpty || videoUrlMp4.trim().isNotEmpty;
 
   double get finalPrice => price;
 
@@ -219,7 +259,13 @@ class MenuItem {
       descriptionEn: descriptionEn,
       price: price,
       originalPrice: _readOriginalPrice(json, price),
+      costPrice: _parseCostPrice(json),
       imageUrl: normalizeMenuImageUrl(firstNonEmptyImageField(json)),
+      videoUrlWebm:
+          (json['videoUrlWebm'] ?? json['video_url_webm'] ?? '').toString().trim(),
+      videoUrlMp4:
+          (json['videoUrlMp4'] ?? json['video_url_mp4'] ?? '').toString().trim(),
+      isStory: _readBool(json['isStory'] ?? json['is_story']),
       talabatId: json['talabat_id'] is int
           ? json['talabat_id'] as int
           : int.tryParse(json['talabat_id']?.toString() ?? ''),
@@ -227,13 +273,31 @@ class MenuItem {
           json['is_available'] == true ||
           json['isAvailable'] == true ||
           json['isAvailable'] == 1,
+      showOnWebsite: _readShowOnWebsite(json),
       displayOrder: _readInt(json['display_order'] ?? json['displayOrder']),
+      orderCount: _readInt(json['order_count'] ?? json['orderCount']),
+      engineeringQuadrant: parseEngineeringQuadrant(
+        json['engineeringQuadrant']?.toString() ??
+            json['engineering_quadrant']?.toString(),
+      ),
+      catalogBadge: (json['catalogBadge'] ?? json['catalog_badge'])?.toString(),
+      profitMargin: (json['profitMargin'] as num?)?.toDouble() ??
+          (json['profit_margin'] as num?)?.toDouble(),
       options: (json['options'] as List<dynamic>? ?? [])
           .whereType<Map>()
           .map((option) => MenuOption.fromMap(Map<String, dynamic>.from(option)))
           .toList(),
       linkedItemIds: _parseLinkedItemIds(json),
     );
+  }
+
+  static double? _parseCostPrice(Map<String, dynamic> json) {
+    final raw = json['costPrice'] ?? json['cost_price'];
+    if (raw == null || raw == '') return null;
+    if (raw is num) return raw >= 0 ? raw.toDouble() : null;
+    final parsed = double.tryParse(raw.toString());
+    if (parsed == null || parsed < 0) return null;
+    return parsed;
   }
 
   static double? _readOriginalPrice(Map<String, dynamic> json, double price) {
@@ -247,6 +311,22 @@ class MenuItem {
     if (value == null || value <= price + 0.0005) return null;
     return value;
   }
+
+  static bool _readShowOnWebsite(Map<String, dynamic> json) {
+    final posOnly = json['posOnly'] == true ||
+        json['pos_only'] == true ||
+        json['posOnly'] == 1 ||
+        json['pos_only'] == 1;
+    if (posOnly) return false;
+    final value = json['showOnWebsite'] ?? json['show_on_website'];
+    if (value == false || value == 0 || value == '0' || value == 'false') {
+      return false;
+    }
+    return true;
+  }
+
+  static bool _readBool(dynamic value) =>
+      value == true || value == 1 || value == '1' || value == 'true';
 
   static int _readInt(dynamic value) {
     if (value is int) return value;
@@ -303,7 +383,13 @@ class MenuItem {
       descriptionEn: descriptionEn,
       price: price,
       originalPrice: _readOriginalPrice(map, price),
+      costPrice: _parseCostPrice(map),
       imageUrl: normalizeMenuImageUrl(firstNonEmptyImageField(map)),
+      videoUrlWebm:
+          (map['videoUrlWebm'] ?? map['video_url_webm'] ?? '').toString().trim(),
+      videoUrlMp4:
+          (map['videoUrlMp4'] ?? map['video_url_mp4'] ?? '').toString().trim(),
+      isStory: _readBool(map['isStory'] ?? map['is_story']),
       talabatId: map['talabat_id'] is int
           ? map['talabat_id'] as int
           : int.tryParse(map['talabat_id']?.toString() ?? ''),
@@ -311,6 +397,7 @@ class MenuItem {
           map['is_available'] == true ||
           map['isAvailable'] == true ||
           map['isAvailable'] == 1,
+      showOnWebsite: _readShowOnWebsite(map),
       displayOrder: (map['display_order'] as num?)?.toInt() ??
           (map['displayOrder'] as num?)?.toInt() ??
           0,
@@ -337,9 +424,26 @@ class MenuItem {
       'price': price,
       if (hasDiscount) 'originalPrice': originalPrice,
       if (hasDiscount) 'original_price': originalPrice,
+      if (costPrice != null) ...{
+        'cost_price': costPrice,
+        'costPrice': costPrice,
+      },
       'image_url': imageUrl,
+      if (videoUrlWebm.isNotEmpty) ...{
+        'videoUrlWebm': videoUrlWebm,
+        'video_url_webm': videoUrlWebm,
+      },
+      if (videoUrlMp4.isNotEmpty) ...{
+        'videoUrlMp4': videoUrlMp4,
+        'video_url_mp4': videoUrlMp4,
+      },
+      'isStory': isStory,
+      'is_story': isStory,
       if (talabatId != null) 'talabat_id': talabatId,
       'is_available': isAvailable ? 1 : 0,
+      'isAvailable': isAvailable,
+      'showOnWebsite': showOnWebsite,
+      'show_on_website': showOnWebsite,
       'display_order': displayOrder,
       if (options.isNotEmpty)
         'options': options.map((option) => option.toMap()).toList(),
@@ -358,12 +462,17 @@ class MenuItem {
       'descriptionEn': descriptionEn,
       'price': price,
       if (hasDiscount) 'originalPrice': originalPrice,
+      if (costPrice != null) 'costPrice': costPrice,
       'imageUrl': imageUrl,
+      'videoUrlWebm': videoUrlWebm,
+      'videoUrlMp4': videoUrlMp4,
+      'isStory': isStory,
       'categoryName': categoryName,
       if (categoryNameEn.isNotEmpty) 'categoryNameEn': categoryNameEn,
       'categoryId': categoryId,
       'options': options.map((option) => option.toMap()).toList(),
       'isAvailable': isAvailable,
+      'showOnWebsite': showOnWebsite,
       'displayOrder': displayOrder,
       if (linkedItemIds.isNotEmpty) 'linkedItemIds': linkedItemIds,
     };
@@ -371,10 +480,15 @@ class MenuItem {
 
   MenuItem copyWith({
     bool? isAvailable,
+    bool? showOnWebsite,
     String? imageUrl,
+    String? videoUrlWebm,
+    String? videoUrlMp4,
+    bool? isStory,
     String? name,
     double? price,
     double? originalPrice,
+    double? costPrice,
   }) {
     return MenuItem(
       id: id,
@@ -389,10 +503,19 @@ class MenuItem {
       descriptionEn: descriptionEn,
       price: price ?? this.price,
       originalPrice: originalPrice ?? this.originalPrice,
+      costPrice: costPrice ?? this.costPrice,
       imageUrl: imageUrl ?? this.imageUrl,
+      videoUrlWebm: videoUrlWebm ?? this.videoUrlWebm,
+      videoUrlMp4: videoUrlMp4 ?? this.videoUrlMp4,
+      isStory: isStory ?? this.isStory,
       talabatId: talabatId,
       isAvailable: isAvailable ?? this.isAvailable,
+      showOnWebsite: showOnWebsite ?? this.showOnWebsite,
       displayOrder: displayOrder,
+      orderCount: orderCount,
+      engineeringQuadrant: engineeringQuadrant,
+      catalogBadge: catalogBadge,
+      profitMargin: profitMargin,
       options: options,
       linkedItemIds: linkedItemIds,
     );

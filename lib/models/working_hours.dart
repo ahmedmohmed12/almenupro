@@ -143,3 +143,25 @@ String formatTimeLabel(TimeOfDay time) {
   final suffix = time.period == DayPeriod.am ? 'ص' : 'م';
   return '$hour:$minute $suffix';
 }
+
+/// Returns whether the restaurant is open at [now] based on weekly hours.
+bool isOpenNow(WorkingHoursSettings hours, [DateTime? now]) {
+  final moment = now ?? DateTime.now();
+  WorkingDaySchedule? day;
+  for (final entry in hours.days) {
+    if (entry.weekday == moment.weekday) {
+      day = entry;
+      break;
+    }
+  }
+  if (day == null) return true;
+  if (!day.isOpen) return false;
+
+  final openMinutes = day.openTime.hour * 60 + day.openTime.minute;
+  final closeMinutes = day.closeTime.hour * 60 + day.closeTime.minute;
+  final nowMinutes = moment.hour * 60 + moment.minute;
+  if (closeMinutes > openMinutes) {
+    return nowMinutes >= openMinutes && nowMinutes < closeMinutes;
+  }
+  return nowMinutes >= openMinutes || nowMinutes < closeMinutes;
+}

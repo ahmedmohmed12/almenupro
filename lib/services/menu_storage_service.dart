@@ -400,6 +400,7 @@ class MenuStorageService {
         'categoryId': item.categoryId,
         'imageUrl': item.imageUrl,
         'isAvailable': item.isAvailable,
+        'showOnWebsite': item.showOnWebsite,
         'source': 'NodeAPI',
       },
     );
@@ -482,6 +483,11 @@ class MenuStorageService {
       'options': data['options'] ?? preserveFrom?['options'] ?? <dynamic>[],
       'isAvailable': data['isAvailable'] as bool? ??
           preserveFrom?['isAvailable'] as bool? ??
+          true,
+      'showOnWebsite': data['showOnWebsite'] ??
+          data['show_on_website'] ??
+          preserveFrom?['showOnWebsite'] ??
+          preserveFrom?['show_on_website'] ??
           true,
       'source': (data['source'] ?? preserveFrom?['source'] ?? 'Manual')
           .toString(),

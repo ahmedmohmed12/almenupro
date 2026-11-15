@@ -9,6 +9,7 @@ import '../models/shift_session.dart';
 import '../models/staff_user.dart';
 import 'admin_auth_service.dart';
 import 'api_service.dart';
+import 'hr_controller.dart';
 import 'super_admin_scope_service.dart';
 
 class PosOperationsService extends ChangeNotifier {
@@ -92,9 +93,11 @@ class PosOperationsService extends ChangeNotifier {
   }
 
   void clearCashierSession() {
+    final hadSession = _cashierSession != null;
     _cashierSession = null;
     _activeShift = null;
     _notifySessionChanged();
+    if (hadSession) _noteHrPinCheckOut();
   }
 
   void setActiveShift(ShiftSession? shift) {
@@ -190,6 +193,7 @@ class PosOperationsService extends ChangeNotifier {
         password: password,
       );
       applyCashierSession(result.cashierSession);
+      _noteHrPinCheckIn(password);
       return result.cashierSession;
     }
 
@@ -220,7 +224,21 @@ class PosOperationsService extends ChangeNotifier {
     }
     final session = PosCashierSession.fromJson(Map<String, dynamic>.from(decoded));
     applyCashierSession(session);
+    _noteHrPinCheckIn(password);
     return session;
+  }
+
+  void _noteHrPinCheckIn(String pin) {
+    HrController.instance.recordPinCheckIn(pin, DateTime.now()).catchError((Object error) {
+      if (kDebugMode) debugPrint('HR PIN check-in skipped: $error');
+      return null;
+    });
+  }
+
+  void _noteHrPinCheckOut() {
+    HrController.instance.recordPinCheckOut(DateTime.now()).catchError((Object error) {
+      if (kDebugMode) debugPrint('HR PIN check-out skipped: $error');
+    });
   }
 
   Future<ManagerOverrideResult> requestManagerOverride({

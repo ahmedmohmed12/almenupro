@@ -1,0 +1,48 @@
+[
+  {
+    "id": "tbl_1791192495492_qza6",
+    "number": "5",
+    "name": "طاولة 5",
+    "zone": "الصالة الرئيسية",
+    "capacity": 4,
+    "status": "available",
+    "sortOrder": 5,
+    "activeSession": null,
+    "createdAt": "2026-10-05T09:28:15.492Z",
+    "updatedAt": "2026-10-05T09:28:15.492Z",
+    "restaurant_id": "rest_molton"
+  },
+  {
+    "id": "tbl_1791826081116_b346",
+    "number": "1",
+    "name": "طاولة 1",
+    "zone": "الصالة الرئيسية",
+    "capacity": 4,
+    "status": "available",
+    "sortOrder": 1,
+    "activeSession": {
+      "id": "tsess_1791826263600_yvc2",
+      "openedAt": "2026-10-12T17:31:03.600Z",
+      "openedById": "staff_1791364134512_f9zk",
+      "openedByName": "mo",
+      "cartItems": [],
+      "notes": "",
+      "customerName": "",
+      "phone": "",
+      "kitchenOrderIds": [],
+      "currentOrderNumber": "",
+      "checkRequested": false,
+      "checkRequestedAt": null,
+      "tipAmount": 0,
+      "paymentMethod": "",
+      "billTotal": 0,
+      "waiterRequested": false,
+      "waiterNote": "",
+      "waiterRequestedAt": null,
+      "updatedAt": "2026-10-12T17:31:03.601Z"
+    },
+    "createdAt": "2026-10-12T17:28:01.116Z",
+    "updatedAt": "2026-10-12T17:31:03.601Z",
+    "restaurant_id": "rest_1791364026166_z8z2"
+  }
+]

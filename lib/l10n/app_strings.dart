@@ -3,6 +3,11 @@ import 'package:provider/provider.dart';
 
 import '../providers/locale_provider.dart';
 
+part 'app_strings_admin.dart';
+part 'app_strings_customer.dart';
+part 'app_strings_driver.dart';
+part 'app_strings_pos.dart';
+
 class AppStrings {
   const AppStrings(this.localeCode);
 
@@ -10,27 +15,39 @@ class AppStrings {
 
   bool get isArabic => localeCode.startsWith('ar');
 
+  String tr(String arabic, String english) => isArabic ? arabic : english;
+
   static AppStrings of(BuildContext context) {
     final locale = context.watch<LocaleProvider>().localeCode;
     return AppStrings(locale);
   }
 
+  static AppStrings read(BuildContext context) {
+    final locale = context.read<LocaleProvider>().localeCode;
+    return AppStrings(locale);
+  }
+
+  String get navReviews => isArabic ? 'التقييمات والمراجعات' : 'Reviews';
+
   String get all => isArabic ? 'الكل' : 'All';
   String get menuTagline => isArabic ? 'قائمة الطعام' : 'Menu';
   String menuTaglineFor(String restaurantName) =>
       isArabic ? 'قائمة الطعام — $restaurantName' : 'Menu — $restaurantName';
-  String get defaultTagline =>
-      isArabic ? 'قائمة الطعام — ميني بايتس وكوكيز' : 'Menu — Mini bites & cookies';
+  String get defaultTagline => isArabic
+      ? 'قائمة الطعام — ميني بايتس وكوكيز'
+      : 'Menu — Mini bites & cookies';
   String get refresh => isArabic ? 'تحديث' : 'Refresh';
   String get noDescription => isArabic ? 'لا يوجد وصف' : 'No description';
   String get noItemsInCategory =>
       isArabic ? 'لا توجد أصناف في هذا التصنيف' : 'No items in this category';
   String get noItemsAvailable =>
       isArabic ? 'لا توجد أصناف متاحة حالياً' : 'No items available right now';
-  String get restaurantNotFound =>
-      isArabic ? 'المطعم غير موجود أو الرابط غير صحيح' : 'Restaurant not found or invalid link';
-  String addedToCart(String itemName) =>
-      isArabic ? 'تمت إضافة "$itemName" إلى السلة' : '"$itemName" added to cart';
+  String get restaurantNotFound => isArabic
+      ? 'المطعم غير موجود أو الرابط غير صحيح'
+      : 'Restaurant not found or invalid link';
+  String addedToCart(String itemName) => isArabic
+      ? 'تمت إضافة "$itemName" إلى السلة'
+      : '"$itemName" added to cart';
   String get continueOrder => isArabic ? 'متابعة الطلب' : 'Checkout';
   String get currency => isArabic ? 'د.ك' : 'KWD';
 
@@ -40,12 +57,15 @@ class AppStrings {
   String get deliveryAddress => isArabic ? 'عنوان التوصيل' : 'Delivery address';
   String get governorate => isArabic ? 'المحافظة' : 'Governorate';
   String get area => isArabic ? 'المنطقة' : 'Area';
-  String get noAreasForGovernorate =>
-      isArabic ? 'لا توجد مناطق لهذه المحافظة' : 'No areas for this governorate';
+  String get noAreasForGovernorate => isArabic
+      ? 'لا توجد مناطق لهذه المحافظة'
+      : 'No areas for this governorate';
   String get block => isArabic ? 'القطعة (Block)' : 'Block';
   String get street => isArabic ? 'الشارع (Street)' : 'Street';
-  String get avenue => isArabic ? 'الجادة (Avenue) — اختياري' : 'Avenue (optional)';
-  String get houseNumber => isArabic ? 'رقم البيت / المبنى' : 'House / building number';
+  String get avenue =>
+      isArabic ? 'الجادة (Avenue) — اختياري' : 'Avenue (optional)';
+  String get houseNumber =>
+      isArabic ? 'رقم البيت / المبنى' : 'House / building number';
   String get floorApartment =>
       isArabic ? 'الطابق / الشقة — اختياري' : 'Floor / apartment (optional)';
   String get paymentMethod => isArabic ? 'طريقة الدفع' : 'Payment method';
@@ -57,8 +77,15 @@ class AppStrings {
   String sendOrder(String total) =>
       isArabic ? 'إرسال الطلب $total د.ك' : 'Send order $total KWD';
   String get required => isArabic ? 'مطلوب' : 'Required';
-  String get selectGovernorateAndArea =>
-      isArabic ? 'يرجى اختيار المحافظة والمنطقة' : 'Please select governorate and area';
+  String get selectGovernorateAndArea => isArabic
+      ? 'يرجى اختيار المحافظة والمنطقة'
+      : 'Please select governorate and area';
+  String minOrderForZone(String amount) => isArabic
+      ? 'الحد الأدنى للطلب في هذه المنطقة: $amount د.ك'
+      : 'Minimum order for this area: $amount KWD';
+  String minOrderNotMet(String amount) => isArabic
+      ? 'أضف أصنافاً حتى يصل مجموع الطلب إلى $amount د.ك على الأقل'
+      : 'Add items until your order reaches at least $amount KWD';
   String get orderSentViaWhatsapp =>
       isArabic ? 'تم إرسال الطلب عبر الواتساب' : 'Order sent via WhatsApp';
   String whatsappOpenFailed(String phone) => isArabic
@@ -77,8 +104,9 @@ class AppStrings {
 
   String get impulseBumpsTitle =>
       isArabic ? 'أضف مع طلبك' : 'Add with your order';
-  String get impulseBumpsSubtitle =>
-      isArabic ? 'إضافات سريعة بأسعار مناسبة' : 'Quick add-ons at a great price';
+  String get impulseBumpsSubtitle => isArabic
+      ? 'إضافات سريعة بأسعار مناسبة'
+      : 'Quick add-ons at a great price';
   String get smartRecommendationsTitle =>
       isArabic ? 'مقترحات لك' : 'Recommended for you';
   String get smartRecommendationsSubtitle =>

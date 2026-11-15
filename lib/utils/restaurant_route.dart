@@ -1,10 +1,13 @@
 import 'package:flutter/foundation.dart';
 
-/// Parses customer menu URLs into a restaurant slug.
+/// Parses customer menu and link-hub URLs into a restaurant slug.
 ///
 /// Supported patterns:
 /// - `/menu/{slug}`
 /// - `/restaurant/{slug}`
+/// - `/r/{slug}` (menu alias)
+/// - `/r/{slug}/links` (link-in-bio hub)
+/// - `/menu/{slug}/links`
 /// - `/{slug}`
 /// - `?slug={slug}` (query fallback on web)
 class RestaurantRoute {
@@ -13,10 +16,18 @@ class RestaurantRoute {
   static const reservedSegments = {
     'admin',
     'login',
+    'manager',
+    'super-admin',
+    'cashier',
     'legacy-menu',
     'menu',
+    'order',
     'restaurants',
     'pos',
+    'table',
+    'driver',
+    'r',
+    'links',
     'index.html',
     'main.dart.js',
     'flutter.js',
@@ -41,6 +52,24 @@ class RestaurantRoute {
     return segment.contains('.') && !segment.startsWith('.');
   }
 
+  /// Returns slug when path is a link-hub page (`/r/{slug}/links` or
+  /// `/menu/{slug}/links`).
+  static String? parseLinkHubSlug(String? path) {
+    final normalized = normalizePath(path);
+    final segments =
+        normalized.split('/').where((segment) => segment.isNotEmpty).toList();
+    if (segments.length < 3) return null;
+    final prefix = segments[0].toLowerCase();
+    final slug = segments[1].toLowerCase();
+    final tail = segments[2].toLowerCase();
+    if (tail != 'links') return null;
+    if (prefix != 'r' && prefix != 'menu') return null;
+    if (slug.isEmpty || reservedSegments.contains(slug) || _looksLikeFile(slug)) {
+      return null;
+    }
+    return slug;
+  }
+
   static String? parseSlug(String? path, {Map<String, String>? query}) {
     final fromQuery = query?['slug']?.trim();
     if (fromQuery != null && fromQuery.isNotEmpty) {
@@ -62,9 +91,15 @@ class RestaurantRoute {
 
     if (segments.length >= 2) {
       final prefix = segments.first.toLowerCase();
-      if (prefix == 'menu' || prefix == 'restaurant') {
+      if (prefix == 'menu' || prefix == 'restaurant' || prefix == 'r') {
+        // `/r/{slug}/links` is not a menu page.
+        if (segments.length >= 3 && segments[2].toLowerCase() == 'links') {
+          return null;
+        }
         final slug = segments[1].toLowerCase();
-        if (slug.isEmpty || reservedSegments.contains(slug) || _looksLikeFile(slug)) {
+        if (slug.isEmpty ||
+            reservedSegments.contains(slug) ||
+            _looksLikeFile(slug)) {
           return null;
         }
         return slug;
@@ -79,9 +114,25 @@ class RestaurantRoute {
   static String? slugFromBrowserLocation() {
     if (!kIsWeb) return null;
     final uri = Uri.base;
-    return parseSlug(uri.path, query: uri.queryParameters);
+    return parseSlug(uri.path, query: uri.queryParameters) ??
+        parseLinkHubSlug(uri.path);
   }
 
   /// Canonical customer menu URL path for a slug.
-  static String menuPathForSlug(String slug) => '/menu/${slug.trim().toLowerCase()}';
+  static String menuPathForSlug(String slug) =>
+      '/r/${slug.trim().toLowerCase()}';
+
+  /// Canonical link-in-bio hub path.
+  static String linksPathForSlug(String slug) =>
+      '/r/${slug.trim().toLowerCase()}/links';
+
+  /// Absolute public hub URL for sharing / QR.
+  static String publicLinksUrl(String slug, {String? origin}) {
+    final base = (origin ??
+            (kIsWeb
+                ? Uri.base.origin
+                : 'https://frontend-six-lime-13.vercel.app'))
+        .replaceAll(RegExp(r'/+$'), '');
+    return '$base${linksPathForSlug(slug)}';
+  }
 }

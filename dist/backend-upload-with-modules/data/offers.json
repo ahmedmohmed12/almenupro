@@ -1,0 +1,36 @@
+[
+  {
+    "id": "offer_molton_family20",
+    "restaurantId": "rest_molton",
+    "restaurant_id": "rest_molton",
+    "title": "خصم 20% على الكوكيز",
+    "description": "خصم 20% على أصناف الكوكيز المختارة طوال فترة العرض.",
+    "type": "percentage",
+    "discountValue": 20,
+    "originalPrice": 0,
+    "offerPrice": 0,
+    "itemIds": [],
+    "badgeText": "20%",
+    "isActive": true,
+    "minSubtotal": 0,
+    "startsAt": "2026-01-01T00:00:00.000Z",
+    "endsAt": "2027-12-31T23:59:59.000Z"
+  },
+  {
+    "id": "offer_molton_combo",
+    "restaurantId": "rest_molton",
+    "restaurant_id": "rest_molton",
+    "title": "وجبة الكوكيز مع المشروب بسعر مميز",
+    "description": "اختر العرض بضغطة واحدة وأضف الباقة إلى السلة بالسعر المخفض.",
+    "type": "combo",
+    "discountValue": 0,
+    "originalPrice": 3.5,
+    "offerPrice": 2.75,
+    "itemIds": [],
+    "badgeText": "عرض",
+    "isActive": true,
+    "minSubtotal": 0,
+    "startsAt": "2026-01-01T00:00:00.000Z",
+    "endsAt": "2027-12-31T23:59:59.000Z"
+  }
+]

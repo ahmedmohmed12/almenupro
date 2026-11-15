@@ -1,0 +1,10 @@
+node_modules/
+dist/
+release/
+release-final/
+release-production/
+release-production-current/
+release-production-icon/
+.env
+.env.local
+!.env.example

@@ -36,9 +36,21 @@ abstract final class PosTheme {
   static const tabletMax = 1100.0;
   static const desktopMin = 1200.0;
 
-  /// Merged shift + order-mode header (Foodics density).
-  static const headerHeight = 45.0;
+  /// Merged shift + order-mode header (Foodics touch targets).
+  static const headerHeight = 58.0;
   static const headerMaroon = Color(0xFF6B1124);
+
+  /// Order-type / ops header buttons: 48–52px hit area, 8px card radius.
+  static const orderTypeButtonHeight = 50.0;
+  static const orderTypeButtonRadius = 8.0;
+  static const orderTypeButtonPadding =
+      EdgeInsets.symmetric(horizontal: 16, vertical: 12);
+  static const orderTypeButtonFontSize = 15.5;
+
+  /// Horizontal category filter chips.
+  static const categoryChipHeight = 44.0;
+  static const categoryChipRadius = 8.0;
+  static const categoryChipFontSize = 14.5;
 
   /// Menu grid: 4 columns by default so ~16+ tiles fit on screen.
   static int menuCrossAxisCount(double menuPaneWidth) {
@@ -47,7 +59,12 @@ abstract final class PosTheme {
     return 2;
   }
 
-  static double menuTileExtent(bool compact) => compact ? 118.0 : 124.0;
+  /// Taller tiles so large cashier-friendly item names fit.
+  static double menuTileExtent(bool compact) => compact ? 132.0 : 142.0;
+
+  /// Menu item card title (cashier readability).
+  static double menuItemNameFontSize(bool compact) => compact ? 14.0 : 15.5;
+  static double menuItemPriceFontSize(bool compact) => compact ? 13.5 : 15.0;
 
   static double cartWidthFor(double availableWidth) {
     final preferred = availableWidth * (cartFlex / 100);

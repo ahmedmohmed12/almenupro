@@ -1,0 +1,36 @@
+{
+  "observerRoot": "main, [role='main'], #root, body",
+  "authenticatedRoot": "[data-testid='app-shell'], [data-testid='sidebar'], nav, aside",
+  "observationModes": [
+    {
+      "id": "live",
+      "root": "[data-testid='live-orders'], [data-testid='active-orders'], .live-orders, .active-orders",
+      "order": "[data-testid='order-card'], [data-order-no], .order-card",
+      "maxRows": 100
+    },
+    {
+      "id": "history",
+      "root": "[data-testid='order-history'], [data-testid='orders-history'], [class*='order-history' i], [class*='orderHistory' i], [class*='virtual' i], [role='table'], [role='grid'], table",
+      "order": "tbody tr[data-order-id], tbody tr[data-order-no], tbody tr, [role='row'], [data-testid='order-history-row'], [class*='order-row' i], [class*='history-row' i]",
+      "maxRows": 500
+    }
+  ],
+  "order": "[data-testid='order-card'], [data-order-no], .order-card",
+  "historyDetailRoot": "[data-testid='order-details'], [data-testid='order-details-drawer'], [data-testid='order-detail-modal'], [role='dialog'], [class*='drawer' i], [class*='modal' i], [class*='detail' i]",
+  "historyDetailClose": "[data-testid='close-order-details'], [data-testid='close-order-detail'], [role='dialog'] button[aria-label='Close'], [role='dialog'] button[aria-label='إغلاق'], [class*='drawer' i] [class*='close' i], [class*='modal' i] [class*='close' i], button[aria-label='Close'], button[aria-label='إغلاق']",
+  "invoiceNumber": "[data-testid='order-seq-no'], [data-testid='short-order-id'], [class*='orderid-seq' i], [class*='seq-no' i]",
+  "id": "[data-testid='order-no'], [data-testid='order-view-id'], [data-column='order-id'], [data-field='order-id'], [class*='odhis-row-orderid-seqno'], [class*='order-view-id' i], .odhis-row-orderid, .order-id, .order-no, .order-number",
+  "customerName": "[data-testid='customer-name'], [data-testid='customer'], [data-testid*='recipient' i], [data-column='customer-name'], .customer-name, [class*='customer-name' i], [class*='recipient-name' i]",
+  "phone": "[data-testid='customer-phone'], [data-testid='phone'], [data-testid*='privacy-phone' i], .customer-phone, [class*='customer-phone' i], a[href^='tel:']",
+  "address": "[data-testid='customer-address'], [data-testid='delivery-address'], [data-testid='address'], .delivery-address, [class*='customer-address' i], [class*='delivery-address' i]",
+  "item": "[data-testid='item'], [data-testid*='product' i], [data-order-item], .order-item, [class*='item-detail' i]",
+  "itemName": "[data-testid='item-name'], [data-testid*='product-name' i], .item-name",
+  "itemQuantity": "[data-testid='item-count'], .item-count, .quantity",
+  "itemPrice": "[data-testid='item-price'], .item-price",
+  "itemOptions": "[data-testid='item-addon'], .item-addon, .modifier",
+  "subtotal": "[data-testid='subtotal'], .subtotal",
+  "total": "[data-testid='total'], .order-total",
+  "paymentMethod": "[data-testid='payment'], .payment-method",
+  "deliveryType": "[data-testid='fulfillment-type'], [data-testid*='delivery-type' i], .fulfillment-type, [class*='fulfillment' i], [class*='delivery-badge' i]",
+  "createdAt": "time[datetime], [data-testid='created-time']"
+}

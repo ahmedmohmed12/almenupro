@@ -1,4 +1,5 @@
 import 'admin_role.dart';
+import 'delivery_dispatch.dart';
 
 enum RestaurantStatus {
   active,
@@ -145,6 +146,8 @@ class Restaurant {
     this.subscriptionNotes = '',
     this.tableManagementEnabled = false,
     this.kitchenManagementEnabled = false,
+    this.deliveryManagementEnabled = false,
+    this.location,
     this.createdAt,
     this.updatedAt,
   });
@@ -161,6 +164,8 @@ class Restaurant {
   final String subscriptionNotes;
   final bool tableManagementEnabled;
   final bool kitchenManagementEnabled;
+  final bool deliveryManagementEnabled;
+  final GeoPointLite? location;
   final DateTime? createdAt;
   final DateTime? updatedAt;
 
@@ -203,6 +208,12 @@ class Restaurant {
           (json['features'] is Map &&
               (json['features']['kitchenManagement'] == true ||
                   json['features']['kitchen_management'] == true)),
+      deliveryManagementEnabled: json['deliveryManagementEnabled'] == true ||
+          json['deliveryManagement'] == true ||
+          (json['features'] is Map &&
+              (json['features']['deliveryManagement'] == true ||
+                  json['features']['delivery_management'] == true)),
+      location: GeoPointLite.tryParse(json['location']),
       createdAt: DateTime.tryParse(json['createdAt']?.toString() ?? ''),
       updatedAt: DateTime.tryParse(
         json['updatedAt']?.toString() ?? json['updated_at']?.toString() ?? '',
@@ -224,10 +235,13 @@ class Restaurant {
         if (subscriptionNotes.isNotEmpty) 'subscriptionNotes': subscriptionNotes,
         'tableManagement': tableManagementEnabled,
         'kitchenManagement': kitchenManagementEnabled,
+        'deliveryManagement': deliveryManagementEnabled,
         'features': {
           'tableManagement': tableManagementEnabled,
           'kitchenManagement': kitchenManagementEnabled,
+          'deliveryManagement': deliveryManagementEnabled,
         },
+        if (location != null) 'location': location!.toMap(),
         if (createdAt != null) 'createdAt': createdAt!.toIso8601String(),
         if (updatedAt != null) 'updatedAt': updatedAt!.toIso8601String(),
       };
@@ -245,6 +259,8 @@ class Restaurant {
     String? subscriptionNotes,
     bool? tableManagementEnabled,
     bool? kitchenManagementEnabled,
+    bool? deliveryManagementEnabled,
+    GeoPointLite? location,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) {
@@ -263,6 +279,9 @@ class Restaurant {
           tableManagementEnabled ?? this.tableManagementEnabled,
       kitchenManagementEnabled:
           kitchenManagementEnabled ?? this.kitchenManagementEnabled,
+      deliveryManagementEnabled:
+          deliveryManagementEnabled ?? this.deliveryManagementEnabled,
+      location: location ?? this.location,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );
@@ -294,6 +313,7 @@ class AdminSession {
   bool get isRestaurantAdmin => role.isRestaurantAdmin;
   bool get isCashier => role.isCashier;
   bool get isKitchen => role.isKitchen;
+  bool get isDriver => role.isDriver;
 
   factory AdminSession.fromJson(Map<String, dynamic> json) {
     return AdminSession(

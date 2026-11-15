@@ -11,10 +11,12 @@ import '../../../models/staff_user.dart';
 import '../../../services/admin_auth_service.dart';
 import '../../../services/admin_order_focus_service.dart';
 import '../../../services/admin_order_monitor_service.dart';
+import '../../../services/incoming_order_auto_accept_service.dart';
 import '../../../services/offline/pos_sync_service.dart';
 import '../../../services/pos_operations_service.dart';
 import '../../../services/pos_security_service.dart';
 import '../../../services/restaurant_settings_service.dart';
+import '../../../utils/admin_route_nav.dart';
 import '../../language_toggle_button.dart';
 import '../admin_pos_panel.dart';
 import 'pos_add_staff_dialog.dart';
@@ -29,6 +31,8 @@ import 'pos_staff_empty_state.dart';
 import 'pos_staff_page.dart';
 import 'pos_void_orders_page.dart';
 import 'pos_dine_in_page.dart';
+import 'pos_pending_pickup_page.dart';
+import '../../../models/order.dart';
 import 'pos_in_page_overlay.dart';
 import 'pos_printer_settings_dialog.dart';
 
@@ -68,6 +72,7 @@ class _PosShiftShellState extends State<PosShiftShell> {
   var _selectedRoute = PosRoute.home;
   var _tableManagementEnabled = false;
   var _homeSheet = _PosHomeSheet.none;
+  Order? _resumeHeldPickup;
 
   @override
   void initState() {
@@ -79,6 +84,9 @@ class _PosShiftShellState extends State<PosShiftShell> {
     }
     _bootstrap();
     AdminOrderFocusService.instance.addListener(_onOrderFocusChanged);
+    IncomingOrderAutoAcceptService.instance.shiftReadinessWarning.addListener(
+      _onShiftReadinessWarning,
+    );
     WidgetsBinding.instance.addPostFrameCallback((_) => _onOrderFocusChanged());
   }
 
@@ -94,9 +102,6 @@ class _PosShiftShellState extends State<PosShiftShell> {
         if (_selectedRoute == PosRoute.dineIn) {
           _selectedRoute = PosRoute.home;
         }
-        if (_homeSheet == _PosHomeSheet.tables) {
-          _homeSheet = _PosHomeSheet.none;
-        }
       }
     });
   }
@@ -104,6 +109,8 @@ class _PosShiftShellState extends State<PosShiftShell> {
   @override
   void dispose() {
     AdminOrderFocusService.instance.removeListener(_onOrderFocusChanged);
+    IncomingOrderAutoAcceptService.instance.shiftReadinessWarning
+        .removeListener(_onShiftReadinessWarning);
     _restaurantController.dispose();
     _cashierNameController.dispose();
     _pinController.dispose();
@@ -272,6 +279,40 @@ class _PosShiftShellState extends State<PosShiftShell> {
     PosSecurityService.instance.registerActivity();
   }
 
+  void _onShiftReadinessWarning() {
+    final orderId =
+        IncomingOrderAutoAcceptService.instance.shiftReadinessWarning.value;
+    if (orderId == null || orderId.isEmpty || !mounted) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final s = AppStrings.of(context);
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            duration: const Duration(seconds: 8),
+            content: Text(
+              s.tr(
+                'وصل طلب جديد ($orderId)، لكن لا توجد وردية كاشير مفتوحة. افتح وردية لتفعيل القبول والطباعة.',
+                'New order ($orderId) arrived, but no cashier shift is open. Open a shift to enable acceptance and printing.',
+              ),
+            ),
+            action: SnackBarAction(
+              label: s.tr('فتح وردية', 'Open shift'),
+              onPressed: () {
+                if (mounted) {
+                  setState(() {
+                    _selectedRoute = PosRoute.home;
+                    _homeSheet = _PosHomeSheet.none;
+                  });
+                }
+              },
+            ),
+          ),
+        );
+    });
+  }
+
   void _onRouteSelected(PosRoute route) {
     if (route == PosRoute.dineIn && !_tableManagementEnabled) {
       return;
@@ -294,10 +335,38 @@ class _PosShiftShellState extends State<PosShiftShell> {
     setState(() => _selectedRoute = PosRoute.orders);
   }
 
+  void _openDineInTables() {
+    if (!_tableManagementEnabled) return;
+    setState(() {
+      _selectedRoute = PosRoute.dineIn;
+      _homeSheet = _PosHomeSheet.none;
+    });
+    navigateToAdminPath(PosRoute.dineIn.path);
+  }
+
+  void _openPendingPickup() {
+    setState(() {
+      _selectedRoute = PosRoute.pendingPickup;
+      _homeSheet = _PosHomeSheet.none;
+    });
+    navigateToAdminPath(PosRoute.pendingPickup.path);
+  }
+
+  void _resumeHeldPickupForSettlement(Order order) {
+    setState(() {
+      _resumeHeldPickup = order;
+      _selectedRoute = PosRoute.home;
+      _homeSheet = _PosHomeSheet.none;
+    });
+    navigateToAdminPath(PosRoute.home.path);
+  }
+
+  void _clearResumeHeldPickup() {
+    if (_resumeHeldPickup == null) return;
+    setState(() => _resumeHeldPickup = null);
+  }
+
   void _openHomeSheet(_PosHomeSheet sheet) {
-    if (sheet == _PosHomeSheet.tables && !_tableManagementEnabled) {
-      return;
-    }
     setState(() {
       _selectedRoute = PosRoute.home;
       _homeSheet = sheet;
@@ -327,9 +396,15 @@ class _PosShiftShellState extends State<PosShiftShell> {
       PosRoute.voidOrders => const PosVoidOrdersPage(),
       PosRoute.staff => const PosStaffPage(),
       PosRoute.menu => const PosMenuPage(),
-      PosRoute.dineIn => PosDineInPage(
-        restaurantId: widget.restaurantId,
-        onOrderSubmitted: widget.onOrderSubmitted,
+      PosRoute.dineIn => ColoredBox(
+        color: const Color(0xFFF4F6F8),
+        child: PosDineInPage(
+          restaurantId: widget.restaurantId,
+          onOrderSubmitted: widget.onOrderSubmitted,
+        ),
+      ),
+      PosRoute.pendingPickup => PosPendingPickupPage(
+        onResumeForSettlement: _resumeHeldPickupForSettlement,
       ),
       PosRoute.shiftClose => _buildShiftClosePlaceholder(),
     };
@@ -344,7 +419,7 @@ class _PosShiftShellState extends State<PosShiftShell> {
             child: _buildPosHome(),
           ),
         ),
-        if (overlay != null) overlay,
+        ?overlay,
       ],
     );
   }
@@ -352,33 +427,26 @@ class _PosShiftShellState extends State<PosShiftShell> {
   Widget _buildPosHome() {
     final s = AppStrings.of(context);
     final shift = _shift!;
-    final shiftLabel =
-        '${s.tr('وردية', 'Shift')}: ${shift.cashierName}';
+    final shiftLabel = '${s.tr('وردية', 'Shift')}: ${shift.cashierName}';
     return Stack(
       fit: StackFit.expand,
       children: [
         AdminPosPanel(
-          key: const ValueKey('pos-home-panel'),
+          key: ValueKey(
+            'pos-home-panel-${_resumeHeldPickup?.id ?? 'default'}',
+          ),
           restaurantId: widget.restaurantId,
           onOrderSubmitted: widget.onOrderSubmitted,
           onOpenMenu: widget.onOpenMenu,
           onLogout: widget.onLogout,
-          onOpenTables: () => _openHomeSheet(_PosHomeSheet.tables),
+          onOpenTables: _openDineInTables,
+          onOpenPendingPickup: _openPendingPickup,
           onOpenDriverHandoff: () => _openHomeSheet(_PosHomeSheet.handoff),
           onOpenOnlineOrders: () => _openHomeSheet(_PosHomeSheet.orders),
+          resumeHeldPickup: _resumeHeldPickup,
+          onHeldPickupCleared: _clearResumeHeldPickup,
           tableManagementEnabled: _tableManagementEnabled,
           shiftLabel: shiftLabel,
-        ),
-        PosInPageOverlay(
-          visible:
-              _tableManagementEnabled && _homeSheet == _PosHomeSheet.tables,
-          title: s.tr('الطاولات', 'Tables'),
-          onClose: _closeHomeSheet,
-          child: PosDineInPage(
-            key: const ValueKey('pos-warm-tables'),
-            restaurantId: widget.restaurantId,
-            onOrderSubmitted: widget.onOrderSubmitted,
-          ),
         ),
         PosInPageOverlay(
           visible: _homeSheet == _PosHomeSheet.handoff,
@@ -778,7 +846,7 @@ class _PosShiftShellState extends State<PosShiftShell> {
   }
 }
 
-enum _PosHomeSheet { none, tables, handoff, orders }
+enum _PosHomeSheet { none, handoff, orders }
 
 PosRoute readPosRouteFromLocation() {
   if (!kIsWeb) return PosRoute.home;

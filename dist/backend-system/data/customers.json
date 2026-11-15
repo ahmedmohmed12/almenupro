@@ -1,0 +1,23 @@
+[
+  {
+    "id": "cust_1787136617056_nvjhfi",
+    "phone": "96550000000",
+    "customerName": "اختبار السلة",
+    "address": "حولي، قطعة 1، شارع 2، منزل 3",
+    "governorate": "",
+    "areaName": "",
+    "deliveryZoneId": null,
+    "addressDetails": {
+      "block": "",
+      "street": "",
+      "avenue": "",
+      "houseNumber": "",
+      "floorApartment": ""
+    },
+    "paymentMethod": "كاش",
+    "totalOrders": 4,
+    "createdAt": "2026-08-19T10:50:17.056Z",
+    "updatedAt": "2026-08-19T11:51:53.213Z",
+    "restaurant_id": "rest_molton"
+  }
+]

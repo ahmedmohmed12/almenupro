@@ -3,8 +3,10 @@ import 'package:flutter/material.dart';
 import '../../models/expense.dart';
 import '../../services/admin_auth_service.dart';
 import '../../services/api_service.dart';
+import '../../services/expense_ledger_service.dart';
 import '../../services/super_admin_scope_service.dart';
 import '../../theme/app_theme.dart';
+import 'admin_breakpoints.dart';
 import 'admin_profit_loss_card.dart';
 import 'admin_responsive_layout.dart';
 
@@ -94,7 +96,11 @@ class _AdminExpensesPanelState extends State<AdminExpensesPanel> {
         expense.id,
         restaurantId: _restaurantId,
       );
-      await _load();
+      if (!mounted) return;
+      setState(() {
+        _expenses = _expenses.where((row) => row.id != expense.id).toList();
+      });
+      ExpenseLedgerService.instance.notifyChanged();
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -110,11 +116,19 @@ class _AdminExpensesPanelState extends State<AdminExpensesPanel> {
     );
     if (created == null) return;
     try {
-      await ApiService.instance.createExpense(
+      final saved = await ApiService.instance.createExpense(
         created,
         restaurantId: _restaurantId,
       );
-      await _load();
+      if (!mounted) return;
+      final matchesFilter =
+          _category == null || _category == saved.category;
+      setState(() {
+        if (matchesFilter) {
+          _expenses = [saved, ..._expenses];
+        }
+      });
+      ExpenseLedgerService.instance.notifyChanged();
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -142,6 +156,11 @@ class _AdminExpensesPanelState extends State<AdminExpensesPanel> {
                 onPressed: needsSelection ? null : _openEditor,
                 icon: const Icon(Icons.add),
                 label: const Text('إضافة مصروف'),
+                style: FilledButton.styleFrom(
+                  minimumSize: const Size(200, 48),
+                  backgroundColor: const Color(0xFF6B1124),
+                  foregroundColor: Colors.white,
+                ),
               ),
             ],
           ),
@@ -156,6 +175,7 @@ class _AdminExpensesPanelState extends State<AdminExpensesPanel> {
             const SizedBox(height: 20),
             Wrap(
               spacing: 8,
+              runSpacing: 8,
               children: [
                 FilterChip(
                   label: const Text('الكل'),
@@ -193,54 +213,11 @@ class _AdminExpensesPanelState extends State<AdminExpensesPanel> {
                 child: Text('لا توجد مصاريف في هذا التصنيف بعد.'),
               )
             else
-              ..._expenses.map(
-                (expense) => Container(
-                  margin: const EdgeInsets.only(bottom: 10),
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(
-                      color: AppTheme.brandMaroon.withValues(alpha: 0.12),
-                    ),
-                  ),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              expense.title,
-                              style: const TextStyle(fontWeight: FontWeight.w800),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              '${expenseCategoryLabel(expense.category)} · ${expense.date}',
-                              style: const TextStyle(color: Color(0xFF666666)),
-                            ),
-                            if (expense.notes.isNotEmpty) ...[
-                              const SizedBox(height: 4),
-                              Text(expense.notes),
-                            ],
-                          ],
-                        ),
-                      ),
-                      Text(
-                        '${expense.amount.toStringAsFixed(3)} د.ك',
-                        style: const TextStyle(
-                          fontWeight: FontWeight.w800,
-                          color: Color(0xFF6B1124),
-                        ),
-                      ),
-                      IconButton(
-                        onPressed: () => _confirmDelete(expense),
-                        icon: const Icon(Icons.delete_outline),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
+              ..._expenses.map((expense) => _ExpenseTile(
+                    expense: expense,
+                    compact: AdminBreakpoints.isCompact(context),
+                    onDelete: () => _confirmDelete(expense),
+                  )),
           ],
         ],
       ),
@@ -294,10 +271,16 @@ class _ExpenseEditorDialogState extends State<_ExpenseEditorDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final width = MediaQuery.sizeOf(context).width;
+    final compact = width < 480;
     return AlertDialog(
+      insetPadding: EdgeInsets.symmetric(
+        horizontal: compact ? 12 : 40,
+        vertical: 24,
+      ),
       title: const Text('إضافة مصروف'),
       content: SizedBox(
-        width: 420,
+        width: compact ? width - 48 : 420,
         child: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -364,4 +347,95 @@ class _ExpenseEditorDialogState extends State<_ExpenseEditorDialog> {
 
 extension on String {
   String sliceDate() => length >= 10 ? substring(0, 10) : this;
+}
+
+class _ExpenseTile extends StatelessWidget {
+  const _ExpenseTile({
+    required this.expense,
+    required this.compact,
+    required this.onDelete,
+  });
+
+  final ExpenseRecord expense;
+  final bool compact;
+  final VoidCallback onDelete;
+
+  @override
+  Widget build(BuildContext context) {
+    final details = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          expense.title,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(fontWeight: FontWeight.w800),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          '${expenseCategoryLabel(expense.category)} · ${expense.date}',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(color: Color(0xFF666666)),
+        ),
+        if (expense.notes.isNotEmpty) ...[
+          const SizedBox(height: 4),
+          Text(
+            expense.notes,
+            maxLines: 3,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ],
+      ],
+    );
+    final amount = Text(
+      '${expense.amount.toStringAsFixed(3)} د.ك',
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      style: const TextStyle(
+        fontWeight: FontWeight.w800,
+        color: Color(0xFF6B1124),
+      ),
+    );
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: AppTheme.brandMaroon.withValues(alpha: 0.12),
+        ),
+      ),
+      child: compact
+          ? Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                details,
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Expanded(child: amount),
+                    IconButton(
+                      onPressed: onDelete,
+                      icon: const Icon(Icons.delete_outline),
+                    ),
+                  ],
+                ),
+              ],
+            )
+          : Row(
+              children: [
+                Expanded(child: details),
+                const SizedBox(width: 12),
+                amount,
+                IconButton(
+                  onPressed: onDelete,
+                  icon: const Icon(Icons.delete_outline),
+                ),
+              ],
+            ),
+    );
+  }
 }

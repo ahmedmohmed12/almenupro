@@ -12,13 +12,18 @@ import '../../../services/admin_order_focus_service.dart';
 import '../../../services/admin_order_monitor_service.dart';
 import '../../../services/incoming_order_auto_accept_service.dart';
 import '../../../services/orders_service.dart';
+import '../../../services/platform_directory_refresh.dart';
+import '../../../services/platform_today_sync.dart';
 import '../../../services/api_service.dart';
 import '../../../services/pos_operations_service.dart';
 import '../../../services/restaurant_settings_service.dart';
 import '../../../utils/admin_deep_link.dart';
 import '../../../utils/order_channel_utils.dart';
 import '../admin_corner_toast.dart';
+import '../platform_today_sync_button.dart';
 import '../admin_order_details_dialog.dart';
+import '../order_inbox_search_field.dart';
+import '../scheduled_invoice_list.dart';
 import '../incoming_order_countdown_badge.dart';
 import '../order_status_chip.dart';
 import '../order_driver_tracking_card.dart';
@@ -50,17 +55,23 @@ class _PosOnlineOrdersPageState extends State<PosOnlineOrdersPage>
   List<SalesPlatformConfig> _platforms = SalesPlatformConfig.defaults();
   var _processingId = '';
   late final TabController _tabController;
+  final _searchController = TextEditingController();
+  var _searchQuery = '';
   var _openingFocusedOrder = false;
   String? _openedFocusRef;
+  late final void Function() _stopBackgroundSync;
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(
-      length: widget.tableManagementEnabled ? 5 : 4,
+      length: _tabCount(widget.tableManagementEnabled),
       vsync: this,
     );
+    _searchController.addListener(_onSearchChanged);
     AdminOrderFocusService.instance.addListener(_onOrderFocusChanged);
+    PlatformDirectoryRefresh.tick.addListener(_onDirectoryRefresh);
+    _stopBackgroundSync = listenPlatformSyncResult(_onBackgroundCapture);
     unawaited(_loadPlatforms());
     unawaited(_ordersService.refreshOrders());
     DeliveryBoardController.instance.ensureStarted();
@@ -73,11 +84,11 @@ class _PosOnlineOrdersPageState extends State<PosOnlineOrdersPage>
       final index = _tabController.index;
       _tabController.dispose();
       _tabController = TabController(
-        length: widget.tableManagementEnabled ? 5 : 4,
+        length: _tabCount(widget.tableManagementEnabled),
         vsync: this,
         initialIndex: index.clamp(
           0,
-          (widget.tableManagementEnabled ? 5 : 4) - 1,
+          _tabCount(widget.tableManagementEnabled) - 1,
         ),
       );
     }
@@ -86,12 +97,40 @@ class _PosOnlineOrdersPageState extends State<PosOnlineOrdersPage>
   @override
   void dispose() {
     AdminOrderFocusService.instance.removeListener(_onOrderFocusChanged);
+    PlatformDirectoryRefresh.tick.removeListener(_onDirectoryRefresh);
+    _stopBackgroundSync();
+    _searchController.removeListener(_onSearchChanged);
+    _searchController.dispose();
     _tabController.dispose();
     super.dispose();
   }
 
+  void _onSearchChanged() {
+    final next = _searchController.text;
+    if (next == _searchQuery || !mounted) return;
+    setState(() => _searchQuery = next);
+  }
+
   void _onOrderFocusChanged() {
     if (mounted) setState(() {});
+  }
+
+  void _onDirectoryRefresh() {
+    unawaited(_ordersService.refreshOrders());
+  }
+
+  void _onBackgroundCapture(PlatformSyncDetail detail) {
+    if (detail.synced <= 0 && detail.purged <= 0) return;
+    unawaited(_ordersService.refreshOrders());
+    PlatformDirectoryRefresh.notify();
+    if (!mounted || !detail.background || detail.notice.isEmpty) return;
+    AdminCornerToast.show(
+      context,
+      detail.notice,
+      backgroundColor: const Color(0xFF166534),
+      maxWidth: 520,
+      duration: const Duration(seconds: 6),
+    );
   }
 
   void _tryOpenFocusedOrder(List<Order> orders) {
@@ -116,17 +155,10 @@ class _PosOnlineOrdersPageState extends State<PosOnlineOrdersPage>
     _openedFocusRef = ref;
     AdminOrderFocusService.instance.consumeOrder();
     IncomingOrderAutoAcceptService.instance.focusDeepLinkedOrder(match);
-    if (match.status == OrderStatus.pending || match.isNewForCashier) {
-      _tabController.animateTo(0);
-    } else if (match.needsCashierHandoff ||
-        match.waitingDriverAfterCashierConfirm) {
-      _tabController.animateTo(widget.tableManagementEnabled ? 4 : 3);
-    } else if (widget.tableManagementEnabled && isClosedHallTableOrder(match)) {
-      _tabController.animateTo(3);
-    } else if (match.isCurrentForCashier) {
-      _tabController.animateTo(1);
+    if (match.needsCashierHandoff || match.waitingDriverAfterCashierConfirm) {
+      _tabController.animateTo(_tabIndex('handoff'));
     } else {
-      _tabController.animateTo(2);
+      _tabController.animateTo(_tabIndexFor(match));
     }
     _openingFocusedOrder = true;
     WidgetsBinding.instance.addPostFrameCallback((_) async {
@@ -185,6 +217,91 @@ class _PosOnlineOrdersPageState extends State<PosOnlineOrdersPage>
     return false;
   }
 
+  bool _isUnassignedOnlineOrder(Order order) {
+    if (!isOnlineMenuOrder(order)) return false;
+    return (order.cashierId ?? '').trim().isEmpty &&
+        (order.shiftId ?? '').trim().isEmpty &&
+        order.receivedByCashierLabel.trim().isEmpty;
+  }
+
+  bool _visibleToCashier(Order order) =>
+      _belongsToCashier(order) || _isUnassignedOnlineOrder(order);
+
+  int _tabCount(bool hall) =>
+      orderInboxTabKeys(hall: hall, handoff: true).length;
+
+  int _tabIndex(String key) {
+    final keys = orderInboxTabKeys(
+      hall: widget.tableManagementEnabled,
+      handoff: true,
+    );
+    final index = keys.indexOf(key);
+    if (index < 0) return keys.indexOf('previous').clamp(0, keys.length - 1);
+    return index;
+  }
+
+  int _tabIndexFor(Order order) {
+    if (order.status == OrderStatus.scheduled) return _tabIndex('scheduled');
+    if (order.status == OrderStatus.pending || order.isNewForCashier) {
+      return _tabIndex('new');
+    }
+    if (order.isCurrentForCashier) return _tabIndex('current');
+    final channel = inboxChannelKey(order);
+    if (channel == 'hall' && !widget.tableManagementEnabled) {
+      return _tabIndex('previous');
+    }
+    return _tabIndex(channel);
+  }
+
+  Widget _cashierChannelList(
+    AppStrings s,
+    DateFormat dateFormat,
+    List<Order> orders,
+    String emptyTitle,
+    String emptyEnglish, {
+    String? emptySubtitle,
+    String? emptySubtitleEnglish,
+  }) {
+    return _PosOnlineOrdersList(
+      orders: orders,
+      dateFormat: dateFormat,
+      platforms: _platforms,
+      processingId: _processingId,
+      emptyTitle: _searchQuery.trim().isEmpty
+          ? s.tr(emptyTitle, emptyEnglish)
+          : s.tr('لا توجد نتائج لهذا البحث', 'No orders match this search'),
+      emptySubtitle: s.tr(
+        emptySubtitle ??
+            'تظهر هنا بعد ما تخرج من طلب جديد: الحالية والمنتهية لهذه القناة.',
+        emptySubtitleEnglish ??
+            'Current and finished orders for this channel appear here after they leave New.',
+      ),
+      onOpen: _openDetails,
+      onNextStatus: _updateMineStatus,
+      onHandoffConfirm: _confirmHandoff,
+      showDriverTracking: true,
+    );
+  }
+
+  List<Order> _cashierSourceOrders(
+    Iterable<Order> orders,
+    bool Function(Order order) test,
+  ) {
+    return ordersForSource(
+      orders.where(
+        (order) => isCashierMenuOrder(order) && _visibleToCashier(order),
+      ),
+      test,
+    );
+  }
+
+  List<Order> _platformHistoryOrders(
+    Iterable<Order> orders,
+    bool Function(Order order) test,
+  ) {
+    return ordersForPlatform(orders.where(isCashierMenuOrder), test);
+  }
+
   ({String cashierId, String cashierName, String shiftId})
   get _receivingIdentity {
     final shift = PosOperationsService.instance.activeShift;
@@ -234,16 +351,17 @@ class _PosOnlineOrdersPageState extends State<PosOnlineOrdersPage>
       );
       if (!mounted) return;
       if (status == OrderStatus.delivered) {
-        if (isClosedHallTableOrder(order) && widget.tableManagementEnabled) {
-          _tabController.animateTo(3);
-          AdminCornerToast.success(
-            context,
-            'تم تسكير حساب الطاولة — يظهر في طاولات الصالة',
-          );
-        } else {
-          _tabController.animateTo(2);
-          AdminCornerToast.success(context, 'تم التوصيل — الطلب انتقل للسابقة');
-        }
+        final channel = inboxChannelKey(order);
+        final tabKey = channel == 'hall' && !widget.tableManagementEnabled
+            ? 'previous'
+            : channel;
+        _tabController.animateTo(_tabIndex(tabKey));
+        AdminCornerToast.success(
+          context,
+          channel == 'hall'
+              ? 'تم تسكير حساب الطاولة — يظهر في طاولات الصالة'
+              : 'تم التوصيل — الطلب انتقل لتبويب مصدره',
+        );
       } else if (status == OrderStatus.preparing) {
         AdminCornerToast.success(context, 'الطلب في الطريق');
       } else {
@@ -413,9 +531,13 @@ class _PosOnlineOrdersPageState extends State<PosOnlineOrdersPage>
             stream: _ordersService.watchOrders(),
             initialData: const [],
             builder: (context, snapshot) {
-              final orders = snapshot.data ?? [];
+              final orders = withoutScheduledHolds(snapshot.data ?? []);
+              final scheduledOrders = filterOrdersByInboxQuery(
+                scheduledHoldOrders(snapshot.data ?? []),
+                _searchQuery,
+              );
               WidgetsBinding.instance.addPostFrameCallback((_) {
-                _tryOpenFocusedOrder(orders);
+                _tryOpenFocusedOrder(snapshot.data ?? []);
               });
               final pendingOnline =
                   orders
@@ -424,11 +546,13 @@ class _PosOnlineOrdersPageState extends State<PosOnlineOrdersPage>
                             !isClosedHallTableOrder(order) &&
                             isCashierMenuOrder(order) &&
                             (order.status == OrderStatus.pending ||
+                                (order.status == OrderStatus.confirmed &&
+                                    _isUnassignedOnlineOrder(order)) ||
                                 (order.isWaitingDriver &&
                                     _belongsToCashier(order))),
                       )
                       .toList()
-                    ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+                    ..sort(compareOrdersByPlatformTimeDesc);
               final currentMine =
                   orders
                       .where(
@@ -436,25 +560,59 @@ class _PosOnlineOrdersPageState extends State<PosOnlineOrdersPage>
                             !isClosedHallTableOrder(order) &&
                             isCashierMenuOrder(order) &&
                             order.isCurrentForCashier &&
-                            _belongsToCashier(order),
+                            order.status != OrderStatus.confirmed &&
+                            (_belongsToCashier(order) ||
+                                _isUnassignedOnlineOrder(order)),
                       )
                       .toList()
-                    ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+                    ..sort(compareOrdersByPlatformTimeDesc);
               final previousMine =
                   orders
                       .where(
                         (order) =>
-                            !isClosedHallTableOrder(order) &&
                             isCashierMenuOrder(order) &&
-                            order.status == OrderStatus.delivered &&
-                            _belongsToCashier(order),
+                            order.status.isArchivedForAdmin &&
+                            isLocalPosOrder(order) &&
+                            _visibleToCashier(order) &&
+                            !(widget.tableManagementEnabled &&
+                                isClosedHallTableOrder(order)),
                       )
                       .toList()
-                    ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+                    ..sort(compareOrdersByPlatformTimeDesc);
+              final talabatOrders = filterOrdersByInboxQuery(
+                _platformHistoryOrders(orders, isTalabatOrder),
+                _searchQuery,
+              );
+              final keetaOrders = filterOrdersByInboxQuery(
+                _platformHistoryOrders(orders, isKeetaOrder),
+                _searchQuery,
+              );
+              final jahezOrders = filterOrdersByInboxQuery(
+                _platformHistoryOrders(orders, isJahezOrder),
+                _searchQuery,
+              );
+              final websiteOrders = filterOrdersByInboxQuery(
+                _cashierSourceOrders(orders, isWebsiteOrder),
+                _searchQuery,
+              );
               final hallTables = widget.tableManagementEnabled
-                  ? (orders.where(isClosedHallTableOrder).toList()
-                      ..sort((a, b) => b.createdAt.compareTo(a.createdAt)))
+                  ? filterOrdersByInboxQuery(
+                      _cashierSourceOrders(orders, isHallTableOrder),
+                      _searchQuery,
+                    )
                   : <Order>[];
+              final visiblePending = filterOrdersByInboxQuery(
+                pendingOnline,
+                _searchQuery,
+              );
+              final visibleCurrent = filterOrdersByInboxQuery(
+                currentMine,
+                _searchQuery,
+              );
+              final visiblePrevious = filterOrdersByInboxQuery(
+                previousMine,
+                _searchQuery,
+              );
               final handoffQueue = orders
                   .where(
                     (order) =>
@@ -471,9 +629,9 @@ class _PosOnlineOrdersPageState extends State<PosOnlineOrdersPage>
                 children: [
                   if (widget.showPageHeader)
                     _OnlineOrdersHeader(
-                      pendingCount: pendingOnline.length,
-                      currentCount: currentMine.length,
-                      previousCount: previousMine.length,
+                      pendingCount: visiblePending.length,
+                      currentCount: visibleCurrent.length,
+                      previousCount: visiblePrevious.length,
                       shiftOpen: shift?.isOpen == true,
                       onlineCashBound: onlineCashBound,
                       expectedCash: shift?.summary.expectedCash ?? 0,
@@ -496,6 +654,10 @@ class _PosOnlineOrdersPageState extends State<PosOnlineOrdersPage>
                       padding: EdgeInsets.symmetric(horizontal: 16),
                       child: _ShiftRequiredBanner(),
                     ),
+                  OrderInboxSearchField(
+                    controller: _searchController,
+                    onChanged: (_) => _onSearchChanged(),
+                  ),
                   Material(
                     color: Colors.white,
                     child: TabBar(
@@ -509,21 +671,32 @@ class _PosOnlineOrdersPageState extends State<PosOnlineOrdersPage>
                       tabs: [
                         Tab(
                           text:
-                              '${s.tr('جديدة', 'New')} (${pendingOnline.length})',
+                              '${s.tr('طلب جديد', 'New')} (${visiblePending.length})',
                         ),
                         Tab(
                           text:
-                              '${s.tr('حالية', 'Current')} (${currentMine.length})',
+                              '${s.tr('طلبات حالية', 'Current')} (${visibleCurrent.length})',
                         ),
                         Tab(
                           text:
-                              '${s.tr('سابقة', 'Previous')} (${previousMine.length})',
+                              '${s.tr('مجدولة', 'Scheduled')} (${scheduledOrders.length})',
+                        ),
+                        Tab(text: 'طلبات (${talabatOrders.length})'),
+                        Tab(text: 'كيتا (${keetaOrders.length})'),
+                        Tab(text: 'جاهز (${jahezOrders.length})'),
+                        Tab(
+                          text:
+                              '${s.tr('طلبات الموقع', 'Website')} (${websiteOrders.length})',
                         ),
                         if (widget.tableManagementEnabled)
                           Tab(
                             text:
                                 '${s.tr('طاولات الصالة', 'Dining tables')} (${hallTables.length})',
                           ),
+                        Tab(
+                          text:
+                              '${s.tr('محلي سابق', 'Local archive')} (${visiblePrevious.length})',
+                        ),
                         Tab(
                           text:
                               '${s.tr('صندوق السائق', 'Driver cash')} (${handoffQueue.length})',
@@ -536,7 +709,7 @@ class _PosOnlineOrdersPageState extends State<PosOnlineOrdersPage>
                       controller: _tabController,
                       children: [
                         _PosOnlineOrdersList(
-                          orders: pendingOnline,
+                          orders: visiblePending,
                           dateFormat: dateFormat,
                           platforms: _platforms,
                           processingId: _processingId,
@@ -545,15 +718,15 @@ class _PosOnlineOrdersPageState extends State<PosOnlineOrdersPage>
                             'No new orders',
                           ),
                           emptySubtitle: s.tr(
-                            'ستظهر هنا طلبات QR / المنيو فور إرسال العميل.',
-                            'QR and online menu orders will appear here.',
+                            'أول ما يوصل الطلب من أي منصة أو الموقع أو الصالة يظهر هنا.',
+                            'A new order from any platform, the website, or the hall appears here first.',
                           ),
                           onAccept: _acceptOrder,
                           onReject: _rejectOrder,
                           onOpen: _openDetails,
                         ),
                         _PosOnlineOrdersList(
-                          orders: currentMine,
+                          orders: visibleCurrent,
                           dateFormat: dateFormat,
                           platforms: _platforms,
                           processingId: _processingId,
@@ -562,47 +735,79 @@ class _PosOnlineOrdersPageState extends State<PosOnlineOrdersPage>
                             'No current orders in your account',
                           ),
                           emptySubtitle: s.tr(
-                            'بعد قبول السائق يظهر الطلب هنا مع اسمه وموقعه.',
-                            'Accepted orders appear here with driver details.',
+                            'بعد طلب جديد ينتقل هنا، ثم يبقى ظاهرًا في تبويب منصته.',
+                            'After New, the order moves here and stays listed under its platform.',
                           ),
                           onOpen: _openDetails,
                           onNextStatus: _updateMineStatus,
                           onHandoffConfirm: _confirmHandoff,
                           showDriverTracking: true,
                         ),
+                        ScheduledInvoiceList(orders: scheduledOrders),
+                        _cashierChannelList(
+                          s,
+                          dateFormat,
+                          talabatOrders,
+                          'لا توجد فواتير طلبات',
+                          'No Talabat orders',
+                          emptySubtitle:
+                              'كل فواتير طلبات المحفوظة من بداية التشغيل حتى اليوم.',
+                          emptySubtitleEnglish:
+                              'Every saved Talabat invoice from launch through today.',
+                        ),
+                        _cashierChannelList(
+                          s,
+                          dateFormat,
+                          keetaOrders,
+                          'لا توجد طلبات كيتا',
+                          'No Keeta orders',
+                          emptySubtitle:
+                              'كل فواتير كيتا المحفوظة من بداية التشغيل حتى اليوم.',
+                          emptySubtitleEnglish:
+                              'Every saved Keeta invoice from launch through today.',
+                        ),
+                        _cashierChannelList(
+                          s,
+                          dateFormat,
+                          jahezOrders,
+                          'لا توجد طلبات جاهز',
+                          'No Jahez orders',
+                          emptySubtitle:
+                              'كل فواتير جاهز المحفوظة من بداية التشغيل حتى اليوم.',
+                          emptySubtitleEnglish:
+                              'Every saved Jahez invoice from launch through today.',
+                        ),
+                        _cashierChannelList(
+                          s,
+                          dateFormat,
+                          websiteOrders,
+                          'لا توجد طلبات موقع',
+                          'No website orders',
+                        ),
+                        if (widget.tableManagementEnabled)
+                          _cashierChannelList(
+                            s,
+                            dateFormat,
+                            hallTables,
+                            'لا توجد طلبات صالة',
+                            'No hall orders',
+                          ),
                         _PosOnlineOrdersList(
-                          orders: previousMine,
+                          orders: visiblePrevious,
                           dateFormat: dateFormat,
                           platforms: _platforms,
                           processingId: _processingId,
                           emptyTitle: s.tr(
-                            'لا توجد طلبات تم توصيلها',
-                            'No delivered orders',
+                            'لا توجد طلبات محلية سابقة',
+                            'No previous local orders',
                           ),
                           emptySubtitle: s.tr(
-                            'الطلبات التي توصّلها لهذا الكاشير تُحفظ هنا.',
-                            'Orders delivered for this cashier are saved here.',
+                            'طلبات الكاشير المحلية المنتهية تُحفظ هنا.',
+                            'Finished local cashier orders are saved here.',
                           ),
                           onOpen: _openDetails,
                           readOnly: true,
                         ),
-                        if (widget.tableManagementEnabled)
-                          _PosOnlineOrdersList(
-                            orders: hallTables,
-                            dateFormat: dateFormat,
-                            platforms: _platforms,
-                            processingId: _processingId,
-                            emptyTitle: s.tr(
-                              'لا توجد فواتير طاولات مسكّرة',
-                              'No closed table receipts',
-                            ),
-                            emptySubtitle: s.tr(
-                              'عند إغلاق حساب الطاولة تظهر الفاتورة هنا ضمن وردية الكاشير.',
-                              'Closed table receipts appear here in the cashier shift.',
-                            ),
-                            onOpen: _openDetails,
-                            readOnly: true,
-                          ),
                         const PosDriverHandoffPage(showPageHeader: false),
                       ],
                     ),
@@ -707,6 +912,8 @@ class _OnlineOrdersHeader extends StatelessWidget {
                 ),
             ],
           ),
+          const SizedBox(height: 12),
+          const PlatformTodaySyncButton(),
           if (shiftOpen) ...[
             const SizedBox(height: 12),
             Wrap(
@@ -945,7 +1152,27 @@ class _PosOnlineOrderCard extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 8),
-              SalesPlatformBadge(platform: platform),
+              Wrap(
+                spacing: 8,
+                runSpacing: 6,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  SalesPlatformBadge(platform: platform),
+                  StoreNameBadge(storeName: order.storeName),
+                  _IngestionSourceBadge(order: order),
+                ],
+              ),
+              if ((order.externalOrderId ?? '').trim().isNotEmpty) ...[
+                const SizedBox(height: 6),
+                Text(
+                  '${s.tr('رقم طلب المنصة', 'Platform order ID')}: #${order.externalOrderId}',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.grey.shade700,
+                  ),
+                ),
+              ],
               if (order.receivedByCashierLabel.isNotEmpty) ...[
                 const SizedBox(height: 8),
                 Text(
@@ -968,11 +1195,10 @@ class _PosOnlineOrderCard extends StatelessWidget {
                 const SizedBox(height: 8),
               ],
               Text('📞 ${order.phone}', style: const TextStyle(fontSize: 13)),
-              if (order.address.trim().isNotEmpty)
-                Text(
-                  '📍 ${order.address}',
-                  style: const TextStyle(fontSize: 13),
-                ),
+              Text(
+                '📍 ${order.address.trim().isEmpty ? 'العنوان: —' : order.address}',
+                style: const TextStyle(fontSize: 13),
+              ),
               const SizedBox(height: 8),
               Text(itemSummary, style: TextStyle(color: Colors.grey.shade800)),
               const SizedBox(height: 10),
@@ -1105,6 +1331,42 @@ class _PosOnlineOrderCard extends StatelessWidget {
               ],
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _IngestionSourceBadge extends StatelessWidget {
+  const _IngestionSourceBadge({required this.order});
+
+  final Order order;
+
+  @override
+  Widget build(BuildContext context) {
+    final source = order.orderSource?.trim().toLowerCase() ?? '';
+    final isPlatformOrder =
+        source == 'talabat' ||
+        source == 'jahez' ||
+        source == 'keeta' ||
+        source == 'keta';
+    final mode = order.ingestionSource.trim().toUpperCase();
+    if (!isPlatformOrder && mode.isEmpty) return const SizedBox.shrink();
+    final isApi = mode == 'API';
+    final color = isApi ? Colors.teal.shade700 : Colors.orange.shade800;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: color.withValues(alpha: 0.35)),
+      ),
+      child: Text(
+        isApi ? '⚡ API' : '👁️ DOM',
+        style: TextStyle(
+          color: color,
+          fontSize: 11,
+          fontWeight: FontWeight.w700,
         ),
       ),
     );

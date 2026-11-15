@@ -4,7 +4,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 class LocaleProvider extends ChangeNotifier {
   LocaleProvider();
 
-  static const _prefKey = 'customer_locale';
+  static const _prefKey = 'app_locale';
+  static const _legacyPrefKey = 'customer_locale';
 
   String _localeCode = 'ar';
 
@@ -17,10 +18,12 @@ class LocaleProvider extends ChangeNotifier {
 
   Future<void> load() async {
     final prefs = await SharedPreferences.getInstance();
-    final saved = prefs.getString(_prefKey);
+    final saved =
+        prefs.getString(_prefKey) ?? prefs.getString(_legacyPrefKey);
     if (saved == 'ar' || saved == 'en') {
       _localeCode = saved!;
       notifyListeners();
+      await prefs.setString(_prefKey, saved);
     }
   }
 

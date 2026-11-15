@@ -8,7 +8,13 @@ import 'admin_responsive_layout.dart';
 import 'pos/pos_close_shift_dialog.dart';
 
 class AdminShiftReportsCard extends StatefulWidget {
-  const AdminShiftReportsCard({super.key});
+  const AdminShiftReportsCard({
+    super.key,
+    this.cashierOnly = false,
+  });
+
+  /// When true (cashier POS), show only the logged-in cashier's current + past shifts.
+  final bool cashierOnly;
 
   @override
   State<AdminShiftReportsCard> createState() => _AdminShiftReportsCardState();
@@ -18,18 +24,26 @@ class _AdminShiftReportsCardState extends State<AdminShiftReportsCard> {
   var _loading = true;
   String? _error;
   ShiftReportsResult _result = const ShiftReportsResult(shifts: []);
+  ShiftSession? _currentShift;
   String? _loadedRestaurantId;
+  String? _loadedCashierId;
 
   @override
   void initState() {
     super.initState();
     _load();
     SuperAdminScopeService.instance.addListener(_onScopeChanged);
+    if (widget.cashierOnly) {
+      PosOperationsService.instance.addListener(_onPosSessionChanged);
+    }
   }
 
   @override
   void dispose() {
     SuperAdminScopeService.instance.removeListener(_onScopeChanged);
+    if (widget.cashierOnly) {
+      PosOperationsService.instance.removeListener(_onPosSessionChanged);
+    }
     super.dispose();
   }
 
@@ -40,14 +54,35 @@ class _AdminShiftReportsCardState extends State<AdminShiftReportsCard> {
     }
   }
 
+  void _onPosSessionChanged() {
+    final nextCashier = _resolveCashierId();
+    if (nextCashier != _loadedCashierId) {
+      _load();
+    }
+  }
+
   String _resolveRestaurantId() {
-    if (AdminAuthService.instance.isRestaurantAdmin) {
+    if (AdminAuthService.instance.isRestaurantAdmin ||
+        AdminAuthService.instance.isCashier) {
       return AdminAuthService.instance.restaurantId ?? '';
     }
     return SuperAdminScopeService.instance.effectiveRestaurantId;
   }
 
+  String? _resolveCashierId() {
+    if (!widget.cashierOnly) return null;
+    final fromPos = PosOperationsService.instance.cashierSession?.staff.id.trim();
+    if (fromPos != null && fromPos.isNotEmpty) return fromPos;
+    final fromAuth = AdminAuthService.instance.session?.staffId?.trim();
+    if (fromAuth != null && fromAuth.isNotEmpty) return fromAuth;
+    return null;
+  }
+
   bool get _canLoad {
+    if (widget.cashierOnly) {
+      return _resolveRestaurantId().isNotEmpty &&
+          (_resolveCashierId()?.isNotEmpty ?? false);
+    }
     if (AdminAuthService.instance.isSuperAdmin) {
       return SuperAdminScopeService.instance.hasEffectiveRestaurant;
     }
@@ -61,27 +96,51 @@ class _AdminShiftReportsCardState extends State<AdminShiftReportsCard> {
         _loading = false;
         _error = null;
         _result = const ShiftReportsResult(shifts: []);
+        _currentShift = null;
         _loadedRestaurantId = null;
+        _loadedCashierId = null;
       });
       return;
     }
 
     final restaurantId = _resolveRestaurantId();
+    final cashierId = _resolveCashierId();
     setState(() {
       _loading = true;
       _error = null;
     });
     try {
-      final from = DateTime.now().toUtc().subtract(const Duration(days: 30));
-      final result = await PosOperationsService.instance.fetchShiftReports(
+      final from = widget.cashierOnly
+          ? null
+          : DateTime.now().toUtc().subtract(const Duration(days: 30));
+      final reportsFuture = PosOperationsService.instance.fetchShiftReports(
         restaurantId: restaurantId,
+        cashierId: cashierId,
         from: from,
         includeOpen: true,
       );
+      final currentFuture = widget.cashierOnly && cashierId != null
+          ? PosOperationsService.instance.fetchCurrentShift(cashierId: cashierId)
+          : Future<ShiftSession?>.value(null);
+
+      final results = await Future.wait([reportsFuture, currentFuture]);
       if (!mounted) return;
+      final result = results[0] as ShiftReportsResult;
+      var current = results[1] as ShiftSession?;
+      if (current == null) {
+        for (final shift in result.openShifts) {
+          if (cashierId == null || shift.cashierId == cashierId) {
+            current = shift;
+            break;
+          }
+        }
+      }
+
       setState(() {
         _result = result;
+        _currentShift = current;
         _loadedRestaurantId = restaurantId;
+        _loadedCashierId = cashierId;
         _loading = false;
       });
     } catch (error) {
@@ -107,29 +166,161 @@ class _AdminShiftReportsCardState extends State<AdminShiftReportsCard> {
     }
   }
 
+  List<ShiftSession> get _previousClosedShifts {
+    final currentId = _currentShift?.id;
+    return _result.closedShifts
+        .where((shift) => currentId == null || shift.id != currentId)
+        .toList();
+  }
+
   Widget _buildShiftTile(ShiftSession shift, {required bool isOpen}) {
     final summary = shift.summary;
-    return ListTile(
-      contentPadding: EdgeInsets.zero,
-      title: Text(
-        '${shift.cashierName} — ${isOpen ? 'مفتوحة' : shift.closedAt?.toLocal().toString().substring(0, 16) ?? ''}',
+    final subtitle = widget.cashierOnly
+        ? 'كاش ${summary.cashSales.toStringAsFixed(3)} • K-Net ${summary.knetSales.toStringAsFixed(3)} • '
+            'طاولات ${summary.dineInCount} • سفري ${summary.takeawayCount} • موقع ${summary.websiteCount}'
+        : 'طلبات: ${summary.orderCount} • كاش: ${summary.cashSales.toStringAsFixed(3)} • توصيل: ${summary.deliveryExpenses.toStringAsFixed(3)}'
+            '${isOpen ? '' : ' • فرق: ${summary.discrepancyLabelAr} ${summary.discrepancy.toStringAsFixed(3)}'}';
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 8),
+      elevation: 0,
+      color: const Color(0xFFF7F7F8),
+      child: ListTile(
+        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+        title: Text(
+          widget.cashierOnly
+              ? (isOpen
+                  ? 'وردية مفتوحة'
+                  : (shift.closedAt?.toLocal().toString().substring(0, 16) ??
+                      'وردية مغلقة'))
+              : '${shift.cashierName} — ${isOpen ? 'مفتوحة' : shift.closedAt?.toLocal().toString().substring(0, 16) ?? ''}',
+          style: const TextStyle(fontWeight: FontWeight.w600),
+        ),
+        subtitle: Text(subtitle),
+        trailing: IconButton(
+          icon: const Icon(Icons.visibility_outlined),
+          tooltip: 'التفاصيل',
+          onPressed: () => showShiftSummaryDialog(context, shift),
+        ),
+        onTap: () => showShiftSummaryDialog(context, shift),
       ),
-      subtitle: Text(
-        'طلبات: ${summary.orderCount} • كاش: ${summary.cashSales.toStringAsFixed(3)} • K-Net: ${summary.knetSales.toStringAsFixed(3)}'
-        '${isOpen ? '' : ' • فرق: ${summary.discrepancyLabelAr} ${summary.discrepancy.toStringAsFixed(3)}'}',
+    );
+  }
+
+  Widget _buildCurrentShiftCard(ShiftSession shift) {
+    final summary = shift.summary;
+    final expectedCash = shift.openingFloat +
+        summary.cashSales -
+        summary.refundTotal -
+        summary.deliveryExpenses;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF8F8),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFF6B1124).withValues(alpha: 0.25)),
       ),
-      trailing: IconButton(
-        icon: const Icon(Icons.visibility_outlined),
-        onPressed: () => showShiftSummaryDialog(context, shift),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.point_of_sale, color: Color(0xFF6B1124)),
+              const SizedBox(width: 8),
+              const Expanded(
+                child: Text(
+                  'الوردية الحالية',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                    color: Color(0xFF6B1124),
+                  ),
+                ),
+              ),
+              TextButton.icon(
+                onPressed: () => showShiftSummaryDialog(context, shift),
+                icon: const Icon(Icons.visibility_outlined, size: 18),
+                label: const Text('التفاصيل'),
+              ),
+            ],
+          ),
+          Text(
+            'الكاشير: ${shift.cashierName}',
+            style: const TextStyle(color: Color(0xFF555555)),
+          ),
+          Text(
+            'افتتحت: ${shift.openedAt.toLocal().toString().substring(0, 16)}',
+            style: const TextStyle(color: Color(0xFF777777), fontSize: 12),
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _metricChip('النقد المتوقع بالدرج', expectedCash),
+              _metricChip('مبيعات كاش', summary.cashSales),
+              _metricChip('مبيعات K-Net', summary.knetSales),
+              _metricChip('إجمالي المبيعات', summary.grossSales),
+            ],
+          ),
+          const SizedBox(height: 12),
+          const Text(
+            'تفصيل القنوات',
+            style: TextStyle(fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 6),
+          shiftSummaryChannelRows(summary),
+          const SizedBox(height: 8),
+          const Divider(),
+          shiftSummaryPaymentRows(summary, openingFloat: shift.openingFloat),
+          const SizedBox(height: 8),
+          Text(
+            'عند إغلاق الوردية يُفترض تسليم نقد الدرج: ${expectedCash.toStringAsFixed(3)} د.ك',
+            style: const TextStyle(
+              fontWeight: FontWeight.w600,
+              color: Color(0xFF6B1124),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _metricChip(String label, double value) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: const Color(0xFFE6E6E8)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label, style: const TextStyle(fontSize: 11, color: Color(0xFF777777))),
+          Text(
+            '${value.toStringAsFixed(3)} د.ك',
+            style: const TextStyle(fontWeight: FontWeight.bold),
+          ),
+        ],
       ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    final closedShifts = _result.closedShifts;
-    final openShifts = _result.openShifts;
+    final closedShifts =
+        widget.cashierOnly ? _previousClosedShifts : _result.closedShifts;
+    final openShifts = widget.cashierOnly
+        ? _result.openShifts
+            .where((shift) => _currentShift == null || shift.id != _currentShift!.id)
+            .toList()
+        : _result.openShifts;
     final emptyMessage = _emptyStateMessage();
+    final hasCurrent = _currentShift != null;
+    final hasAny = hasCurrent || closedShifts.isNotEmpty || openShifts.isNotEmpty;
 
     return Card(
       child: Padding(
@@ -141,8 +332,12 @@ class _AdminShiftReportsCardState extends State<AdminShiftReportsCard> {
                 children: [
                   AdminSectionHeader(
                     icon: Icons.receipt_long,
-                    title: 'تقارير إغلاق الورديات',
-                    subtitle: 'جرد مالي لكل وردية — كاش، K-Net، فروقات',
+                    title: widget.cashierOnly
+                        ? 'تقارير ورديتي'
+                        : 'تقارير إغلاق الورديات',
+                    subtitle: widget.cashierOnly
+                        ? 'الوردية الحالية + الورديات السابقة الخاصة بك — كاش، K-Net، طاولات، سفري، موقع'
+                        : 'جرد مالي لكل وردية — كاش، K-Net، فروقات',
                     actions: [
                       IconButton(
                         tooltip: 'تحديث',
@@ -155,25 +350,41 @@ class _AdminShiftReportsCardState extends State<AdminShiftReportsCard> {
                   if (_error != null)
                     Text(_error!, style: const TextStyle(color: Colors.red))
                   else if (!_canLoad)
-                    const Text(
-                      'اختر مطعماً لعرض تقارير الورديات.',
-                      style: TextStyle(color: Color(0xFF888888)),
-                    )
-                  else if (closedShifts.isEmpty && openShifts.isEmpty)
                     Text(
-                      emptyMessage ?? 'لا توجد ورديات مغلقة في آخر 30 يوم',
+                      widget.cashierOnly
+                          ? 'سجّل دخول الكاشير لعرض تقارير ورديتك.'
+                          : 'اختر مطعماً لعرض تقارير الورديات.',
+                      style: const TextStyle(color: Color(0xFF888888)),
+                    )
+                  else if (!hasAny)
+                    Text(
+                      emptyMessage ??
+                          (widget.cashierOnly
+                              ? 'لا توجد وردية حالية أو سابقة لهذا الكاشير.'
+                              : 'لا توجد ورديات مغلقة في آخر 30 يوم'),
                       style: const TextStyle(color: Color(0xFF888888)),
                     )
                   else ...[
+                    if (widget.cashierOnly && hasCurrent) ...[
+                      _buildCurrentShiftCard(_currentShift!),
+                      const SizedBox(height: 16),
+                    ],
                     if (closedShifts.isNotEmpty) ...[
-                      const Text(
-                        'ورديات مغلقة',
-                        style: TextStyle(fontWeight: FontWeight.bold),
+                      Text(
+                        widget.cashierOnly
+                            ? 'الورديات السابقة'
+                            : 'ورديات مغلقة',
+                        style: const TextStyle(fontWeight: FontWeight.bold),
                       ),
                       const SizedBox(height: 8),
-                      ...closedShifts.take(20).map(
+                      ...closedShifts.take(widget.cashierOnly ? 50 : 20).map(
                             (shift) => _buildShiftTile(shift, isOpen: false),
                           ),
+                    ] else if (widget.cashierOnly && hasCurrent) ...[
+                      const Text(
+                        'لا توجد ورديات سابقة مغلقة بعد.',
+                        style: TextStyle(color: Color(0xFF888888)),
+                      ),
                     ] else if (emptyMessage != null) ...[
                       Text(
                         emptyMessage,
@@ -181,7 +392,7 @@ class _AdminShiftReportsCardState extends State<AdminShiftReportsCard> {
                       ),
                       const SizedBox(height: 12),
                     ],
-                    if (openShifts.isNotEmpty) ...[
+                    if (!widget.cashierOnly && openShifts.isNotEmpty) ...[
                       const SizedBox(height: 12),
                       const Text(
                         'ورديات مفتوحة (لم تُغلق بعد)',

@@ -4,7 +4,7 @@
     "restaurant_id": "rest_molton",
     "governorate": "حولي",
     "areaName": "السالمية",
-    "deliveryFee": 1.0,
+    "deliveryFee": 1,
     "isActive": true,
     "createdAt": "2026-07-25T00:00:00.000Z",
     "updatedAt": "2026-07-25T00:00:00.000Z"
@@ -34,9 +34,43 @@
     "restaurant_id": "rest_molton",
     "governorate": "الأحمدي",
     "areaName": "الفنطاس",
-    "deliveryFee": 2.0,
+    "deliveryFee": 2,
     "isActive": true,
     "createdAt": "2026-07-25T00:00:00.000Z",
     "updatedAt": "2026-07-25T00:00:00.000Z"
+  },
+  {
+    "id": "zone_1791480440274_x272",
+    "restaurant_id": "rest_1791364026166_z8z2",
+    "restaurantId": "rest_1791364026166_z8z2",
+    "governorate": "حولي",
+    "areaName": "حوالي",
+    "deliveryFee": 0.5,
+    "minOrder": 5,
+    "min_order": 5,
+    "driverDeliveryFee": 0.5,
+    "platformMargin": 0,
+    "isActive": true,
+    "defaultKitchenId": "kitchen_ardiya__rest_1791364026166_z8z2",
+    "default_kitchen_id": "kitchen_ardiya__rest_1791364026166_z8z2",
+    "createdAt": "2026-10-08T17:27:20.274Z",
+    "updatedAt": "2026-10-08T17:27:20.274Z"
+  },
+  {
+    "id": "zone_1791480472025_nry9",
+    "restaurant_id": "rest_1791364026166_z8z2",
+    "restaurantId": "rest_1791364026166_z8z2",
+    "governorate": "حولي",
+    "areaName": "ميدان حوالي",
+    "deliveryFee": 0.5,
+    "minOrder": 5,
+    "min_order": 5,
+    "driverDeliveryFee": 1.5,
+    "platformMargin": -1,
+    "isActive": true,
+    "defaultKitchenId": "kitchen_sabah__rest_1791364026166_z8z2",
+    "default_kitchen_id": "kitchen_sabah__rest_1791364026166_z8z2",
+    "createdAt": "2026-10-08T17:27:52.025Z",
+    "updatedAt": "2026-10-08T17:27:52.025Z"
   }
 ]

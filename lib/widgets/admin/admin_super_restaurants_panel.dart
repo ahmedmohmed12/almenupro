@@ -1,12 +1,16 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+import '../../models/delivery_dispatch.dart';
 import '../../models/restaurant.dart';
+import '../../models/signup_request.dart';
 import '../../services/api_service.dart';
 import '../../services/super_admin_scope_service.dart';
 import '../../services/talabat_menu_service.dart';
 import '../../utils/restaurant_route.dart';
 import '../../utils/restaurant_slug.dart';
+import 'admin_signup_requests_inbox.dart';
+import 'restaurant_location_picker.dart';
 
 class AdminSuperRestaurantsPanel extends StatefulWidget {
   const AdminSuperRestaurantsPanel({super.key});
@@ -16,7 +20,8 @@ class AdminSuperRestaurantsPanel extends StatefulWidget {
       _AdminSuperRestaurantsPanelState();
 }
 
-class _AdminSuperRestaurantsPanelState extends State<AdminSuperRestaurantsPanel> {
+class _AdminSuperRestaurantsPanelState extends State<AdminSuperRestaurantsPanel>
+    with SingleTickerProviderStateMixin {
   static const burgundy = Color(0xFF6B1124);
 
   final _nameController = TextEditingController();
@@ -38,18 +43,24 @@ class _AdminSuperRestaurantsPanelState extends State<AdminSuperRestaurantsPanel>
   SubscriptionPlan _subscriptionPlan = SubscriptionPlan.free;
   SubscriptionStatus _subscriptionStatus = SubscriptionStatus.active;
   var _tableManagementEnabled = false;
+  var _kitchenManagementEnabled = false;
+  var _deliveryManagementEnabled = false;
+  GeoPointLite? _location;
+  late final TabController _tabs;
 
   bool get _isEditMode => _editingRestaurant != null;
 
   @override
   void initState() {
     super.initState();
+    _tabs = TabController(length: 2, vsync: this);
     _loadRestaurants();
     _loadStorageHealth();
   }
 
   @override
   void dispose() {
+    _tabs.dispose();
     _nameController.dispose();
     _slugController.dispose();
     _ownerController.dispose();
@@ -94,6 +105,29 @@ class _AdminSuperRestaurantsPanelState extends State<AdminSuperRestaurantsPanel>
     if (mounted) setState(() => _loading = false);
   }
 
+  void _applySignupRequest(SignupRequest request) {
+    setState(() {
+      _editingRestaurant = null;
+      _nameController.text = request.restaurantName;
+      _slugController.text = request.slug;
+      _ownerController.text = request.ownerName;
+      _phoneController.text = request.phone;
+      _passwordController.clear();
+      _subscriptionNotesController.text =
+          'طلب اشتراك من ${request.email}${request.instagram.isEmpty ? '' : ' · IG @${request.instagram}'}';
+      _status = RestaurantStatus.inactive;
+      _subscriptionPlan = SubscriptionPlan.free;
+      _subscriptionStatus = SubscriptionStatus.trial;
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        backgroundColor: burgundy,
+        content: Text('تم تعبئة نموذج "${request.restaurantName}". أدخل كلمة مرور الإدارة ثم احفظ.'),
+      ),
+    );
+    _tabs.animateTo(0);
+  }
+
   void _resetForm() {
     setState(() {
       _editingRestaurant = null;
@@ -108,6 +142,9 @@ class _AdminSuperRestaurantsPanelState extends State<AdminSuperRestaurantsPanel>
       _subscriptionPlan = SubscriptionPlan.free;
       _subscriptionStatus = SubscriptionStatus.active;
       _tableManagementEnabled = false;
+      _kitchenManagementEnabled = false;
+      _deliveryManagementEnabled = false;
+      _location = null;
     });
   }
 
@@ -127,6 +164,9 @@ class _AdminSuperRestaurantsPanelState extends State<AdminSuperRestaurantsPanel>
       _subscriptionPlan = restaurant.subscriptionPlan;
       _subscriptionStatus = restaurant.subscriptionStatus;
       _tableManagementEnabled = restaurant.tableManagementEnabled;
+      _kitchenManagementEnabled = restaurant.kitchenManagementEnabled;
+      _deliveryManagementEnabled = restaurant.deliveryManagementEnabled;
+      _location = restaurant.location;
     });
   }
 
@@ -204,6 +244,9 @@ class _AdminSuperRestaurantsPanelState extends State<AdminSuperRestaurantsPanel>
           subscriptionNotes: subscriptionNotes,
           adminPassword: password.isEmpty ? null : password,
           tableManagementEnabled: _tableManagementEnabled,
+          kitchenManagementEnabled: _kitchenManagementEnabled,
+          deliveryManagementEnabled: _deliveryManagementEnabled,
+          location: _location,
         );
       } else {
         saved = await ApiService.instance.createRestaurant(
@@ -218,10 +261,11 @@ class _AdminSuperRestaurantsPanelState extends State<AdminSuperRestaurantsPanel>
           subscriptionExpiresAt: subscriptionExpiresAt,
           subscriptionNotes: subscriptionNotes,
           tableManagementEnabled: _tableManagementEnabled,
+          kitchenManagementEnabled: _kitchenManagementEnabled,
+          deliveryManagementEnabled: _deliveryManagementEnabled,
+          location: _location,
         );
       }
-
-      await _loadRestaurants();
       await SuperAdminScopeService.instance.refreshRestaurants();
       _loadRestaurantIntoForm(saved);
 
@@ -308,7 +352,7 @@ class _AdminSuperRestaurantsPanelState extends State<AdminSuperRestaurantsPanel>
                             statusMessage = 'جاري السحب...';
                           });
 
-                          await processAndSaveTalabatMenu(
+                          final ok = await processAndSaveTalabatMenu(
                             url: url,
                             restaurantId: restaurant.id,
                             onProgress: (msg) {
@@ -316,12 +360,19 @@ class _AdminSuperRestaurantsPanelState extends State<AdminSuperRestaurantsPanel>
                             },
                             onComplete: (added, skipped, updated) {
                               setDialogState(() {
-                                isLoading = false;
                                 statusMessage =
                                     'تم: $added جديد، $updated محدّث، $skipped موجود';
                               });
                             },
                           );
+                          setDialogState(() {
+                            isLoading = false;
+                            if (!ok &&
+                                (statusMessage == null ||
+                                    statusMessage == 'جاري السحب...')) {
+                              statusMessage = 'فشل الاستيراد — راجع الرابط أو حاول لاحقاً';
+                            }
+                          });
                         },
                   child: Text(
                     isLoading ? 'جاري...' : 'بدء الاستيراد',
@@ -408,6 +459,33 @@ class _AdminSuperRestaurantsPanelState extends State<AdminSuperRestaurantsPanel>
                   labelText: 'رقم الهاتف الأساسي',
                   border: OutlineInputBorder(),
                 ),
+              ),
+              const SizedBox(height: 12),
+              OutlinedButton.icon(
+                onPressed: () async {
+                  final picked = await RestaurantLocationPicker.show(
+                    context,
+                    initial: _location,
+                  );
+                  if (picked == null || !mounted) return;
+                  setState(() => _location = picked);
+                },
+                icon: Icon(
+                  _location == null ? Icons.add_location_alt_outlined : Icons.edit_location_alt_outlined,
+                ),
+                label: Align(
+                  alignment: AlignmentDirectional.centerStart,
+                  child: Text(
+                    _location == null
+                        ? 'إضافة الموقع من الخريطة * — لاستلام السائق'
+                        : 'الموقع: ${_location!.lat.toStringAsFixed(5)}, ${_location!.lng.toStringAsFixed(5)}',
+                  ),
+                ),
+              ),
+              const SizedBox(height: 4),
+              const Text(
+                'حدّد موقع المطعم على الخريطة حتى يفتح السائق الملاحة مباشرة عند استلام الطلب.',
+                style: TextStyle(fontSize: 12, color: Color(0xFF666666)),
               ),
               const SizedBox(height: 12),
               TextField(
@@ -510,6 +588,11 @@ class _AdminSuperRestaurantsPanelState extends State<AdminSuperRestaurantsPanel>
                 ),
               ),
               const SizedBox(height: 12),
+              const Text(
+                'إضافات الاشتراك',
+                style: TextStyle(fontWeight: FontWeight.w700),
+              ),
+              const SizedBox(height: 4),
               SwitchListTile(
                 contentPadding: EdgeInsets.zero,
                 title: const Text('إدارة الطاولات / الصالة'),
@@ -520,6 +603,30 @@ class _AdminSuperRestaurantsPanelState extends State<AdminSuperRestaurantsPanel>
                 onChanged: _saving
                     ? null
                     : (value) => setState(() => _tableManagementEnabled = value),
+              ),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('إدارة المطابخ وشاشات المطبخ'),
+                subtitle: const Text(
+                  'يسمح بإنشاء مطابخ، توجيه المناطق، وشاشات مطبخ بعد قبول الكاشير.',
+                ),
+                value: _kitchenManagementEnabled,
+                onChanged: _saving
+                    ? null
+                    : (value) =>
+                        setState(() => _kitchenManagementEnabled = value),
+              ),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('توصيل سائقي المنيو برو'),
+                subtitle: const Text(
+                  'يفتح إرسال طلبات التوصيل لسائقي منصة المنيو برو من نقطة البيع.',
+                ),
+                value: _deliveryManagementEnabled,
+                onChanged: _saving
+                    ? null
+                    : (value) =>
+                        setState(() => _deliveryManagementEnabled = value),
               ),
               const SizedBox(height: 16),
               const Divider(),
@@ -623,6 +730,12 @@ class _AdminSuperRestaurantsPanelState extends State<AdminSuperRestaurantsPanel>
                         ),
                         if (restaurant.tableManagementEnabled)
                           _badge('طاولات', const Color(0xFF2E7D32)),
+                        if (restaurant.kitchenManagementEnabled)
+                          _badge('مطابخ', const Color(0xFF6A1B9A)),
+                        if (restaurant.deliveryManagementEnabled)
+                          _badge('توصيل سائقين', const Color(0xFFE65100)),
+                        if (restaurant.location != null)
+                          _badge('موقع على الخريطة', const Color(0xFF00695C)),
                       ],
                     ),
                   ],
@@ -677,9 +790,39 @@ class _AdminSuperRestaurantsPanelState extends State<AdminSuperRestaurantsPanel>
           ),
           const SizedBox(height: 8),
           const Text(
-            'اضغط على أي مطعم لتعديل بياناته، أو أنشئ مطعماً جديداً من النموذج.',
+            'طلبات الاشتراك من صفحة «ابدأ مجاناً» تظهر هنا كرسالة. يمكنك إنشاء المطعم من الطلب.',
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 12),
+          TabBar(
+            controller: _tabs,
+            labelColor: burgundy,
+            indicatorColor: burgundy,
+            tabs: const [
+              Tab(text: 'المطاعم'),
+              Tab(text: 'طلبات الاشتراك'),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Expanded(
+            child: TabBarView(
+              controller: _tabs,
+              children: [
+                _buildRestaurantsTab(),
+                AdminSignupRequestsInbox(
+                  onUseForRestaurant: _applySignupRequest,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRestaurantsTab() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
           if (_storageHealth != null && !_storageHealth!.persistent)
             Card(
               color: const Color(0xFFFFEBEE),
@@ -755,7 +898,6 @@ class _AdminSuperRestaurantsPanelState extends State<AdminSuperRestaurantsPanel>
             ),
           ),
         ],
-      ),
     );
   }
 }

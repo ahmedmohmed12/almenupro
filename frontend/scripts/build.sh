@@ -16,8 +16,8 @@ fi
 
 FLUTTER_VERSION="${FLUTTER_VERSION:-stable}"
 FLUTTER_HOME="${FLUTTER_HOME:-$PROJECT_ROOT/.flutter}"
-# Production Mongo API. Do not inherit a stale Vercel API_BASE_URL.
-API_BASE_URL="https://backend-henna-chi-76.vercel.app/api"
+# Production API. Do not inherit a stale preview API_BASE_URL.
+API_BASE_URL="https://backend.u-menus.com/api"
 DIST_DIR="$FRONTEND_DIR/dist"
 
 if [ ! -x "$FLUTTER_HOME/bin/flutter" ]; then
@@ -45,6 +45,23 @@ if [ -f "$FRONTEND_DIR/landing/index.html" ]; then
     mv "$DIST_DIR/index.html" "$DIST_DIR/app.html"
   fi
   cp "$FRONTEND_DIR/landing/index.html" "$DIST_DIR/index.html"
+fi
+if [ -f "$FRONTEND_DIR/landing/customers.html" ]; then
+  cp "$FRONTEND_DIR/landing/customers.html" "$DIST_DIR/customers.html"
+fi
+if [ -f "$FRONTEND_DIR/landing/smart-seller.html" ]; then
+  cp "$FRONTEND_DIR/landing/smart-seller.html" "$DIST_DIR/smart-seller.html"
+fi
+if [ -f "$FRONTEND_DIR/landing/create.html" ]; then
+  cp "$FRONTEND_DIR/landing/create.html" "$DIST_DIR/create.html"
+fi
+if [ -f "$FRONTEND_DIR/landing/i18n.js" ]; then
+  cp "$FRONTEND_DIR/landing/i18n.js" "$DIST_DIR/i18n.js"
+fi
+if [ -f "$PROJECT_ROOT/web/logo.png" ]; then
+  cp "$PROJECT_ROOT/web/logo.png" "$DIST_DIR/logo.png"
+elif [ -f "$FRONTEND_DIR/landing/logo.png" ]; then
+  cp "$FRONTEND_DIR/landing/logo.png" "$DIST_DIR/logo.png"
 fi
 
 echo "Flutter web build complete: $DIST_DIR"

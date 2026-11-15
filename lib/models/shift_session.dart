@@ -9,10 +9,21 @@ class ShiftSummary {
     this.grossSales = 0,
     this.discountTotal = 0,
     this.refundTotal = 0,
+    this.deliveryExpenses = 0,
     this.expectedCash = 0,
     this.actualCash = 0,
     this.discrepancy = 0,
     this.discrepancyType = 'balanced',
+    this.dineInSales = 0,
+    this.dineInCount = 0,
+    this.takeawaySales = 0,
+    this.takeawayCount = 0,
+    this.deliverySales = 0,
+    this.deliveryCount = 0,
+    this.websiteSales = 0,
+    this.websiteCount = 0,
+    this.posSales = 0,
+    this.posCount = 0,
   });
 
   final int orderCount;
@@ -24,10 +35,21 @@ class ShiftSummary {
   final double grossSales;
   final double discountTotal;
   final double refundTotal;
+  final double deliveryExpenses;
   final double expectedCash;
   final double actualCash;
   final double discrepancy;
   final String discrepancyType;
+  final double dineInSales;
+  final int dineInCount;
+  final double takeawaySales;
+  final int takeawayCount;
+  final double deliverySales;
+  final int deliveryCount;
+  final double websiteSales;
+  final int websiteCount;
+  final double posSales;
+  final int posCount;
 
   String get discrepancyLabelAr => switch (discrepancyType) {
         'shortage' => 'عجز',
@@ -37,45 +59,79 @@ class ShiftSummary {
 
   factory ShiftSummary.fromJson(Map<String, dynamic>? json) {
     if (json == null) return const ShiftSummary();
+    int asInt(List<String> keys) {
+      for (final key in keys) {
+        final value = json[key];
+        if (value is num) return value.toInt();
+      }
+      return 0;
+    }
+
+    double asDouble(List<String> keys) {
+      for (final key in keys) {
+        final value = json[key];
+        if (value is num) return value.toDouble();
+      }
+      return 0;
+    }
+
     return ShiftSummary(
-      orderCount: (json['orderCount'] as num?)?.toInt() ??
-          (json['order_count'] as num?)?.toInt() ??
-          0,
-      voidCount: (json['voidCount'] as num?)?.toInt() ??
-          (json['void_count'] as num?)?.toInt() ??
-          0,
-      refundCount: (json['refundCount'] as num?)?.toInt() ??
-          (json['refund_count'] as num?)?.toInt() ??
-          0,
-      cashSales: (json['cashSales'] as num?)?.toDouble() ??
-          (json['cash_sales'] as num?)?.toDouble() ??
-          0,
-      knetSales: (json['knetSales'] as num?)?.toDouble() ??
-          (json['knet_sales'] as num?)?.toDouble() ??
-          0,
-      electronicSales: (json['electronicSales'] as num?)?.toDouble() ??
-          (json['electronic_sales'] as num?)?.toDouble() ??
-          0,
-      grossSales: (json['grossSales'] as num?)?.toDouble() ??
-          (json['gross_sales'] as num?)?.toDouble() ??
-          0,
-      discountTotal: (json['discountTotal'] as num?)?.toDouble() ??
-          (json['discount_total'] as num?)?.toDouble() ??
-          0,
-      refundTotal: (json['refundTotal'] as num?)?.toDouble() ??
-          (json['refund_total'] as num?)?.toDouble() ??
-          0,
-      expectedCash: (json['expectedCash'] as num?)?.toDouble() ??
-          (json['expected_cash'] as num?)?.toDouble() ??
-          0,
-      actualCash: (json['actualCash'] as num?)?.toDouble() ??
-          (json['actual_cash'] as num?)?.toDouble() ??
-          0,
-      discrepancy: (json['discrepancy'] as num?)?.toDouble() ?? 0,
+      orderCount: asInt(const ['orderCount', 'order_count']),
+      voidCount: asInt(const ['voidCount', 'void_count']),
+      refundCount: asInt(const ['refundCount', 'refund_count']),
+      cashSales: asDouble(const ['cashSales', 'cash_sales']),
+      knetSales: asDouble(const ['knetSales', 'knet_sales']),
+      electronicSales: asDouble(const ['electronicSales', 'electronic_sales']),
+      grossSales: asDouble(const ['grossSales', 'gross_sales']),
+      discountTotal: asDouble(const ['discountTotal', 'discount_total']),
+      refundTotal: asDouble(const ['refundTotal', 'refund_total']),
+      deliveryExpenses: asDouble(const ['deliveryExpenses', 'delivery_expenses']),
+      expectedCash: asDouble(const ['expectedCash', 'expected_cash']),
+      actualCash: asDouble(const ['actualCash', 'actual_cash']),
+      discrepancy: asDouble(const ['discrepancy']),
       discrepancyType:
-          json['discrepancyType']?.toString() ?? json['discrepancy_type']?.toString() ?? 'balanced',
+          json['discrepancyType']?.toString() ??
+          json['discrepancy_type']?.toString() ??
+          'balanced',
+      dineInSales: asDouble(const ['dineInSales', 'dine_in_sales']),
+      dineInCount: asInt(const ['dineInCount', 'dine_in_count']),
+      takeawaySales: asDouble(const ['takeawaySales', 'takeaway_sales']),
+      takeawayCount: asInt(const ['takeawayCount', 'takeaway_count']),
+      deliverySales: asDouble(const ['deliverySales', 'delivery_sales']),
+      deliveryCount: asInt(const ['deliveryCount', 'delivery_count']),
+      websiteSales: asDouble(const ['websiteSales', 'website_sales']),
+      websiteCount: asInt(const ['websiteCount', 'website_count']),
+      posSales: asDouble(const ['posSales', 'pos_sales']),
+      posCount: asInt(const ['posCount', 'pos_count']),
     );
   }
+
+  Map<String, dynamic> toJson() => {
+        'orderCount': orderCount,
+        'voidCount': voidCount,
+        'refundCount': refundCount,
+        'cashSales': cashSales,
+        'knetSales': knetSales,
+        'electronicSales': electronicSales,
+        'grossSales': grossSales,
+        'discountTotal': discountTotal,
+        'refundTotal': refundTotal,
+        'deliveryExpenses': deliveryExpenses,
+        'expectedCash': expectedCash,
+        'actualCash': actualCash,
+        'discrepancy': discrepancy,
+        'discrepancyType': discrepancyType,
+        'dineInSales': dineInSales,
+        'dineInCount': dineInCount,
+        'takeawaySales': takeawaySales,
+        'takeawayCount': takeawayCount,
+        'deliverySales': deliverySales,
+        'deliveryCount': deliveryCount,
+        'websiteSales': websiteSales,
+        'websiteCount': websiteCount,
+        'posSales': posSales,
+        'posCount': posCount,
+      };
 }
 
 class ShiftSession {
@@ -138,6 +194,24 @@ class ShiftSession {
       closedByName: json['closedByName']?.toString() ?? json['closed_by_name']?.toString(),
     );
   }
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'cashierId': cashierId,
+        'cashierName': cashierName,
+        'roleId': roleId,
+        'status': status,
+        'openedAt': openedAt.toUtc().toIso8601String(),
+        if (closedAt != null) 'closedAt': closedAt!.toUtc().toIso8601String(),
+        'openingFloat': openingFloat,
+        if (closingCashCounted != null) 'closingCashCounted': closingCashCounted,
+        'notes': notes,
+        'summary': summary.toJson(),
+        if (closedById != null) 'closedById': closedById,
+        if (closedByName != null) 'closedByName': closedByName,
+        'pettyCashLogs': const [],
+        'registerBalance': openingFloat,
+      };
 }
 
 class ShiftReportsMeta {

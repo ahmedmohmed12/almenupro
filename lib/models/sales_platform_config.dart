@@ -196,6 +196,35 @@ class PlatformCatalog {
       platforms.where((p) => p.isExternal).toList();
 }
 
+/// Operational store/branch tag. Never used on customer receipts.
+class StoreNameBadge extends StatelessWidget {
+  const StoreNameBadge({super.key, required this.storeName});
+
+  final String storeName;
+
+  @override
+  Widget build(BuildContext context) {
+    final name = storeName.trim();
+    if (name.isEmpty) return const SizedBox.shrink();
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: const Color(0xFF0F766E).withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: const Color(0xFF0F766E).withValues(alpha: 0.45)),
+      ),
+      child: Text(
+        '🏷️ $name',
+        style: const TextStyle(
+          fontSize: 13,
+          fontWeight: FontWeight.w800,
+          color: Color(0xFF115E59),
+        ),
+      ),
+    );
+  }
+}
+
 class SalesPlatformBadge extends StatelessWidget {
   const SalesPlatformBadge({
     super.key,

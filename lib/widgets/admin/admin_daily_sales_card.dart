@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 
 import '../../models/restaurant_settings.dart';
@@ -7,6 +10,7 @@ import '../../services/api_service.dart';
 import '../../services/restaurant_settings_service.dart';
 import '../../services/super_admin_scope_service.dart';
 import 'admin_responsive_layout.dart';
+import 'settings/link_hub_qr_download.dart';
 
 class AdminDailySalesCard extends StatefulWidget {
   const AdminDailySalesCard({super.key});
@@ -19,7 +23,9 @@ class _AdminDailySalesCardState extends State<AdminDailySalesCard> {
   static const burgundy = Color(0xFF6B1124);
 
   var _loading = true;
+  var _exporting = false;
   var _days = 1;
+  var _storeId = '';
   String? _error;
   Map<String, dynamic>? _data;
   List<SalesPlatformConfig> _platforms = SalesPlatformConfig.defaults();
@@ -104,6 +110,49 @@ class _AdminDailySalesCardState extends State<AdminDailySalesCard> {
   SalesPlatformConfig _platformFromRow(Map<String, dynamic> row) =>
       PlatformCatalog.fromAnalyticsRow(row, _platforms);
 
+  List<Map<String, dynamic>> get _storeRows =>
+      (_data?['stores'] as List<dynamic>? ?? [])
+          .whereType<Map>()
+          .map((row) => Map<String, dynamic>.from(row))
+          .toList();
+
+  Map<String, dynamic>? get _selectedStore {
+    if (_storeId.isEmpty) return null;
+    for (final row in _storeRows) {
+      if (row['storeId']?.toString() == _storeId) return row;
+    }
+    return null;
+  }
+
+  Future<void> _export(String format) async {
+    if (_exporting || !_canLoad) return;
+    setState(() => _exporting = true);
+    try {
+      final bytes = await ApiService.instance.fetchDailySalesExport(
+        restaurantId: _resolveRestaurantId(),
+        days: _days,
+        storeId: _storeId,
+        format: format,
+      );
+      if (format == 'csv') {
+        await downloadBytesAsFile(
+          Uint8List.fromList(bytes),
+          filename: 'daily-sales.csv',
+          mime: 'text/csv;charset=utf-8',
+        );
+      } else {
+        await openReportPrintView(utf8.decode(bytes));
+      }
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(error.toString().replaceFirst('Exception: ', ''))),
+      );
+    } finally {
+      if (mounted) setState(() => _exporting = false);
+    }
+  }
+
   String? _emptyStateMessage() {
     final meta = _data?['meta'] as Map<String, dynamic>? ?? {};
     final dataState = meta['dataState']?.toString() ?? '';
@@ -122,16 +171,21 @@ class _AdminDailySalesCardState extends State<AdminDailySalesCard> {
 
   @override
   Widget build(BuildContext context) {
-    final summary = _data?['summary'] as Map<String, dynamic>? ?? {};
-    final platforms = (_data?['platforms'] as List<dynamic>? ?? [])
-        .whereType<Map>()
-        .map((row) => Map<String, dynamic>.from(row))
-        .toList();
+    final summary = _selectedStore ??
+        (_data?['summary'] as Map<String, dynamic>? ?? {});
+    final stores = _storeRows;
+    final storeIds = stores
+        .map((row) => row['storeId']?.toString() ?? '')
+        .where((id) => id.isNotEmpty)
+        .toSet();
+    final selectedStoreId = storeIds.contains(_storeId) ? _storeId : '';
 
     final gross = (summary['grossRevenue'] as num?)?.toDouble() ?? 0;
     final net = (summary['netRevenue'] as num?)?.toDouble() ?? 0;
     final commission = (summary['commission'] as num?)?.toDouble() ?? 0;
     final orders = (summary['orders'] as num?)?.toInt() ?? 0;
+    final average = (summary['averageOrderValue'] as num?)?.toDouble() ??
+        (orders > 0 ? gross / orders : 0);
     final emptyMessage = _emptyStateMessage();
 
     return Card(
@@ -143,8 +197,27 @@ class _AdminDailySalesCardState extends State<AdminDailySalesCard> {
             AdminSectionHeader(
               icon: Icons.storefront,
               title: 'تقرير المبيعات الموحّد',
-              subtitle: 'تفصيل ديناميكي حسب قناة البيع — أي منصة جديدة تظهر تلقائياً',
+              subtitle: 'التجميع حسب حساب المتجر، وليس حسب نوع المنصة',
               actions: [
+                DropdownButton<String>(
+                  value: selectedStoreId,
+                  underline: const SizedBox.shrink(),
+                  items: [
+                    const DropdownMenuItem(
+                      value: '',
+                      child: Text('إجمالي كل المتاجر'),
+                    ),
+                    ...stores.map(
+                      (row) => DropdownMenuItem(
+                        value: row['storeId']?.toString() ?? '',
+                        child: Text(row['storeName']?.toString() ?? ''),
+                      ),
+                    ),
+                  ],
+                  onChanged: _loading
+                      ? null
+                      : (value) => setState(() => _storeId = value ?? ''),
+                ),
                 DropdownButton<int>(
                   value: _days,
                   underline: const SizedBox.shrink(),
@@ -160,6 +233,16 @@ class _AdminDailySalesCardState extends State<AdminDailySalesCard> {
                           setState(() => _days = value);
                           _load();
                         },
+                ),
+                IconButton(
+                  tooltip: 'تصدير CSV',
+                  onPressed: _loading || _exporting ? null : () => _export('csv'),
+                  icon: const Icon(Icons.table_view),
+                ),
+                IconButton(
+                  tooltip: 'تصدير PDF',
+                  onPressed: _loading || _exporting ? null : () => _export('pdf'),
+                  icon: const Icon(Icons.picture_as_pdf),
                 ),
                 IconButton(
                   tooltip: 'تحديث',
@@ -211,73 +294,75 @@ class _AdminDailySalesCardState extends State<AdminDailySalesCard> {
                     icon: Icons.receipt_long,
                     color: Colors.blue,
                   ),
+                  _SummaryTile(
+                    label: 'متوسط الطلب',
+                    value: '${average.toStringAsFixed(3)} د.ك',
+                    icon: Icons.analytics,
+                    color: const Color(0xFF0F766E),
+                  ),
                 ],
               ),
               const SizedBox(height: 18),
               const Text(
-                'حسب قناة البيع',
+                'مقارنة المتاجر',
                 style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
               ),
               const SizedBox(height: 10),
-              if (platforms.isEmpty && emptyMessage != null)
+              if (stores.isEmpty && emptyMessage != null)
                 Text(
                   emptyMessage,
                   style: const TextStyle(color: Color(0xFF888888)),
                 )
-              else if (platforms.isEmpty)
+              else if (stores.isEmpty)
                 const Text(
                   'لا توجد مبيعات في هذه الفترة',
                   style: TextStyle(color: Color(0xFF888888)),
                 )
               else
-                ...platforms.map((row) {
-                  final platform = _platformFromRow(row);
-                  final rowGross =
-                      (row['grossRevenue'] as num?)?.toDouble() ?? 0;
-                  final rowNet = (row['netRevenue'] as num?)?.toDouble() ?? 0;
-                  final rowOrders = (row['orders'] as num?)?.toInt() ?? 0;
-                  final share = (row['sharePercent'] as num?)?.toDouble() ?? 0;
-
-                  return Container(
-                    margin: const EdgeInsets.only(bottom: 8),
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: platform.color.withValues(alpha: 0.06),
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(
-                        color: platform.color.withValues(alpha: 0.25),
-                      ),
-                    ),
-                    child: Row(
-                      children: [
-                        SalesPlatformBadge(platform: platform),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                '$rowOrders طلب • ${share.toStringAsFixed(1)}% من الإجمالي',
-                                style: const TextStyle(
-                                  fontSize: 12,
-                                  color: Color(0xFF666666),
-                                ),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                'إجمالي ${rowGross.toStringAsFixed(3)} — صافي ${rowNet.toStringAsFixed(3)} د.ك',
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 13,
-                                ),
-                              ),
-                            ],
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: DataTable(
+                    headingRowHeight: 40,
+                    dataRowMinHeight: 42,
+                    dataRowMaxHeight: 56,
+                    columns: const [
+                      DataColumn(label: Text('المتجر')),
+                      DataColumn(label: Text('الطلبات')),
+                      DataColumn(label: Text('إجمالي المبيعات')),
+                      DataColumn(label: Text('متوسط الطلب')),
+                      DataColumn(label: Text('الصافي')),
+                    ],
+                    rows: stores.map((row) {
+                      final platform = _platformFromRow(row);
+                      final rowGross =
+                          (row['grossRevenue'] as num?)?.toDouble() ?? 0;
+                      final rowNet = (row['netRevenue'] as num?)?.toDouble() ?? 0;
+                      final rowOrders = (row['orders'] as num?)?.toInt() ?? 0;
+                      final rowAverage =
+                          (row['averageOrderValue'] as num?)?.toDouble() ?? 0;
+                      final active = row['storeId']?.toString() == selectedStoreId;
+                      return DataRow(
+                        selected: active,
+                        cells: [
+                          DataCell(
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                SalesPlatformBadge(platform: platform),
+                                const SizedBox(width: 8),
+                                Text(row['storeName']?.toString() ?? ''),
+                              ],
+                            ),
                           ),
-                        ),
-                      ],
-                    ),
-                  );
-                }),
+                          DataCell(Text('$rowOrders')),
+                          DataCell(Text('${rowGross.toStringAsFixed(3)} د.ك')),
+                          DataCell(Text('${rowAverage.toStringAsFixed(3)} د.ك')),
+                          DataCell(Text('${rowNet.toStringAsFixed(3)} د.ك')),
+                        ],
+                      );
+                    }).toList(),
+                  ),
+                ),
             ],
           ],
         ),

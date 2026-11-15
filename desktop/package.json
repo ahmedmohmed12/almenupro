@@ -1,0 +1,57 @@
+{
+  "name": "almenupro-desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "AlMenuPro Electron POS shell and delivery-provider scraper adapters",
+  "main": "src/main.js",
+  "type": "commonjs",
+  "scripts": {
+    "build:preload": "node scripts/build-preload.js",
+    "start": "npm run build:preload && electron .",
+    "test": "node --test test/*.test.js",
+    "test:watch": "node --test --watch test/*.test.js",
+    "smoke": "npm run build:preload && npm test && node --check src/main.js && node --check src/preload/shell-preload.js && node --check src/renderer/shell.js",
+    "diagnose": "node scripts/diagnose-config.js",
+    "simulate:talabat": "node scripts/simulate-order.js talabat",
+    "simulate:jahez": "node scripts/simulate-order.js jahez",
+    "simulate:keeta": "node scripts/simulate-order.js keeta",
+    "simulate:e2e:talabat": "node scripts/simulate-order.js talabat --wait-confirmed",
+    "simulate:e2e:jahez": "node scripts/simulate-order.js jahez --wait-confirmed",
+    "simulate:e2e:keeta": "node scripts/simulate-order.js keeta --wait-confirmed",
+    "pack": "npm run build:preload && electron-builder --dir",
+    "dist:win": "npm run build:preload && electron-builder --win && node scripts/export-windows-artifacts.js"
+  },
+  "devDependencies": {
+    "electron": "^44.5.1",
+    "electron-builder": "^26.15.3",
+    "esbuild": "^0.25.10"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "build": {
+    "appId": "com.almenupro.pos",
+    "productName": "AlMenuPro POS",
+    "directories": {
+      "output": "release-production-icon"
+    },
+    "files": [
+      "src/**/*",
+      "dist/scraper-preload.cjs",
+      ".env.example",
+      ".env.production.example",
+      "README.md",
+      "package.json"
+    ],
+    "win": {
+      "icon": "../windows/runner/resources/app_icon.ico",
+      "target": [
+        "nsis",
+        "portable"
+      ]
+    }
+  },
+  "dependencies": {
+    "axios": "^1.20.0"
+  }
+}

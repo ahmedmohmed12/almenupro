@@ -22,8 +22,8 @@ class PosReceiptHtml {
     InvoiceLanguage language = InvoiceLanguage.arabic,
   }) {
     final ar = language.isArabic;
-    final resolvedWidth = widthMm ??
-        (paperWidth == PosReceiptPaperWidth.mm58 ? 58.0 : 80.0);
+    final resolvedWidth =
+        widthMm ?? (paperWidth == PosReceiptPaperWidth.mm58 ? 58.0 : 80.0);
     final w = resolvedWidth.clamp(40.0, 120.0);
     final time = DateFormat('hh:mm a').format(order.createdAt.toLocal());
     final dateLine = DateFormat('yyyy-MM-dd').format(order.createdAt.toLocal());
@@ -32,6 +32,7 @@ class PosReceiptHtml {
     final title = isKitchen
         ? (ar ? 'تذكرة المطبخ' : 'Kitchen ticket')
         : (ar ? 'فاتورة' : 'Invoice');
+    // storeName is cashier/admin only and is intentionally omitted here.
     final fonts = _fontScale(fontSize, w);
     final currency = ar ? 'د.ك' : 'KWD';
     final langAttr = ar ? 'ar' : 'en';
@@ -87,8 +88,25 @@ class PosReceiptHtml {
       OrderType.pickup => ar ? 'استلام' : 'Pickup',
       OrderType.dineIn => ar ? 'صالة' : 'Dine-in',
       OrderType.delivery => ar ? 'توصيل' : 'Delivery',
+      OrderType.scheduledDelivery => ar ? 'توصيل مجدول' : 'Scheduled delivery',
     };
     final defaultPayment = ar ? 'كاش' : 'Cash';
+    final paymentLabel = (order.paymentMethod ?? '').trim().isEmpty
+        ? defaultPayment
+        : order.paymentMethod!.trim();
+    final settlement = order.settlementLabel;
+    final settlementText = settlement == 'CASH ON DELIVERY'
+        ? (ar
+            ? 'الدفع عند الاستلام — CASH ON DELIVERY'
+            : 'CASH ON DELIVERY')
+        : (ar ? 'مدفوع مسبقاً — PREPAID / ONLINE' : 'PREPAID / ONLINE');
+    final settlementHtml = settlement.isEmpty
+        ? ''
+        : '<div class="settlement">${_escape(settlementText)}</div>';
+    final payable = order.customerPayable;
+    final instructions = order.deliveryInstructions.trim();
+    final tableLabel = _tableLabel(order, ar: ar);
+    final isTableKitchen = isKitchen && tableLabel != null;
 
     final itemsBlock = isKitchen
         ? '<div class="kitchen-items">$rows</div>'
@@ -100,16 +118,47 @@ class PosReceiptHtml {
   <div class="totals">
     <div class="total-row"><span>${ar ? 'المجموع' : 'Subtotal'}</span><span>${subtotal.toStringAsFixed(3)}</span></div>
     ${deliveryFee > 0 ? '<div class="total-row"><span>${ar ? 'التوصيل' : 'Delivery'}</span><span>${deliveryFee.toStringAsFixed(3)}</span></div>' : ''}
-    <div class="total-row grand"><span>${ar ? 'الإجمالي' : 'Total'}</span><span>${order.totalPrice.toStringAsFixed(3)} $currency</span></div>
+    <div class="total-row grand"><span>${ar ? 'المطلوب من العميل' : 'Customer payable'}</span><span>${payable.toStringAsFixed(3)} $currency</span></div>
   </div>''';
 
-    final customerBlock = isKitchen
+    final hasCustomerDetails =
+        order.customerName.trim().isNotEmpty ||
+        order.phone.trim().isNotEmpty ||
+        order.address.trim().isNotEmpty;
+    final showCustomerDetails =
+        !isKitchen ||
+        (order.orderType == OrderType.delivery && hasCustomerDetails);
+    final customerBlock = !showCustomerDetails
         ? ''
         : '''
     <div class="customer">
       <div class="customer-name">${_escape(order.customerName)}</div>
       ${_customerAddressHtml(order, ar: ar)}
       <div class="customer-phone">${_escape(order.phone)}</div>
+      ${instructions.isEmpty ? '' : '<div class="note">${_escape(ar ? 'تعليمات التوصيل: $instructions' : 'Delivery instructions: $instructions')}</div>'}
+    </div>''';
+
+    final tableKitchenBlock = isTableKitchen
+        ? '''
+    <div class="table-highlight">
+      <div class="table-label">${ar ? 'رقم الطاولة' : 'Table'}</div>
+      <div class="table-value">${_escape(tableLabel)}</div>
+      <div class="payment-label">${ar ? 'طريقة الدفع' : 'Payment'}</div>
+      <div class="payment-value">${_escape(paymentLabel)}</div>
+    </div>'''
+        : '';
+
+    final statusRow = isTableKitchen
+        ? '''
+    <div class="status-row">
+      <span class="pill">${_escape(orderTypeLabel)}</span>
+      <span class="pill">$time</span>
+    </div>'''
+        : '''
+    <div class="status-row">
+      <span class="pill">${_escape(orderTypeLabel)}</span>
+      <span class="pill">$time</span>
+      <span class="pill">${_escape(paymentLabel)}</span>
     </div>''';
 
     return '''
@@ -131,11 +180,10 @@ class PosReceiptHtml {
       $phoneLine
       $addressLine
     </div>
-    <div class="status-row">
-      <span class="pill">${_escape(orderTypeLabel)}</span>
-      <span class="pill">$time</span>
-      <span class="pill">${_escape(order.paymentMethod ?? defaultPayment)}</span>
-    </div>
+    $settlementHtml
+    $statusRow
+    ${isKitchen && (order.targetKitchenName ?? '').trim().isNotEmpty ? '<div class="order-no">${_escape(order.targetKitchenName!.trim())}</div>' : ''}
+    $tableKitchenBlock
     <div class="order-no">#${_escape(orderId)}</div>
     $customerBlock
     <div class="divider"></div>
@@ -150,6 +198,34 @@ class PosReceiptHtml {
 </html>''';
   }
 
+  static String? _tableLabel(Order order, {required bool ar}) {
+    final number = (order.tableNumber ?? '').trim();
+    if (number.isNotEmpty) {
+      return ar ? 'طاولة $number' : 'Table $number';
+    }
+    final tableId = (order.tableId ?? '').trim();
+    final isDineIn = order.orderType == OrderType.dineIn || tableId.isNotEmpty;
+    if (!isDineIn) return null;
+
+    final address = order.address.trim();
+    final addressMatch = RegExp(r'طاولة\s*([^\s—\-]+)').firstMatch(address);
+    if (addressMatch != null) {
+      final value = addressMatch.group(1)?.trim() ?? '';
+      if (value.isNotEmpty) {
+        return ar ? 'طاولة $value' : 'Table $value';
+      }
+    }
+
+    final name = order.customerName.trim();
+    if (name.startsWith('طاولة') || name.toLowerCase().startsWith('table')) {
+      return name;
+    }
+    if (name.isNotEmpty) {
+      return ar ? 'طاولة $name' : 'Table $name';
+    }
+    return ar ? 'طاولة' : 'Table';
+  }
+
   static String _customerAddressHtml(Order order, {required bool ar}) {
     final details = order.addressDetails;
     final parts = <String>[];
@@ -161,10 +237,16 @@ class PosReceiptHtml {
     }
     final streetBits = <String>[];
     if (details.block.trim().isNotEmpty) {
-      streetBits.add(ar ? 'قطعة ${details.block.trim()}' : 'block ${details.block.trim()}');
+      streetBits.add(
+        ar ? 'قطعة ${details.block.trim()}' : 'block ${details.block.trim()}',
+      );
     }
     if (details.street.trim().isNotEmpty) {
-      streetBits.add(ar ? 'شارع ${details.street.trim()}' : 'street ${details.street.trim()}');
+      streetBits.add(
+        ar
+            ? 'شارع ${details.street.trim()}'
+            : 'street ${details.street.trim()}',
+      );
     }
     if (details.houseNumber.trim().isNotEmpty) {
       streetBits.add(
@@ -172,26 +254,40 @@ class PosReceiptHtml {
       );
     }
     if (details.avenue.trim().isNotEmpty) {
-      streetBits.add(ar ? 'جادة ${details.avenue.trim()}' : 'avenue ${details.avenue.trim()}');
+      streetBits.add(
+        ar
+            ? 'جادة ${details.avenue.trim()}'
+            : 'avenue ${details.avenue.trim()}',
+      );
     }
     if (details.floorApartment.trim().isNotEmpty) {
       streetBits.add(
-        ar ? 'طابق ${details.floorApartment.trim()}' : details.floorApartment.trim(),
+        ar
+            ? 'طابق ${details.floorApartment.trim()}'
+            : details.floorApartment.trim(),
       );
     }
 
     final lines = <String>[];
     if (streetBits.isNotEmpty) lines.add(streetBits.join(', '));
     if (parts.isNotEmpty) lines.add(parts.join(', '));
-    if (lines.isEmpty && order.address.trim().isNotEmpty) {
-      lines.add(order.address.trim());
+    final rawAddress = order.address.trim();
+    if (lines.isEmpty && rawAddress.isNotEmpty) {
+      lines.add(rawAddress);
     }
-    if (lines.isEmpty) return '';
-    return lines.map((line) => '<div class="addr">${_escape(line)}</div>').join();
+    final shown = lines.isEmpty ? (ar ? '—' : '—') : lines.join(' · ');
+    return '<div class="addr"><strong>${ar ? 'العنوان' : 'Address'}:</strong> ${_escape(shown)}</div>';
   }
 
-  static ({double base, double brand, double kitchen, double title, double grand, double orderNo})
-      _fontScale(PosPrintFontSize size, double widthMm) {
+  static ({
+    double base,
+    double brand,
+    double kitchen,
+    double title,
+    double grand,
+    double orderNo,
+  })
+  _fontScale(PosPrintFontSize size, double widthMm) {
     final narrow = widthMm < 65;
     final factor = switch (size) {
       PosPrintFontSize.small => 0.85,
@@ -218,7 +314,8 @@ class PosReceiptHtml {
       double title,
       double grand,
       double orderNo,
-    }) fonts,
+    })
+    fonts,
   }) {
     final w = widthMm.toStringAsFixed(2);
     return '''
@@ -263,12 +360,44 @@ class PosReceiptHtml {
       font-weight: 700;
     }
     .pill { flex: 1; text-align: center; }
+    .settlement {
+      border: 2px solid #111;
+      font-size: ${fonts.grand.toStringAsFixed(1)}px;
+      font-weight: 800;
+      margin: 8px 0;
+      padding: 6px;
+      text-align: center;
+    }
     .order-no {
       text-align: center;
       font-weight: 900;
       font-size: ${fonts.orderNo.toStringAsFixed(1)}px;
       line-height: 1.1;
       margin: 6px 0 8px;
+    }
+    .table-highlight {
+      text-align: center;
+      margin: 8px 0 10px;
+      padding: 8px 4px;
+      border: 2px solid #000;
+    }
+    .table-label,
+    .payment-label {
+      font-size: ${(fonts.base * 0.95).toStringAsFixed(1)}px;
+      font-weight: 800;
+      margin-top: 2px;
+    }
+    .table-value {
+      font-size: ${(fonts.orderNo * 1.05).toStringAsFixed(1)}px;
+      font-weight: 900;
+      line-height: 1.05;
+      margin: 2px 0 8px;
+    }
+    .payment-value {
+      font-size: ${(fonts.orderNo * 0.85).toStringAsFixed(1)}px;
+      font-weight: 900;
+      line-height: 1.05;
+      margin-bottom: 2px;
     }
     .customer { text-align: center; margin-bottom: 8px; line-height: 1.4; }
     .customer-name { font-weight: 800; font-size: ${(fonts.base * 1.05).toStringAsFixed(1)}px; }

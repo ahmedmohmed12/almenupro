@@ -1,0 +1,46 @@
+{
+  "id": "/admin",
+  "name": "AlMenuPro POS",
+  "short_name": "AlMenuPro POS",
+  "description": "Dedicated AlMenuPro cashier terminal for live orders, printing, and checkout.",
+  "start_url": "/admin",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": ["standalone", "window-controls-overlay", "minimal-ui"],
+  "orientation": "landscape-primary",
+  "background_color": "#F4F6F8",
+  "theme_color": "#6B1124",
+  "lang": "ar",
+  "dir": "rtl",
+  "categories": ["business", "productivity", "food"],
+  "prefer_related_applications": false,
+  "launch_handler": {
+    "client_mode": ["navigate-existing", "auto"]
+  },
+  "icons": [
+    {
+      "src": "icons/Icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/Icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/Icon-maskable-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "icons/Icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

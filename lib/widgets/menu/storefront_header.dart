@@ -1,10 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import '../../models/menu_item.dart';
 import '../../providers/customer_session_provider.dart';
+import '../../providers/locale_provider.dart';
 import '../../theme/app_theme.dart';
 import '../network_menu_image.dart';
 import 'product_sale_price.dart';
+import 'menu_engineering_badge.dart';
+import 'video/menu_video_widgets.dart';
 
 class StorefrontHero extends StatelessWidget {
   const StorefrontHero({
@@ -14,6 +18,13 @@ class StorefrontHero extends StatelessWidget {
     required this.logoUrl,
     required this.deliveryFee,
     required this.session,
+    this.heroImageUrl = '',
+    this.isArabic = true,
+    this.rating,
+    this.reviewCount = 0,
+    this.onSearch,
+    this.onShare,
+    this.onToggleLanguage,
   });
 
   final String restaurantName;
@@ -21,6 +32,13 @@ class StorefrontHero extends StatelessWidget {
   final String logoUrl;
   final double deliveryFee;
   final CustomerSessionProvider session;
+  final String heroImageUrl;
+  final bool isArabic;
+  final double? rating;
+  final int reviewCount;
+  final VoidCallback? onSearch;
+  final VoidCallback? onShare;
+  final VoidCallback? onToggleLanguage;
 
   @override
   Widget build(BuildContext context) {
@@ -29,36 +47,64 @@ class StorefrontHero extends StatelessWidget {
         final width = constraints.maxWidth;
         final compact = width < 520;
         final desktop = width >= 900;
-        final bannerHeight = desktop ? 148.0 : compact ? 84.0 : 112.0;
-        final logoSize = desktop ? 64.0 : compact ? 44.0 : 52.0;
-        final titleSize = desktop ? 22.0 : compact ? 15.0 : 17.0;
+        final bannerHeight = desktop
+            ? 280.0
+            : compact
+            ? 220.0
+            : 248.0;
+        final logoSize = desktop
+            ? 64.0
+            : compact
+            ? 44.0
+            : 52.0;
+        final titleSize = desktop
+            ? 22.0
+            : compact
+            ? 15.0
+            : 17.0;
         final horizontal = desktop ? 20.0 : 10.0;
+        final coverUrl = heroImageUrl.trim();
 
         return Column(
           children: [
             Stack(
               clipBehavior: Clip.none,
               children: [
-                Container(
+                SizedBox(
                   height: bannerHeight,
                   width: double.infinity,
-                  decoration: const BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [Color(0xFF6B1124), Color(0xFFB45309)],
-                      begin: Alignment.topRight,
-                      end: Alignment.bottomLeft,
-                    ),
-                  ),
-                  child: Align(
-                    alignment: Alignment.topLeft,
-                    child: Padding(
-                      padding: EdgeInsets.fromLTRB(horizontal, 10, 12, 0),
-                      child: Icon(
-                        Icons.cookie,
-                        color: Colors.white24,
-                        size: desktop ? 80 : 52,
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      _HeroBackdrop(
+                        imageUrl: coverUrl,
+                        cookieSize: desktop ? 96 : 64,
                       ),
-                    ),
+                      const DecoratedBox(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [
+                              Color(0x99000000),
+                              Color(0x33000000),
+                              Color(0x66000000),
+                            ],
+                          ),
+                        ),
+                      ),
+                      Positioned(
+                        top: 10,
+                        left: horizontal,
+                        right: horizontal,
+                        child: _HeroActions(
+                          isArabic: isArabic,
+                          onSearch: onSearch,
+                          onShare: onShare,
+                          onToggleLanguage: onToggleLanguage,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
                 Padding(
@@ -99,7 +145,12 @@ class StorefrontHero extends StatelessWidget {
                                   ],
                                 ),
                                 const SizedBox(height: 6),
-                                _MetaRow(deliveryFee: deliveryFee),
+                                _MetaRow(
+                                  deliveryFee: deliveryFee,
+                                  isArabic: isArabic,
+                                  rating: rating,
+                                  reviewCount: reviewCount,
+                                ),
                               ],
                             )
                           : Row(
@@ -109,7 +160,8 @@ class StorefrontHero extends StatelessWidget {
                                 const SizedBox(width: 14),
                                 Expanded(
                                   child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
                                       _Identity(
                                         restaurantName: restaurantName,
@@ -118,7 +170,12 @@ class StorefrontHero extends StatelessWidget {
                                         maxDescriptionLines: desktop ? 2 : 1,
                                       ),
                                       const SizedBox(height: 6),
-                                      _MetaRow(deliveryFee: deliveryFee),
+                                      _MetaRow(
+                                        deliveryFee: deliveryFee,
+                                        isArabic: isArabic,
+                                        rating: rating,
+                                        reviewCount: reviewCount,
+                                      ),
                                     ],
                                   ),
                                 ),
@@ -137,6 +194,128 @@ class StorefrontHero extends StatelessWidget {
         );
       },
     );
+  }
+}
+
+class _HeroBackdrop extends StatelessWidget {
+  const _HeroBackdrop({required this.imageUrl, required this.cookieSize});
+
+  final String imageUrl;
+  final double cookieSize;
+
+  @override
+  Widget build(BuildContext context) {
+    final hasImage = imageUrl.trim().isNotEmpty;
+    return ColoredBox(
+      color: const Color(0xFF6B1124),
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          const DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [Color(0xFF6B1124), Color(0xFFB45309)],
+                begin: Alignment.topRight,
+                end: Alignment.bottomLeft,
+              ),
+            ),
+          ),
+          if (hasImage)
+            NetworkMenuImage(imageUrl: imageUrl, fit: BoxFit.cover)
+          else
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Padding(
+                padding: const EdgeInsets.only(left: 16),
+                child: Icon(
+                  Icons.cookie,
+                  color: Colors.white24,
+                  size: cookieSize,
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _HeroActions extends StatelessWidget {
+  const _HeroActions({
+    required this.isArabic,
+    this.onSearch,
+    this.onShare,
+    this.onToggleLanguage,
+  });
+
+  final bool isArabic;
+  final VoidCallback? onSearch;
+  final VoidCallback? onShare;
+  final VoidCallback? onToggleLanguage;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        const Spacer(),
+        _CircleAction(
+          icon: Icons.search,
+          tooltip: isArabic ? 'بحث' : 'Search',
+          onTap: onSearch,
+        ),
+        const SizedBox(width: 8),
+        _CircleAction(
+          icon: Icons.share_outlined,
+          tooltip: isArabic ? 'مشاركة' : 'Share',
+          onTap: onShare,
+        ),
+        const SizedBox(width: 8),
+        _CircleAction(
+          label: isArabic ? 'EN' : 'ع',
+          tooltip: isArabic ? 'English' : 'العربية',
+          onTap: onToggleLanguage,
+        ),
+      ],
+    );
+  }
+}
+
+class _CircleAction extends StatelessWidget {
+  const _CircleAction({this.icon, this.label, this.tooltip, this.onTap});
+
+  final IconData? icon;
+  final String? label;
+  final String? tooltip;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final child = Material(
+      color: Colors.black.withValues(alpha: 0.38),
+      shape: const CircleBorder(),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: SizedBox(
+          width: 40,
+          height: 40,
+          child: Center(
+            child: label != null
+                ? Text(
+                    label!,
+                    style: const TextStyle(
+                      color: Color(0xFFF59E0B),
+                      fontWeight: FontWeight.w800,
+                      fontSize: 13,
+                    ),
+                  )
+                : Icon(icon, color: Colors.white, size: 20),
+          ),
+        ),
+      ),
+    );
+    if (tooltip == null || tooltip!.isEmpty) return child;
+    return Tooltip(message: tooltip!, child: child);
   }
 }
 
@@ -179,6 +358,8 @@ class _Identity extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final localeCode = context.watch<LocaleProvider>().localeCode;
+    final isArabic = localeCode.startsWith('ar');
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -186,14 +367,15 @@ class _Identity extends StatelessWidget {
           restaurantName,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
-          style: TextStyle(
-            fontSize: titleSize,
-            fontWeight: FontWeight.w800,
-          ),
+          style: TextStyle(fontSize: titleSize, fontWeight: FontWeight.w800),
         ),
         const SizedBox(height: 2),
         Text(
-          description.isEmpty ? 'كوكيز طازج وتوصيل سريع' : description,
+          description.isEmpty
+              ? (isArabic
+                    ? 'طعام طازج وتوصيل سريع'
+                    : 'Fresh food and fast delivery')
+              : description,
           maxLines: maxDescriptionLines,
           overflow: TextOverflow.ellipsis,
           style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
@@ -204,23 +386,40 @@ class _Identity extends StatelessWidget {
 }
 
 class _MetaRow extends StatelessWidget {
-  const _MetaRow({required this.deliveryFee});
+  const _MetaRow({
+    required this.deliveryFee,
+    required this.isArabic,
+    this.rating,
+    this.reviewCount = 0,
+  });
 
   final double deliveryFee;
+  final bool isArabic;
+  final double? rating;
+  final int reviewCount;
 
   @override
   Widget build(BuildContext context) {
+    final hasReviews = rating != null && reviewCount > 0;
     return Wrap(
       spacing: 10,
       runSpacing: 6,
       children: [
-        const _MetaChip(icon: Icons.star_rounded, label: '4.8'),
-        const _MetaChip(icon: Icons.timer_outlined, label: '25-35 د'),
+        _MetaChip(
+          icon: Icons.star_rounded,
+          label: hasReviews
+              ? '${rating!.toStringAsFixed(1)} ($reviewCount)'
+              : (isArabic ? 'جديد على AlMenuPro' : 'New on AlMenuPro'),
+        ),
+        _MetaChip(
+          icon: Icons.timer_outlined,
+          label: isArabic ? '25-35 د' : '25-35 min',
+        ),
         _MetaChip(
           icon: Icons.delivery_dining_outlined,
           label: deliveryFee <= 0
-              ? 'توصيل مجاني'
-              : '${deliveryFee.toStringAsFixed(3)} د.ك',
+              ? (isArabic ? 'توصيل مجاني' : 'Free delivery')
+              : '${deliveryFee.toStringAsFixed(3)} ${isArabic ? 'د.ك' : 'KWD'}',
         ),
       ],
     );
@@ -235,6 +434,8 @@ class _PromoBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final locale = context.watch<LocaleProvider>();
+    final isArabic = locale.isArabic;
     return Container(
       width: double.infinity,
       padding: EdgeInsets.symmetric(
@@ -257,8 +458,10 @@ class _PromoBanner extends StatelessWidget {
               children: [
                 Text(
                   session.identified && session.isReturning
-                      ? 'مرحباً بعودتك، ${session.welcomeName}'
-                      : 'عرض الكاش باك',
+                      ? (isArabic
+                            ? 'مرحباً بعودتك، ${session.welcomeName}'
+                            : 'Welcome back, ${session.welcomeName}')
+                      : (isArabic ? 'عرض الكاش باك' : 'Cashback offer'),
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
@@ -269,7 +472,9 @@ class _PromoBanner extends StatelessWidget {
                 const SizedBox(height: 2),
                 Text(
                   session.identified && session.walletBalance > 0
-                      ? 'رصيد محفظتك ${session.walletBalance.toStringAsFixed(3)} د.ك — ${session.cashbackOfferLabel}'
+                      ? (isArabic
+                            ? 'رصيد محفظتك ${session.walletBalance.toStringAsFixed(3)} د.ك — ${session.cashbackOfferLabel}'
+                            : 'Wallet balance ${session.walletBalance.toStringAsFixed(3)} KWD — ${session.cashbackOfferLabel}')
                       : session.cashbackOfferLabel,
                   maxLines: compact ? 3 : 2,
                   overflow: TextOverflow.ellipsis,
@@ -324,10 +529,14 @@ class StorefrontItemCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final localeCode = context.watch<LocaleProvider>().localeCode;
+    final name = item.localizedName(localeCode);
+    final description = item.localizedDescription(localeCode);
+    final currency = localeCode.startsWith('ar') ? 'د.ك' : 'KWD';
     return LayoutBuilder(
       builder: (context, constraints) {
         final compact = dense || constraints.maxWidth < 200;
-        final showDescription = !compact && item.description.trim().isNotEmpty;
+        final showDescription = !compact && description.trim().isNotEmpty;
         final radius = BorderRadius.circular(14);
 
         return Material(
@@ -361,6 +570,24 @@ class StorefrontItemCard extends StatelessWidget {
                           compact: compact,
                         ),
                       ),
+                    if ((item.catalogBadge ?? '').trim().isNotEmpty)
+                      Positioned(
+                        top: 8,
+                        right: 8,
+                        child: MenuEngineeringBadge.forItem(
+                          item,
+                          compact: compact,
+                        ),
+                      ),
+                    if (item.hasVideo)
+                      PositionedDirectional(
+                        start: 8,
+                        bottom: 8,
+                        child: ItemVideoBadge(
+                          item: item,
+                          compact: compact,
+                        ),
+                      ),
                   ],
                 ),
               ),
@@ -375,7 +602,7 @@ class StorefrontItemCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      item.name,
+                      name,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
@@ -387,7 +614,7 @@ class StorefrontItemCard extends StatelessWidget {
                     if (showDescription) ...[
                       const SizedBox(height: 3),
                       Text(
-                        item.description,
+                        description,
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
@@ -411,7 +638,9 @@ class StorefrontItemCard extends StatelessWidget {
                   child: SizedBox(
                     height: compact ? 38 : 42,
                     child: Padding(
-                      padding: EdgeInsets.symmetric(horizontal: compact ? 10 : 12),
+                      padding: EdgeInsets.symmetric(
+                        horizontal: compact ? 10 : 12,
+                      ),
                       child: Row(
                         children: [
                           Icon(
@@ -421,7 +650,7 @@ class StorefrontItemCard extends StatelessWidget {
                           ),
                           Expanded(
                             child: Text(
-                              '${item.finalPrice.toStringAsFixed(3)} د.ك',
+                              '${item.finalPrice.toStringAsFixed(3)} $currency',
                               textAlign: TextAlign.center,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,

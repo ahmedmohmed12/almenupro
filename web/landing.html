@@ -1,11 +1,11 @@
 <!DOCTYPE html>
-<html lang="ar" dir="rtl">
+<html lang="ar" dir="rtl" data-title-key="homeTitle" data-desc-key="homeDesc">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="description" content="المنيو برو — منيو إلكتروني، كاشير POS، قبول طلبات تلقائي، طباعة حرارية، وروابط واتساب ذكية بدون أي عمولات." />
+  <meta name="description" content="المنيو برو — نظام نقاط بيع وإدارة مطاعم سحابي: منيو إلكتروني، كاشير، مطبخ، وواتساب بدون أي عمولات." />
   <meta name="theme-color" content="#6B1124" />
-  <title>المنيو برو | أنشئ منيو مطعمك ونظام الكاشير بدون عمولات</title>
+  <title>المنيو برو | إدارة المطاعم ونقاط البيع بدون عمولات</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -19,13 +19,11 @@
               orange: '#E39000',
               maroon: '#6B1124',
               surface: '#FAF7F4',
-              bg: '#F5F0EB',
+              bg: '#F7F4F1',
               black: '#1A1A1A',
             },
           },
-          fontFamily: {
-            sans: ['Cairo', 'system-ui', 'sans-serif'],
-          },
+          fontFamily: { sans: ['Cairo', 'system-ui', 'sans-serif'] },
           boxShadow: {
             card: '0 8px 30px rgba(26, 26, 26, 0.08)',
             glow: '0 18px 50px rgba(107, 17, 36, 0.18)',
@@ -37,230 +35,269 @@
   <style>
     html { scroll-behavior: smooth; }
     body { font-family: 'Cairo', system-ui, sans-serif; }
-    .nav-blur {
-      backdrop-filter: blur(16px);
-      -webkit-backdrop-filter: blur(16px);
-    }
-    .feature-card:hover { transform: translateY(-6px); }
-    .feature-card { transition: transform .25s ease, box-shadow .25s ease; }
+    .nav-blur { backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); }
     .pulse-dot { animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
     @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .45; } }
-    .skeleton {
-      background: linear-gradient(90deg, #ece5df 25%, #f7f2ed 50%, #ece5df 75%);
-      background-size: 200% 100%;
-      animation: shimmer 1.2s infinite;
-    }
-    @keyframes shimmer {
-      0% { background-position: 200% 0; }
-      100% { background-position: -200% 0; }
-    }
+    .logo-track { animation: marquee 28s linear infinite; }
+    @keyframes marquee { from { transform: translateX(0); } to { transform: translateX(50%); } }
   </style>
 </head>
-<body class="min-h-screen bg-brand-bg text-brand-black antialiased">
-  <div class="pointer-events-none fixed inset-0 overflow-hidden">
-    <div class="absolute -right-24 -top-24 h-80 w-80 rounded-full bg-brand-orange/15 blur-3xl"></div>
-    <div class="absolute -bottom-24 -left-24 h-[28rem] w-[28rem] rounded-full bg-brand-maroon/10 blur-3xl"></div>
-  </div>
-
-  <header class="nav-blur sticky top-0 z-50 border-b border-white/60 bg-white/80">
+<body class="min-h-screen bg-white text-brand-black antialiased">
+  <header class="nav-blur sticky top-0 z-50 border-b border-stone-100 bg-white/90">
     <nav class="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3 sm:px-6">
-      <a href="#top" class="flex items-center gap-3">
-        <span class="flex h-11 w-11 items-center justify-center rounded-2xl bg-brand-maroon text-lg font-black text-white">م</span>
-        <span class="text-lg font-black leading-none sm:text-xl">
-          <span class="text-brand-maroon">المنيو</span>
-          <span class="text-brand-orange"> برو</span>
-        </span>
+      <a href="#top" class="flex shrink-0 items-center">
+        <img src="/logo.png" alt="Almenupro" class="h-16 w-auto object-contain sm:h-20" />
       </a>
-      <div class="hidden items-center gap-6 text-sm font-bold text-stone-600 md:flex">
-        <a href="#features" class="hover:text-brand-maroon">المميزات</a>
-        <a href="#powers" class="hover:text-brand-maroon">القدرات التقنية</a>
-        <a href="#restaurants" class="hover:text-brand-maroon">المطاعم</a>
+      <div class="hidden items-center gap-7 text-sm font-bold text-stone-600 md:flex">
+        <a href="#features" class="hover:text-brand-maroon" data-i18n="navSolutions">الحلول</a>
+        <a href="/smart-seller" class="hover:text-brand-maroon" data-i18n="navSeller">البياع الشاطر</a>
+        <a href="/customers" class="hover:text-brand-maroon" data-i18n="navCustomers">عملاؤنا</a>
+        <a href="#powers" class="hover:text-brand-maroon" data-i18n="navPowers">القدرات</a>
       </div>
       <div class="flex items-center gap-2">
-        <a href="/login" class="hidden rounded-xl border border-brand-maroon/20 px-3 py-2 text-sm font-bold text-brand-maroon sm:inline-flex">تسجيل دخول الكاشير</a>
-        <a href="/admin" class="rounded-xl bg-brand-maroon px-4 py-2 text-sm font-bold text-white shadow-glow hover:bg-[#57101d]">ابدأ مجاناً الآن</a>
+        <button type="button" class="lang-toggle rounded-full border border-stone-200 px-3 py-2 text-xs font-black text-stone-600 hover:border-brand-maroon hover:text-brand-maroon" data-i18n="langSwitch">English</button>
+        <a href="/login" class="hidden rounded-full border border-brand-maroon px-4 py-2 text-sm font-bold text-brand-maroon sm:inline-flex" data-i18n="navLogin">الدخول</a>
+        <a href="/create" class="rounded-full bg-brand-maroon px-5 py-2 text-sm font-bold text-white hover:bg-[#57101d]" data-i18n="navStart">ابدأ مجاناً</a>
       </div>
     </nav>
   </header>
 
-  <main id="top" class="relative mx-auto max-w-6xl px-4 pb-16 sm:px-6 lg:px-8">
-    <section class="grid items-center gap-10 py-12 lg:grid-cols-2 lg:py-16">
-      <div>
-        <p class="mb-4 inline-flex items-center gap-2 rounded-full bg-white px-3 py-1 text-xs font-bold text-brand-maroon shadow-card ring-1 ring-brand-maroon/10">
-          <span class="h-2 w-2 rounded-full bg-emerald-500 pulse-dot"></span>
-          0% عمولة · نظام إدارة متكامل
+  <main id="top">
+    <section class="mx-auto max-w-6xl px-4 pb-6 pt-12 text-center sm:px-6 sm:pt-16">
+      <h1 class="mx-auto max-w-4xl text-3xl font-black leading-[1.35] text-stone-800 sm:text-5xl lg:text-[3.4rem]" data-i18n="heroTitle">
+        نصمم مستقبل نقاط البيع وإدارة المطاعم
+      </h1>
+      <p class="mx-auto mt-6 max-w-2xl text-base leading-8 text-stone-500 sm:text-lg" data-i18n="heroSub">
+        منيو إلكتروني، كاشير، مطبخ، وروابط واتساب ذكية في نظام واحد — بدون أي عمولة على الطلبات.
+      </p>
+      <div class="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
+        <a href="/create" class="inline-flex min-w-48 items-center justify-center rounded-full bg-brand-maroon px-8 py-3.5 text-base font-black text-white shadow-glow hover:bg-[#57101d]" data-i18n="startNow">ابدأ مجاناً الآن</a>
+        <a href="/login" class="inline-flex min-w-48 items-center justify-center rounded-full border border-brand-maroon px-8 py-3.5 text-base font-black text-brand-maroon hover:bg-brand-maroon hover:text-white" data-i18n="cashierLogin">دخول الكاشير</a>
+      </div>
+    </section>
+
+    <section class="mx-auto max-w-6xl px-4 pb-16 sm:px-6">
+      <div class="grid items-end gap-4 sm:grid-cols-12">
+        <div class="sm:col-span-3">
+          <div class="overflow-hidden rounded-[1.6rem] bg-[#1c1c1c] p-3 shadow-card">
+            <div class="rounded-2xl bg-white p-3">
+              <p class="text-xs font-black text-brand-maroon" data-i18n="guestMenu">منيو الضيوف</p>
+              <div class="mt-3 space-y-2">
+                <div class="h-16 rounded-xl bg-gradient-to-br from-brand-maroon to-brand-orange"></div>
+                <div class="h-8 rounded-lg bg-stone-100"></div>
+                <div class="h-8 rounded-lg bg-stone-100"></div>
+                <div class="rounded-xl bg-brand-orange py-2 text-center text-xs font-black text-white" data-i18n="addToCart">أضف للسلة</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="space-y-4 sm:col-span-5">
+          <div class="rounded-[1.6rem] bg-brand-bg p-4 shadow-card">
+            <div class="flex items-center justify-between">
+              <p class="font-black text-brand-maroon" data-i18n="posTitle">نقطة البيع POS</p>
+              <span class="rounded-full bg-emerald-50 px-3 py-1 text-[11px] font-bold text-emerald-700" data-i18n="live">مباشر</span>
+            </div>
+            <div class="mt-4 grid grid-cols-3 gap-2">
+              <div class="rounded-xl bg-white p-3 text-center text-xs font-bold" data-i18n="burger">برجر</div>
+              <div class="rounded-xl bg-white p-3 text-center text-xs font-bold" data-i18n="drinks">مشروبات</div>
+              <div class="rounded-xl bg-brand-maroon p-3 text-center text-xs font-bold text-white" data-i18n="sweets">حلويات</div>
+            </div>
+            <div class="mt-3 rounded-xl bg-white p-4">
+              <p class="text-sm font-black" data-i18n="orderDelivery">ORD-48291 · توصيل</p>
+              <p class="mt-1 text-xs text-stone-500" data-i18n="autoAccept">عداد القبول التلقائي: 10 ثوانٍ</p>
+            </div>
+          </div>
+          <div class="rounded-[1.6rem] bg-white p-4 shadow-card ring-1 ring-stone-100">
+            <p class="text-sm font-black" data-i18n="kitchenTicket">تذكرة المطبخ</p>
+            <p class="mt-2 text-xs leading-6 text-stone-500" data-i18n="kitchenTicketSub">طباعة حرارية صامتة بدون كليك — الكاشير يستقبل والمطبخ يجهّز في نفس اللحظة.</p>
+          </div>
+        </div>
+        <div class="sm:col-span-4">
+          <div class="rounded-[1.6rem] bg-brand-maroon p-5 text-white shadow-glow">
+            <p class="text-xs font-bold text-brand-orange" data-i18n="smartWhatsapp">واتساب ذكي</p>
+            <p class="mt-3 text-lg font-black leading-8" data-i18n="smartWhatsappTitle">رابط يفتح الأوردر فوراً حتى لو المتصفح مغلق</p>
+            <p class="mt-4 break-all rounded-2xl bg-white/10 p-3 text-xs">/admin/orders/ORD-48291</p>
+            <p class="mt-4 text-sm text-white/75" data-i18n="smartWhatsappFoot">قبول تلقائي · تنبيه صوتي · بدون عمولة</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="border-y border-stone-100 bg-brand-bg py-14">
+      <div class="mx-auto max-w-4xl px-4 text-center sm:px-6">
+        <h2 class="text-2xl font-black text-stone-800 sm:text-4xl" data-i18n="partnersTitle">نبني شراكات مع المطاعم في كل مكان</h2>
+        <p class="mt-4 text-base leading-8 text-stone-500" data-i18n="partnersSub">
+          مطاعم ومقاهٍ ومحلات حلويات تدير طلباتها ومدفوعاتها ومنيوها الإلكتروني عبر المنيو برو — من الكاشير إلى المطبخ وواتساب، في تدفق واحد سلس.
         </p>
-        <h1 class="text-3xl font-black leading-[1.35] text-brand-black sm:text-5xl">
-          أنشئ منيو مطعمك الإلكتروني ونظام الكاشير المتكامل في دقائق.. بدون أي عمولات!
-        </h1>
-        <p class="mt-5 max-w-xl text-base leading-8 text-stone-600 sm:text-lg">
-          طباعة حرارية بدون نقرة، روابط واتساب تفتح الأوردر فوراً، وقبول تلقائي خلال 10 ثوانٍ —
-          وكل أرباحك تبقى لك بالكامل بدون عمولة على الطلبات.
-        </p>
-        <div class="mt-8 flex flex-col gap-3 sm:flex-row">
-          <a href="/admin" class="inline-flex items-center justify-center rounded-2xl bg-brand-maroon px-6 py-3.5 text-base font-black text-white shadow-glow hover:bg-[#57101d]">ابدأ مجاناً الآن</a>
-          <a href="/login" class="inline-flex items-center justify-center rounded-2xl border border-brand-maroon/20 bg-white px-6 py-3.5 text-base font-black text-brand-maroon hover:border-brand-orange/50">تسجيل دخول الكاشير</a>
-        </div>
-        <div class="mt-8 grid grid-cols-3 gap-3 text-center">
-          <div class="rounded-2xl bg-white p-3 shadow-card">
-            <p class="text-xl font-black text-brand-maroon">0%</p>
-            <p class="text-xs font-semibold text-stone-500">عمولة</p>
-          </div>
-          <div class="rounded-2xl bg-white p-3 shadow-card">
-            <p class="text-xl font-black text-brand-maroon">10 ث</p>
-            <p class="text-xs font-semibold text-stone-500">قبول تلقائي</p>
-          </div>
-          <div class="rounded-2xl bg-white p-3 shadow-card">
-            <p class="text-xl font-black text-brand-maroon">PWA</p>
-            <p class="text-xs font-semibold text-stone-500">تطبيق مستقل</p>
-          </div>
-        </div>
       </div>
-      <div class="rounded-[2rem] border border-white/80 bg-white p-6 shadow-glow">
-        <div class="mb-4 flex items-center justify-between">
-          <p class="font-black text-brand-maroon">لوحة الكاشير</p>
-          <span class="rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700">طلب جديد</span>
-        </div>
-        <div class="space-y-3">
-          <div class="rounded-2xl bg-brand-surface p-4">
-            <p class="text-sm font-bold">ORD-48291 · توصيل</p>
-            <p class="mt-1 text-xs text-stone-500">تنبيه صوتي · عداد 10 ثوانٍ · طباعة حرارية صامتة</p>
-          </div>
-          <div class="rounded-2xl bg-brand-surface p-4">
-            <p class="text-sm font-bold">رابط واتساب ذكي</p>
-            <p class="mt-1 break-all text-xs text-brand-orange">/admin/orders/ORD-48291</p>
-          </div>
-          <div class="rounded-2xl bg-brand-maroon p-4 text-white">
-            <p class="text-sm font-black">تم القبول تلقائياً</p>
-            <p class="mt-1 text-xs text-white/80">المطبخ يطبع · الكاشير يراجع · بدون عمولة</p>
-          </div>
-        </div>
+      <div class="mx-auto mt-10 max-w-6xl overflow-hidden px-4 sm:px-6">
+        <div id="logo-strip" class="flex flex-wrap items-center justify-center gap-3"></div>
       </div>
     </section>
 
-    <section id="features" class="py-8 sm:py-12">
-      <div class="mb-8 text-center">
-        <p class="text-sm font-bold text-brand-orange">عرض تفصيلي لأقسام ومميزات المنيو برو</p>
-        <h2 class="mt-2 text-3xl font-black text-brand-maroon">منظومة إدارة كاملة لمطعمك</h2>
-      </div>
-      <div class="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
-        <article class="feature-card rounded-3xl bg-white p-6 shadow-card">
-          <p class="text-3xl">💳</p>
-          <h3 class="mt-3 text-lg font-black">نقطة البيع POS</h3>
-          <p class="mt-2 text-sm leading-7 text-stone-600">واجهة كاشير سريعة وسهلة لإدارة الطلبات والمبيعات المحلية والمباشرة بكفاءة تامة.</p>
-        </article>
-        <article class="feature-card rounded-3xl bg-white p-6 shadow-card">
-          <p class="text-3xl">📦</p>
-          <h3 class="mt-3 text-lg font-black">إدارة الطلبات المتقدمة</h3>
-          <p class="mt-2 text-sm leading-7 text-stone-600">استقبال الأوردرات فورياً مع تنبيه صوتي، عداد 10 ثوانٍ للقبول التلقائي، وطباعة حرارية صامتة بدون كليك.</p>
-        </article>
-        <article class="feature-card rounded-3xl bg-white p-6 shadow-card">
-          <p class="text-3xl">👥</p>
-          <h3 class="mt-3 text-lg font-black">إدارة العملاء</h3>
-          <p class="mt-2 text-sm leading-7 text-stone-600">حفظ بيانات العملاء، تتبع سجل طلباتهم، وبناء علاقات قوية لزيادة الولاء.</p>
-        </article>
-        <article class="feature-card rounded-3xl bg-white p-6 shadow-card">
-          <p class="text-3xl">🥗</p>
-          <h3 class="mt-3 text-lg font-black">إدارة المنيو والأصناف</h3>
-          <p class="mt-2 text-sm leading-7 text-stone-600">تحكم كامل في الأقسام، الأطباق، الإضافات، والأسعار وتحديثها لحظياً.</p>
-        </article>
-        <article class="feature-card rounded-3xl bg-white p-6 shadow-card">
-          <p class="text-3xl">🚚</p>
-          <h3 class="mt-3 text-lg font-black">مناطق التوصيل ورسومها</h3>
-          <p class="mt-2 text-sm leading-7 text-stone-600">تخصيص مناطق التوصيل بدقة وتحديد رسوم الشحن لكل منطقة بكل سهولة.</p>
-        </article>
-        <article class="feature-card rounded-3xl bg-white p-6 shadow-card">
-          <p class="text-3xl">🏷️</p>
-          <h3 class="mt-3 text-lg font-black">العروض والخصومات</h3>
-          <p class="mt-2 text-sm leading-7 text-stone-600">إنشاء كوبونات تخفيض وعروض ترويجية لجذب المزيد من الزبائن وضاعف المبيعات.</p>
-        </article>
-        <article class="feature-card rounded-3xl bg-white p-6 shadow-card">
-          <p class="text-3xl">📊</p>
-          <h3 class="mt-3 text-lg font-black">التحليلات والمبيعات</h3>
-          <p class="mt-2 text-sm leading-7 text-stone-600">تقارير دقيقة ولحظية للمبيعات، الأرباح، والأصناف الأكثر طلباً لاتخاذ قرارات ذكية.</p>
-        </article>
-        <article class="feature-card rounded-3xl bg-white p-6 shadow-card">
-          <p class="text-3xl">🪄</p>
-          <h3 class="mt-3 text-lg font-black">البياع الشاطر</h3>
-          <p class="mt-2 text-sm leading-7 text-stone-600">أدوات ذكية مساعدة لزيادة المبيعات وتحسين تجربة العميل.</p>
-        </article>
-      </div>
-    </section>
-
-    <section id="powers" class="py-8 sm:py-12">
-      <div class="rounded-[2rem] bg-brand-maroon px-6 py-10 text-white sm:px-10">
-        <p class="text-sm font-bold text-brand-orange">القدرات التقنية الخارقة</p>
-        <h2 class="mt-2 text-3xl font-black">يعمل حتى لو المتصفح أُغلق</h2>
-        <div class="mt-8 grid gap-5 md:grid-cols-3">
-          <article class="rounded-3xl bg-white/10 p-6 ring-1 ring-white/15">
-            <p class="text-2xl">🔗</p>
-            <h3 class="mt-3 text-lg font-black">روابط واتساب ذكية</h3>
-            <p class="mt-2 text-sm leading-7 text-white/80">تفتح الأوردر وتوجه الكاشير فوراً حتى لو المتصفح مغلق، مع تسجيل الدخول الآمن ثم التركيز على الطلب.</p>
-          </article>
-          <article class="rounded-3xl bg-white/10 p-6 ring-1 ring-white/15">
-            <p class="text-2xl">🖥️</p>
-            <h3 class="mt-3 text-lg font-black">تطبيق ديسكتوب مستقل (PWA)</h3>
-            <p class="mt-2 text-sm leading-7 text-white/80">ثبّت المنيو برو كتطبيق مستقل على الكمبيوتر أو الجوال لضمان عدم توقف العمل أبداً.</p>
-          </article>
-          <article class="rounded-3xl bg-white/10 p-6 ring-1 ring-white/15">
-            <p class="text-2xl">💰</p>
-            <h3 class="mt-3 text-lg font-black">0% عمولة</h3>
-            <p class="mt-2 text-sm leading-7 text-white/80">احتفظ بأرباحك كاملة. لا عمولة على الطلبات، ولا وسيط يخصم من فاتورة الزبون.</p>
-          </article>
+    <section id="features" class="mx-auto max-w-6xl px-4 py-16 sm:px-6 lg:py-20">
+      <div class="grid items-center gap-10 rounded-[2rem] bg-brand-bg p-6 sm:p-10 lg:grid-cols-2">
+        <div class="order-2 rounded-[1.6rem] bg-white p-5 shadow-card lg:order-1">
+          <div class="mb-4 flex items-center justify-between">
+            <p class="font-black" data-i18n="cashierBrand">كاشير المنيو برو</p>
+            <span class="h-2 w-2 rounded-full bg-emerald-500 pulse-dot"></span>
+          </div>
+          <div class="grid grid-cols-2 gap-3">
+            <div class="rounded-2xl bg-brand-bg p-4">
+              <p class="text-2xl font-black text-brand-maroon">0%</p>
+              <p class="text-xs font-bold text-stone-500" data-i18n="zeroCommission">عمولة على الطلبات</p>
+            </div>
+            <div class="rounded-2xl bg-brand-bg p-4">
+              <p class="text-2xl font-black text-brand-maroon" data-i18n="tenSecShort">10ث</p>
+              <p class="text-xs font-bold text-stone-500" data-i18n="tenSec">قبول تلقائي</p>
+            </div>
+            <div class="col-span-2 rounded-2xl bg-brand-maroon p-4 text-white">
+              <p class="text-sm font-black" data-i18n="newWhatsappOrder">طلب جديد من واتساب</p>
+              <p class="mt-1 text-xs text-white/75" data-i18n="routedPrint">تم التوجيه للكاشير · جاهز للطباعة</p>
+            </div>
+          </div>
+        </div>
+        <div class="order-1 lg:order-2">
+          <h2 class="text-3xl font-black leading-snug text-stone-800 sm:text-4xl" data-i18n="successTitle">نجاح مطعمك يبدأ بالاختيار الصائب لنقطة البيع ونظام الإدارة</h2>
+          <p class="mt-4 text-base leading-8 text-stone-500" data-i18n="successSub">
+            المنيو برو يمكّن كل أنواع المطاعم من استقبال الطلبات، إدارة المنيو، وطباعة المطبخ بسهولة — بدون وسيط يخصم من فاتورة الزبون.
+          </p>
+          <a href="/create" class="mt-6 inline-flex font-black text-brand-maroon hover:text-brand-orange" data-i18n="startArrow">ابدأ الآن ←</a>
         </div>
       </div>
-    </section>
 
-    <section id="restaurants" class="rounded-3xl border border-stone-200/80 bg-white p-6 shadow-card sm:p-8">
-      <div class="mb-6 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+      <div class="mt-8 grid items-center gap-10 py-8 lg:grid-cols-2">
         <div>
-          <h2 class="text-lg font-black text-brand-maroon">مطاعم تعمل على المنصة</h2>
-          <p class="text-sm text-stone-500">بيانات مباشرة من الباك إند</p>
+          <h3 class="text-2xl font-black text-stone-800 sm:text-3xl" data-i18n="controlTitle">تحكم بعمليات مطعمك على الدوام ومن أي مكان</h3>
+          <p class="mt-4 text-base leading-8 text-stone-500" data-i18n="controlSub">
+            لوحة الإدارة تعمل من المتصفح أو كتطبيق مستقل (PWA). تابع المبيعات، الطلبات، المصروفات، والأرباح من الجوال أو الكمبيوتر — حتى بعد إغلاق التبويب.
+          </p>
+          <ul class="mt-5 space-y-2 text-sm font-bold text-stone-600">
+            <li data-i18n="bulletReports">• تقارير مبيعات لحظية وربح وخسارة</li>
+            <li data-i18n="bulletZones">• مناطق توصيل ورسوم شحن لكل منطقة</li>
+            <li data-i18n="bulletOffers">• عروض وكوبونات من نفس اللوحة</li>
+          </ul>
         </div>
-        <div class="flex items-center gap-3">
-          <div id="status-badges" class="flex flex-wrap gap-2"></div>
-          <button id="refresh-btn" type="button"
-            class="inline-flex items-center gap-2 self-start rounded-xl border border-stone-200 bg-brand-surface px-4 py-2 text-sm font-bold text-stone-700 hover:border-brand-orange/40 hover:text-brand-maroon">
-            تحديث
-          </button>
+        <div class="rounded-[1.8rem] bg-stone-900 p-6 text-white shadow-glow">
+          <p class="text-xs font-bold text-brand-orange" data-i18n="adminPanel">لوحة الإدارة</p>
+          <p class="mt-2 text-xl font-black" data-i18n="todaySales">مبيعات اليوم</p>
+          <div class="mt-5 grid grid-cols-3 gap-3 text-center">
+            <div class="rounded-2xl bg-white/10 p-3"><p class="text-lg font-black">84</p><p class="text-[11px] text-white/60" data-i18n="orders">طلب</p></div>
+            <div class="rounded-2xl bg-white/10 p-3"><p class="text-lg font-black">0%</p><p class="text-[11px] text-white/60" data-i18n="commission">عمولة</p></div>
+            <div class="rounded-2xl bg-white/10 p-3"><p class="text-lg font-black" data-i18n="kitchenHot">حيّ</p><p class="text-[11px] text-white/60" data-i18n="kitchenLive">المطبخ</p></div>
+          </div>
         </div>
       </div>
-      <div id="restaurants-grid" class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        <div class="h-36 rounded-2xl border border-stone-100 skeleton"></div>
-        <div class="h-36 rounded-2xl border border-stone-100 skeleton"></div>
+
+      <div class="grid items-center gap-10 py-8 lg:grid-cols-2">
+        <div class="order-2 rounded-[1.8rem] border border-stone-100 bg-brand-bg p-6 lg:order-1">
+          <div class="space-y-3">
+            <div class="flex items-center justify-between rounded-2xl bg-white p-4 shadow-card">
+              <span class="font-black" data-i18n="kitchen">المطبخ</span>
+              <span class="text-xs font-bold text-emerald-700" data-i18n="printingNow">يُطبع الآن</span>
+            </div>
+            <div class="rounded-2xl bg-white p-4 shadow-card">
+              <p class="text-sm font-black">ORD-48291</p>
+              <p class="mt-1 text-xs text-stone-500" data-i18n="kitchenItems">برجر ×2 · بطاطس · مشروب</p>
+            </div>
+            <div class="rounded-2xl bg-brand-maroon p-4 text-sm font-black text-white" data-i18n="silentPrint">طباعة حرارية بدون نقرة</div>
+          </div>
+        </div>
+        <div class="order-1 lg:order-2">
+          <h3 class="text-2xl font-black text-stone-800 sm:text-3xl" data-i18n="flowTitle">انسيابية من الكاشير إلى المطبخ</h3>
+          <p class="mt-4 text-base leading-8 text-stone-500" data-i18n="flowSub">
+            اربط استقبال الطلبات بمحطات التحضير: الطلب يصل المطبخ فوراً، والأخطاء والتأخير تقل لأن المسار واحد من واتساب أو المنيو إلى التذكرة الحرارية.
+          </p>
+        </div>
+      </div>
+
+      <div class="grid items-center gap-10 py-8 lg:grid-cols-2">
+        <div>
+          <h3 class="text-2xl font-black text-stone-800 sm:text-3xl" data-i18n="guestsTitle">تعرّف على ضيوفك واخدمهم بجودة أعلى</h3>
+          <p class="mt-4 text-base leading-8 text-stone-500" data-i18n="guestsSub">
+            منيو إلكتروني أنيق يفتح من الجوال، مع سلة وطلبات محفوظة. اجمع بيانات العملاء، وقدّم عروضاً تناسبهم، وافتح مطعمك للطلب دون تطبيق ثقيل.
+          </p>
+          <a href="/smart-seller" class="mt-6 inline-flex font-black text-brand-maroon hover:text-brand-orange" data-i18n="meetSeller">تعرّف على البياع الشاطر ←</a>
+        </div>
+        <div class="mx-auto w-full max-w-xs rounded-[2rem] bg-[#111] p-3 shadow-glow">
+          <div class="rounded-[1.5rem] bg-white p-4">
+            <p class="text-center text-sm font-black" data-i18n="restaurantMenu">منيو المطعم</p>
+            <div class="mt-3 h-24 rounded-2xl bg-gradient-to-br from-brand-maroon to-brand-orange"></div>
+            <div class="mt-3 space-y-2">
+              <div class="h-10 rounded-xl bg-stone-100"></div>
+              <div class="h-10 rounded-xl bg-stone-100"></div>
+            </div>
+            <div class="mt-3 rounded-xl bg-brand-orange py-2 text-center text-xs font-black text-white" data-i18n="orderNow">اطلب الآن</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="powers" class="bg-brand-maroon py-16 text-white">
+      <div class="mx-auto max-w-6xl px-4 sm:px-6">
+        <p class="text-sm font-bold text-brand-orange" data-i18n="opsLabel">قدرات التشغيل</p>
+        <h2 class="mt-2 max-w-3xl text-3xl font-black sm:text-4xl" data-i18n="opsTitle">المطبخ والطاولات والفروع من مكان واحد — والولاء يرجّع الزبون</h2>
+        <div class="mt-10 grid gap-5 md:grid-cols-3">
+          <article class="rounded-3xl bg-white/10 p-6 ring-1 ring-white/15">
+            <h3 class="text-lg font-black" data-i18n="opsKitchenTitle">المطبخ والطاولات</h3>
+            <p class="mt-3 text-sm leading-7 text-white/80" data-i18n="opsKitchenBody">أدر الصالة والمطبخ من لوحة واحدة: طاولات متاحة أو مشغولة، محطات تحضير، وطباعة حرارية للتذكرة بدون ما تتنقل بين أنظمة.</p>
+          </article>
+          <article class="rounded-3xl bg-white/10 p-6 ring-1 ring-white/15">
+            <h3 class="text-lg font-black" data-i18n="opsBranchTitle">فروع متعددة وفواتير</h3>
+            <p class="mt-3 text-sm leading-7 text-white/80" data-i18n="opsBranchBody">حتى لو عندك أكثر من فرع، تشغّل الكل من حساب واحد وتستقبل فواتير الطلبات والكاشير في مكان واحد — مبيعات، مطبخ، وتقارير لكل فرع.</p>
+          </article>
+          <article class="rounded-3xl bg-white/10 p-6 ring-1 ring-white/15">
+            <h3 class="text-lg font-black" data-i18n="opsLoyaltyTitle">كاش باك ونظام الولاء</h3>
+            <p class="mt-3 text-sm leading-7 text-white/80" data-i18n="opsLoyaltyBody">كل طلب يضيف رصيد محفظة للزبون بعد التوصيل (نسبة أو مبلغ ثابت). يصرف الرصيد في الطلب الجاي — يحفّز الرجوع بدون تطبيق ولاء منفصل.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section class="mx-auto max-w-6xl px-4 py-16 sm:px-6">
+      <div class="text-center">
+        <h2 class="text-3xl font-black text-stone-800 sm:text-4xl" data-i18n="shareTitle">شارك مطاعم المنصة نجاح التشغيل معنا</h2>
+        <p class="mx-auto mt-4 max-w-2xl text-base leading-8 text-stone-500" data-i18n="shareSub">
+          ازدهار مطعمك هو الأولوية: منيو للضيوف، كاشير للكاشير، ومطبخ للطباعة — من غير عمولات.
+        </p>
+      </div>
+      <div id="customers-grid" class="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-4"></div>
+      <div class="mt-8 text-center">
+        <a href="/customers" class="inline-flex rounded-full border border-brand-maroon px-6 py-3 text-sm font-black text-brand-maroon hover:bg-brand-maroon hover:text-white" data-i18n="viewAllCustomers">عرض كل العملاء</a>
+      </div>
+    </section>
+
+    <section class="px-4 pb-16 sm:px-6">
+      <div class="mx-auto max-w-4xl rounded-[2rem] bg-brand-bg px-6 py-12 text-center sm:px-12">
+        <h2 class="text-3xl font-black text-brand-maroon sm:text-4xl" data-i18n="trialTitle">اطلب تجربة المنيو برو مجاناً</h2>
+        <p class="mx-auto mt-4 max-w-2xl text-base leading-8 text-stone-500" data-i18n="trialSub">
+          ابدأ بمنيو إلكتروني وكاشير ومطبخ خلال دقائق. نساعدك تختار ما يناسب حجم مطعمك — بدون عمولة على الطلبات.
+        </p>
+        <a href="/create" class="mt-8 inline-flex rounded-full bg-brand-maroon px-8 py-3.5 text-base font-black text-white shadow-glow hover:bg-[#57101d]" data-i18n="startNow">ابدأ مجاناً الآن</a>
       </div>
     </section>
   </main>
 
-  <footer class="relative border-t border-stone-200 bg-white">
+  <footer class="border-t border-stone-100 bg-white">
     <div class="mx-auto flex max-w-6xl flex-col gap-6 px-4 py-10 sm:flex-row sm:items-center sm:justify-between sm:px-6">
       <div>
-        <p class="text-lg font-black"><span class="text-brand-maroon">المنيو</span> <span class="text-brand-orange">برو</span></p>
-        <p class="mt-1 text-sm text-stone-500">منيو إلكتروني + كاشير + مطبخ بدون عمولات.</p>
+        <a href="/" class="inline-flex"><img src="/logo.png" alt="Almenupro" class="h-20 w-auto object-contain" /></a>
+        <p class="mt-2 text-sm text-stone-500" data-i18n="footerTag">نقاط بيع + منيو إلكتروني + مطبخ بدون عمولات.</p>
       </div>
       <div class="flex flex-wrap gap-4 text-sm font-bold text-stone-600">
-        <a href="#features" class="hover:text-brand-maroon">المميزات</a>
-        <a href="#powers" class="hover:text-brand-maroon">القدرات التقنية</a>
-        <a href="/restaurants" class="hover:text-brand-maroon">دليل المطاعم</a>
-        <a href="/admin" class="hover:text-brand-maroon">لوحة الإدارة</a>
-        <a href="/login" class="hover:text-brand-maroon">دخول الكاشير</a>
+        <a href="#features" class="hover:text-brand-maroon" data-i18n="navSolutions">الحلول</a>
+        <a href="/smart-seller" class="hover:text-brand-maroon" data-i18n="navSeller">البياع الشاطر</a>
+        <a href="/customers" class="hover:text-brand-maroon" data-i18n="navCustomers">عملاؤنا</a>
+        <a href="/admin" class="hover:text-brand-maroon" data-i18n="navAdmin">لوحة الإدارة</a>
+        <a href="/login" class="hover:text-brand-maroon" data-i18n="navLogin">الدخول</a>
       </div>
     </div>
-    <p class="pb-8 text-center text-xs text-stone-400">Almenupro · API: <span id="api-url" class="font-mono">—</span></p>
   </footer>
 
+  <script src="/i18n.js"></script>
   <script>
-    const FRONTEND_ORIGIN = window.location.origin;
-    const API_BASE = 'https://backend-henna-chi-76.vercel.app/api';
-    document.getElementById('api-url').textContent = API_BASE;
-
-    function badge(label, ok, detail) {
-      const dot = ok ? 'bg-emerald-500 pulse-dot' : 'bg-red-500';
-      const bg = ok ? 'bg-emerald-50 text-emerald-800 ring-emerald-200' : 'bg-red-50 text-red-800 ring-red-200';
-      return `<span class="inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-bold shadow-sm ring-1 ${bg}" title="${detail || ''}">
-        <span class="h-2 w-2 rounded-full ${dot}"></span>${label}
-      </span>`;
-    }
+    const API_ORIGIN = 'https://backend-henna-chi-76.vercel.app';
+    const API_BASE = API_ORIGIN + '/api';
 
     function escapeHtml(str) {
       return String(str || '')
@@ -270,54 +307,81 @@
         .replace(/"/g, '&quot;');
     }
 
-    function restaurantCard(r) {
-      const menuUrl = `${FRONTEND_ORIGIN}/menu/${encodeURIComponent(r.slug)}`;
-      const statusColor = r.status === 'active' ? 'bg-emerald-100 text-emerald-700' : 'bg-stone-100 text-stone-600';
-      return `
-        <article class="rounded-2xl border border-stone-100 bg-brand-surface/50 p-5 hover:border-brand-orange/30 hover:shadow-card">
-          <div class="mb-3 flex items-start justify-between gap-3">
-            <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand-orange/15 text-brand-orange font-black">م</div>
-            <span class="rounded-full px-2.5 py-0.5 text-[11px] font-bold uppercase ${statusColor}">${escapeHtml(r.status || 'active')}</span>
-          </div>
-          <h3 class="font-black text-brand-black">${escapeHtml(r.name)}</h3>
-          <p class="mt-1 font-mono text-xs text-stone-500">${escapeHtml(r.slug)}</p>
-          <a href="${menuUrl}" class="mt-4 inline-flex text-sm font-bold text-brand-orange hover:underline">فتح منيو العملاء</a>
-        </article>`;
+    function absUrl(raw) {
+      const value = String(raw || '').trim();
+      if (!value) return '';
+      if (value.startsWith('http://') || value.startsWith('https://')) return value;
+      if (value.startsWith('/')) return API_ORIGIN + value;
+      return value;
     }
 
-    async function loadDashboard() {
-      const badgesEl = document.getElementById('status-badges');
-      const gridEl = document.getElementById('restaurants-grid');
-      badgesEl.innerHTML = badge('جاري الفحص...', false, '');
-      let health = null;
+    function normalizeKey(value) {
+      return String(value || '').toLowerCase().replace(/[أإآ]/g, 'ا').replace(/[^a-z0-9\u0600-\u06ff]/g, '');
+    }
+
+    function uniqueRestaurants(list) {
+      const byName = new Map();
+      (Array.isArray(list) ? list : []).forEach((r) => {
+        const status = String(r.status || 'active').toLowerCase();
+        if (status && status !== 'active') return;
+        const key = normalizeKey(r.name) || normalizeKey(r.slug) || String(r.id || '');
+        if (!key || byName.has(key)) return;
+        byName.set(key, r);
+      });
+      return [...byName.values()];
+    }
+
+    function logoChip(r) {
+      const logo = absUrl(r.logoUrl || r.logo_url || '');
+      const initial = escapeHtml((r.name || 'م').trim().charAt(0));
+      const inner = logo
+        ? `<img src="${escapeHtml(logo)}" alt="" class="h-8 w-8 rounded-full object-cover" />`
+        : `<span class="flex h-8 w-8 items-center justify-center rounded-full bg-brand-maroon text-xs font-black text-white">${initial}</span>`;
+      return `<a href="/menu/${encodeURIComponent(r.slug)}" class="inline-flex items-center gap-2 rounded-full bg-white px-3 py-2 text-sm font-black text-stone-700 shadow-card">${inner}${escapeHtml(r.name)}</a>`;
+    }
+
+    function customerCard(r) {
+      const logo = absUrl(r.logoUrl || r.logo_url || '');
+      const initial = escapeHtml((r.name || 'م').trim().charAt(0));
+      const cover = absUrl(r.heroImageUrl || r.hero_image_url || r.logoUrl || r.logo_url || '');
+      const coverHtml = cover
+        ? `<img src="${escapeHtml(cover)}" alt="" class="h-28 w-full object-cover" />`
+        : `<div class="flex h-28 items-center justify-center bg-gradient-to-br from-brand-maroon to-brand-orange text-3xl font-black text-white">${initial}</div>`;
+      const logoHtml = logo
+        ? `<img src="${escapeHtml(logo)}" alt="" class="h-full w-full object-cover" />`
+        : `<span class="text-sm font-black text-brand-maroon">${initial}</span>`;
+      return `
+        <a href="/menu/${encodeURIComponent(r.slug)}" class="block overflow-visible rounded-3xl bg-white p-2 shadow-card ring-1 ring-stone-100">
+          <div class="relative">
+            <div class="overflow-hidden rounded-2xl bg-stone-100">${coverHtml}</div>
+            <div class="absolute -bottom-5 left-1/2 flex h-10 w-10 -translate-x-1/2 overflow-hidden rounded-full border-2 border-white bg-white">${logoHtml}</div>
+          </div>
+          <p class="px-2 pb-3 pt-7 text-center text-sm font-black">${escapeHtml(r.name)}</p>
+        </a>`;
+    }
+
+    async function loadSocial() {
       let restaurants = [];
       try {
-        const healthRes = await fetch(`${API_BASE}/health`);
-        health = await healthRes.json();
-      } catch (e) {
-        health = { ok: false, persistent: false };
-      }
-      try {
-        const restRes = await fetch(`${API_BASE}/restaurants/public`);
-        if (restRes.ok) restaurants = await restRes.json();
+        const res = await fetch(`${API_BASE}/public/restaurants`);
+        const data = res.ok ? await res.json() : [];
+        restaurants = uniqueRestaurants(Array.isArray(data) ? data : (data.restaurants || []));
       } catch (e) {
         restaurants = [];
       }
-      const apiOk = health && health.ok === true;
-      const mongoOk = health && health.persistent === true && health.storage === 'mongodb';
-      badgesEl.innerHTML = [
-        badge(apiOk ? 'متصل' : 'غير متاح', apiOk, health?.persistenceMessage || ''),
-        badge(mongoOk ? 'MongoDB' : 'تخزين مؤقت', mongoOk, health?.storage || 'unknown'),
-      ].join('');
+      const strip = document.getElementById('logo-strip');
+      const grid = document.getElementById('customers-grid');
       if (!restaurants.length) {
-        gridEl.innerHTML = `<div class="col-span-full rounded-2xl border border-dashed border-stone-200 bg-stone-50 p-8 text-center text-sm text-stone-500">لا توجد مطاعم مسجّلة حالياً أو تعذّر الاتصال.</div>`;
-      } else {
-        gridEl.innerHTML = restaurants.map(restaurantCard).join('');
+        strip.innerHTML = `<p class="text-sm text-stone-400">${window.AMP_I18N ? AMP_I18N.t('restaurantsSoon') : 'سيتم عرض المطاعم هنا فور توفرها.'}</p>`;
+        grid.innerHTML = '';
+        return;
       }
+      strip.innerHTML = restaurants.map(logoChip).join('');
+      grid.innerHTML = restaurants.slice(0, 8).map(customerCard).join('');
     }
 
-    document.getElementById('refresh-btn').addEventListener('click', loadDashboard);
-    loadDashboard();
+    loadSocial();
+    document.addEventListener('amp-lang', loadSocial);
   </script>
 </body>
 </html>

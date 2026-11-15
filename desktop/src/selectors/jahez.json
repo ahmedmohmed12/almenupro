@@ -1,0 +1,35 @@
+{
+  "observerRoot": "main, [role='main'], #root, body",
+  "authenticatedRoot": "[data-testid='app-shell'], [data-testid='sidebar'], nav, aside",
+  "observationModes": [
+    {
+      "id": "live",
+      "root": "[data-testid='live-orders'], [data-testid='active-orders'], .live-orders, .active-orders",
+      "order": "[data-testid='order-card'], [data-order-id], .order-card",
+      "maxRows": 100
+    },
+    {
+      "id": "history",
+      "root": "[data-testid='order-history'], [data-testid='orders-history'], [class*='order-history' i], [class*='orderHistory' i], [role='grid'], [role='table'], .order-history, .orders-history, table",
+      "order": "tbody tr[data-order-id], tbody tr[data-order-no], tbody tr, [role='row'], [data-testid='order-history-row'], [class*='order-row' i], .order-history-row",
+      "maxRows": 500
+    }
+  ],
+  "order": "[data-testid='order-card'], [data-order-id], .order-card",
+  "historyDetailRoot": "[data-testid='order-details'], [data-testid='order-details-drawer'], [data-testid='order-detail-modal'], [role='dialog']",
+  "historyDetailClose": "[data-testid='close-order-details'], [data-testid='close-order-detail'], [role='dialog'] button[aria-label='Close'], [role='dialog'] button[aria-label='إغلاق']",
+  "id": "[data-testid='order-number'], [data-testid='order-id'], [data-column='order-id'], [data-field='order-id'], [data-field='orderId'], .order-id, .order-number, td:first-child, [role='gridcell']:first-child",
+  "customerName": "[data-testid='customer-name'], [data-column='customer-name'], .customer-name",
+  "phone": "[data-testid='phone'], .customer-phone",
+  "address": "[data-testid='address'], .customer-address",
+  "item": "[data-testid='order-item'], [data-order-item], .order-item",
+  "itemName": "[data-testid='item-name'], .item-name",
+  "itemQuantity": "[data-testid='quantity'], .quantity",
+  "itemPrice": "[data-testid='price'], .price",
+  "itemOptions": "[data-testid='modifier'], .modifier",
+  "subtotal": "[data-testid='subtotal'], .subtotal",
+  "total": "[data-testid='total'], .total",
+  "paymentMethod": "[data-testid='payment-method'], .payment-method",
+  "deliveryType": "[data-testid='order-type'], .order-type",
+  "createdAt": "time[datetime], [data-testid='created-at']"
+}

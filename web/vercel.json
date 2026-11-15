@@ -45,6 +45,22 @@
       "destination": "/index.html"
     },
     {
+      "source": "/manager/login",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/super-admin/login",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/pos/login",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/cashier/login",
+      "destination": "/index.html"
+    },
+    {
       "source": "/admin",
       "destination": "/index.html"
     },

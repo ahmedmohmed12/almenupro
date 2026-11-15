@@ -12,21 +12,20 @@ Future<void> printPosReceiptHtml(
 }) async {
   final baseHtml = _normalizeDocument(htmlContent);
   if (baseHtml.trim().isEmpty) return;
-
-  final printable = _withAutoPrintScript(baseHtml);
+  final selfPrintingHtml = _withAutoPrintScript(baseHtml);
 
   final viaIframe = await _printViaHiddenIframe(
-    printable,
+    selfPrintingHtml,
     sizedForThermal: zeroClick,
   );
   if (viaIframe) return;
 
   if (zeroClick) {
-    final viaHost = await _printViaInvisibleHost(printable);
+    final viaHost = await _printViaInvisibleHost(baseHtml);
     if (viaHost) return;
   }
 
-  await _printViaBlobPopup(printable);
+  await _printViaBlobPopup(selfPrintingHtml);
 }
 
 Future<bool> _printViaHiddenIframe(
@@ -93,10 +92,9 @@ Future<bool> _printViaHiddenIframe(
         finish(false);
         return;
       }
-      try {
-        win.focus();
-      } catch (_) {}
-      win.print();
+      // Electron does not reliably honor contentWindow.print() when invoked
+      // from the parent WebContentsView. The receipt document contains one
+      // guarded auto-print command, so do not trigger a second print here.
       await Future<void>.delayed(const Duration(milliseconds: 800));
       finish(true);
     } catch (_) {

@@ -1,4 +1,7 @@
 # Miscellaneous
+.git.zip
+*.apk
+dist/*.zip
 *.class
 *.log
 *.pyc

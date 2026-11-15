@@ -3,9 +3,12 @@ import 'package:flutter/material.dart';
 import '../../models/menu_item.dart';
 import '../../services/api_service.dart';
 import '../../services/menu_storage_service.dart';
+import '../../services/restaurant_settings_service.dart';
 import '../../services/super_admin_scope_service.dart';
 import '../network_menu_image.dart';
 import 'admin_breakpoints.dart';
+import 'admin_categories_panel.dart';
+import 'admin_corner_toast.dart';
 import 'admin_menu_panel_status.dart';
 
 class AdminMenuPanel extends StatefulWidget {
@@ -44,6 +47,8 @@ class _AdminMenuPanelState extends State<AdminMenuPanel> {
   var _apiOnline = false;
   var _togglingId = '';
   var _totalItems = 0;
+  var _dynamicSort = false;
+  var _savingOrder = false;
   String? _errorMessage;
 
   @override
@@ -75,7 +80,7 @@ class _AdminMenuPanelState extends State<AdminMenuPanel> {
   Future<void> _loadFromApi({bool reset = true}) async {
     if (reset) {
       setState(() {
-        _loading = true;
+        if (_apiItems.isEmpty) _loading = true;
         _errorMessage = null;
       });
     } else {
@@ -83,10 +88,15 @@ class _AdminMenuPanelState extends State<AdminMenuPanel> {
     }
 
     try {
+      final settings = await RestaurantSettingsService.instance.load(
+        restaurantId: _restaurantId,
+      );
+      _dynamicSort = settings.dynamicMenuSortingEnabled;
       final page = await ApiService.instance.fetchItemsPage(
         restaurantId: _restaurantId,
         lite: true,
-        limit: _pageSize,
+        // Manual reorder needs a full page; dynamic can stay paginated.
+        limit: _dynamicSort ? _pageSize : 250,
         offset: reset ? 0 : _apiItems.length,
       );
       _apiOnline = true;
@@ -113,7 +123,7 @@ class _AdminMenuPanelState extends State<AdminMenuPanel> {
           loading: false,
           apiOnline: _apiOnline,
           errorMessage: _apiItems.isEmpty ? _errorMessage : null,
-          savingOrder: false,
+          savingOrder: _savingOrder,
           itemCount: _apiItems.length,
         ),
       );
@@ -197,17 +207,75 @@ class _AdminMenuPanelState extends State<AdminMenuPanel> {
 
   @override
   Widget build(BuildContext context) {
-    return ColoredBox(
-      color: Colors.white,
-      child: Column(
-        mainAxisSize: MainAxisSize.max,
-        mainAxisAlignment: MainAxisAlignment.start,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          _buildToolbar(),
-          if (_errorMessage != null) _retryBanner(),
-          Expanded(child: _buildContent()),
-        ],
+    return DefaultTabController(
+      length: 2,
+      child: ColoredBox(
+        color: Colors.white,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const Material(
+              color: Color(0xFFF8F1F3),
+              child: TabBar(
+                labelColor: Color(0xFF6B1124),
+                unselectedLabelColor: Colors.black54,
+                indicatorColor: Color(0xFF6B1124),
+                tabs: [
+                  Tab(text: 'الأصناف'),
+                  Tab(text: 'الأقسام'),
+                ],
+              ),
+            ),
+            Expanded(
+              child: TabBarView(
+                physics: const NeverScrollableScrollPhysics(),
+                children: [
+                  ColoredBox(
+                    color: Colors.white,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        _buildToolbar(),
+                        if (_errorMessage != null) _retryBanner(),
+                        if (!_dynamicSort && widget.canManageItems)
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(12, 0, 12, 6),
+                            child: Text(
+                              _savingOrder
+                                  ? 'جاري حفظ ترتيب الأصناف...'
+                                  : 'اسحب الأصناف لإعادة ترتيبها يدوياً (الترتيب الديناميكي متوقف).',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: _savingOrder
+                                    ? burgundy
+                                    : Colors.black54,
+                              ),
+                            ),
+                          ),
+                        if (_dynamicSort)
+                          const Padding(
+                            padding: EdgeInsets.fromLTRB(12, 0, 12, 6),
+                            child: Text(
+                              'الترتيب الديناميكي مفعّل — ترتيب الأصناف اليدوي متوقف.',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Color(0xFFE65100),
+                              ),
+                            ),
+                          ),
+                        Expanded(child: _buildContent()),
+                      ],
+                    ),
+                  ),
+                  AdminCategoriesPanel(
+                    restaurantId: _restaurantId,
+                    canManage: widget.canManageItems,
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -384,55 +452,135 @@ class _AdminMenuPanelState extends State<AdminMenuPanel> {
     );
   }
 
+  Future<void> _onReorderItems(int oldIndex, int newIndex) async {
+    if (_dynamicSort || !widget.canManageItems) return;
+    setState(() {
+      if (newIndex > oldIndex) newIndex -= 1;
+      final item = _apiItems.removeAt(oldIndex);
+      _apiItems.insert(newIndex, item);
+      _savingOrder = true;
+    });
+    try {
+      await ApiService.instance.reorderMenuItems(
+        restaurantId: _restaurantId,
+        orderedIds: _apiItems.map((e) => e.id.toString()).toList(),
+      );
+      ApiService.instance.invalidateItemsCache();
+      if (mounted) {
+        AdminCornerToast.success(context, 'تم حفظ ترتيب الأصناف');
+      }
+    } catch (error) {
+      ApiService.instance.invalidateItemsCache();
+      await _loadFromApi();
+      if (mounted) {
+        AdminCornerToast.error(
+          context,
+          error.toString().replaceFirst('Exception: ', ''),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _savingOrder = false);
+    }
+  }
+
   Widget _buildItemList(List<MenuItem> items) {
+    final canReorder =
+        !_dynamicSort && widget.canManageItems && items.isNotEmpty;
     return LayoutBuilder(
       builder: (context, constraints) {
         final wide = constraints.maxWidth >= 900;
-        return ColoredBox(
-          color: Colors.white,
-          child: Directionality(
-            textDirection: TextDirection.ltr,
+        if (!canReorder) {
+          return ColoredBox(
+            color: Colors.white,
             child: ListView(
               padding: EdgeInsets.zero,
               physics: const AlwaysScrollableScrollPhysics(),
               children: [
-                Directionality(
-                  textDirection: TextDirection.rtl,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      if (wide) _buildWideHeader(),
-                      for (final item in items) ...[
-                        wide ? _buildWideRow(item) : _buildCompactRow(item),
-                        const Divider(height: 1),
-                      ],
-                      if (items.length < _totalItems)
-                        Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          child: Center(
-                            child: OutlinedButton(
-                              onPressed: _loadingMore
-                                  ? null
-                                  : () => _loadFromApi(reset: false),
-                              child: _loadingMore
-                                  ? const SizedBox(
-                                      width: 18,
-                                      height: 18,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                      ),
-                                    )
-                                  : Text(
-                                      'تحميل المزيد (${items.length}/$_totalItems)',
-                                    ),
-                            ),
-                          ),
-                        ),
-                    ],
+                if (wide) _buildWideHeader(),
+                for (final item in items) ...[
+                  wide ? _buildWideRow(item) : _buildCompactRow(item),
+                  const Divider(height: 1),
+                ],
+                if (items.length < _totalItems)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    child: Center(
+                      child: OutlinedButton(
+                        onPressed: _loadingMore
+                            ? null
+                            : () => _loadFromApi(reset: false),
+                        child: _loadingMore
+                            ? const SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(strokeWidth: 2),
+                              )
+                            : Text(
+                                'تحميل المزيد (${items.length}/$_totalItems)',
+                              ),
+                      ),
+                    ),
                   ),
-                ),
               ],
             ),
+          );
+        }
+
+        return ColoredBox(
+          color: Colors.white,
+          child: ReorderableListView.builder(
+            buildDefaultDragHandles: false,
+            itemCount: items.length + (items.length < _totalItems ? 1 : 0),
+            onReorder: (oldIndex, newIndex) {
+              if (oldIndex >= items.length) return;
+              if (newIndex > items.length) newIndex = items.length;
+              _onReorderItems(oldIndex, newIndex);
+            },
+            itemBuilder: (context, index) {
+              if (index >= items.length) {
+                return Padding(
+                  key: const ValueKey('load-more'),
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  child: Center(
+                    child: OutlinedButton(
+                      onPressed: _loadingMore
+                          ? null
+                          : () => _loadFromApi(reset: false),
+                      child: Text(
+                        'تحميل المزيد (${items.length}/$_totalItems)',
+                      ),
+                    ),
+                  ),
+                );
+              }
+              final item = items[index];
+              return Material(
+                key: ValueKey('item-${item.id}'),
+                color: Colors.white,
+                child: Column(
+                  children: [
+                    if (index == 0 && wide) _buildWideHeader(),
+                    Row(
+                      children: [
+                        ReorderableDragStartListener(
+                          index: index,
+                          child: const Padding(
+                            padding: EdgeInsets.symmetric(horizontal: 8),
+                            child: Icon(Icons.drag_handle),
+                          ),
+                        ),
+                        Expanded(
+                          child: wide
+                              ? _buildWideRow(item)
+                              : _buildCompactRow(item),
+                        ),
+                      ],
+                    ),
+                    const Divider(height: 1),
+                  ],
+                ),
+              );
+            },
           ),
         );
       },
@@ -477,16 +625,38 @@ class _AdminMenuPanelState extends State<AdminMenuPanel> {
                 height: 56,
                 child: _itemThumb(item.imageUrl),
               ),
-              Expanded(
-                flex: 3,
-                child: Text(
-                  item.name,
-                  style: TextStyle(
-                    fontWeight: FontWeight.w700,
-                    decoration: hidden ? TextDecoration.lineThrough : null,
+                Expanded(
+                  flex: 3,
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          item.name,
+                          style: TextStyle(
+                            fontWeight: FontWeight.w700,
+                            decoration: hidden ? TextDecoration.lineThrough : null,
+                          ),
+                        ),
+                      ),
+                      if (!item.showOnWebsite)
+                        Padding(
+                          padding: const EdgeInsets.only(right: 6),
+                          child: Chip(
+                            visualDensity: VisualDensity.compact,
+                            label: const Text('كاشير فقط'),
+                            labelStyle: TextStyle(
+                              fontSize: 10,
+                              color: Colors.brown.shade800,
+                              fontWeight: FontWeight.w700,
+                            ),
+                            backgroundColor: Colors.orange.shade50,
+                            side: BorderSide(color: Colors.orange.shade200),
+                            padding: EdgeInsets.zero,
+                          ),
+                        ),
+                    ],
                   ),
                 ),
-              ),
               Expanded(
                 flex: 2,
                 child: Text(
@@ -529,7 +699,11 @@ class _AdminMenuPanelState extends State<AdminMenuPanel> {
                     ),
                   ),
                   Text(
-                    '${item.categoryName} • ${item.price.toStringAsFixed(3)} د.ك',
+                    [
+                      item.categoryName,
+                      '${item.price.toStringAsFixed(3)} د.ك',
+                      if (!item.showOnWebsite) 'كاشير فقط',
+                    ].join(' • '),
                     style: const TextStyle(fontSize: 12, color: Color(0xFF666666)),
                   ),
                 ],

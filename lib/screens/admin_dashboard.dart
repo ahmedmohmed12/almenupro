@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/order.dart';
 import '../models/restaurant_settings.dart';
 import '../models/staff_user.dart';
+import '../l10n/app_strings.dart';
 import '../utils/admin_deep_link.dart';
 import '../utils/admin_route_nav.dart';
 import '../utils/admin_settings_url.dart';
@@ -15,6 +16,9 @@ import '../utils/food_cost_utils.dart';
 import '../utils/image_url.dart';
 import '../utils/whatsapp_phone.dart';
 import '../services/admin_auth_service.dart';
+import '../services/scheduled_kitchen_release.dart';
+import '../services/scheduled_orders_controller.dart';
+import '../services/scheduled_release_engine.dart';
 import '../services/admin_order_focus_service.dart';
 import '../services/admin_order_monitor_service.dart';
 import '../services/admin_runtime_keepalive.dart';
@@ -34,15 +38,22 @@ import '../widgets/admin/admin_pos_roles_staff_card.dart';
 import '../widgets/admin/pos/pos_cashier_login_panel.dart';
 import '../widgets/admin/pos/pos_shift_shell.dart';
 import '../widgets/admin/kitchen_station_screen.dart';
+import '../widgets/admin/driver_station_screen.dart';
 import '../widgets/admin/admin_delivery_zones_panel.dart';
+import '../widgets/admin/admin_drivers_panel.dart';
 import '../widgets/admin/admin_offers_panel.dart';
 import '../widgets/admin/admin_reviews_panel.dart';
 import '../widgets/admin/admin_expenses_panel.dart';
 import '../widgets/admin/admin_item_addons_editor.dart';
 import '../widgets/admin/admin_item_linked_sides_editor.dart';
 import '../widgets/admin/admin_menu_panel.dart';
+import '../widgets/admin/admin_platform_menu_mapping_panel.dart';
 import '../widgets/admin/admin_orders_panel.dart';
 import '../widgets/admin/admin_customers_panel.dart';
+import '../widgets/admin/smart_whatsapp_hub_page.dart';
+import '../widgets/admin/hr/hr_module_page.dart';
+import '../widgets/admin/scheduled_orders_page.dart';
+import '../utils/whatsapp_launcher.dart';
 import '../widgets/admin/admin_sidebar.dart';
 import '../widgets/admin/settings/admin_settings_tab.dart';
 import '../widgets/admin/settings/admin_settings_tabbed_panel.dart';
@@ -54,6 +65,7 @@ import '../widgets/admin/admin_top_header.dart';
 import '../widgets/admin/admin_smart_upsell_panel.dart';
 import '../widgets/admin/admin_working_hours_card.dart';
 import '../widgets/app_error_boundary.dart';
+import 'auth/manager_login_screen.dart';
 
 class AdminDashboard extends StatefulWidget {
   const AdminDashboard({super.key});
@@ -69,15 +81,8 @@ class _AdminDashboardState extends State<AdminDashboard>
 
   bool _isAuthenticated = false;
   bool _isSuperAdmin = false;
-  bool _isLoggingIn = false;
-  var _loginMode = 0;
-  final _usernameController = TextEditingController();
-  final _slugController = TextEditingController(text: 'molton-cookies');
-  final _cashierNameController = TextEditingController();
-  final _passwordController = TextEditingController();
-  String? _errorMessage;
   String? _restaurantLabel;
-  int _selectedIndex = AdminSidebar.posIndex;
+  int _selectedIndex = AdminSidebar.analyticsIndex;
   AdminMenuPanelStatus? _menuPanelStatus;
   var _menuRevision = 0;
 
@@ -99,6 +104,9 @@ class _AdminDashboardState extends State<AdminDashboard>
     if (_isSuperAdmin) {
       return [
         ...AdminSidebar.superAdminItems,
+        AdminSidebar.whatsappBroadcastItem,
+        AdminSidebar.reservationsItem,
+        AdminSidebar.hrItem,
         if (SuperAdminScopeService.instance.hasSelection &&
             _tableManagementEnabled)
           AdminSidebar.tablesItem,
@@ -106,12 +114,16 @@ class _AdminDashboardState extends State<AdminDashboard>
     }
     return [
       ...AdminSidebar.defaultItems,
+      AdminSidebar.whatsappBroadcastItem,
+      AdminSidebar.reservationsItem,
+      AdminSidebar.hrItem,
       if (_tableManagementEnabled) AdminSidebar.tablesItem,
     ];
   }
 
   bool get _isCashierSession => AdminAuthService.instance.isCashier;
   bool get _isKitchenSession => AdminAuthService.instance.isKitchen;
+  bool get _isDriverSession => AdminAuthService.instance.isDriver;
 
   int get _settingsNavIndex => _isSuperAdmin
       ? AdminSidebar.superSettingsIndex
@@ -128,7 +140,8 @@ class _AdminDashboardState extends State<AdminDashboard>
   }
 
   bool get _shouldShowWhatsappBanner {
-    if (_isCashierSession || _isKitchenSession) return false;
+    if (_isCashierSession || _isKitchenSession || _isDriverSession)
+      return false;
     if (_isSuperAdmin && !SuperAdminScopeService.instance.hasSelection) {
       return false;
     }
@@ -142,6 +155,11 @@ class _AdminDashboardState extends State<AdminDashboard>
     attachAdminRuntimeKeepAlive(_onRuntimeResume);
     _bootstrapAuth();
     OrderAlertSoundService.instance.initialize();
+    ScheduledOrdersController.instance.addListener(_onScheduledDesk);
+    unawaited(ScheduledOrdersController.instance.start());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _onScheduledDesk();
+    });
   }
 
   @override
@@ -196,9 +214,14 @@ class _AdminDashboardState extends State<AdminDashboard>
         _isAuthenticated = true;
         _isSuperAdmin = AdminAuthService.instance.isSuperAdmin;
         _restaurantLabel = AdminAuthService.instance.restaurantName;
-        _selectedIndex = AdminAuthService.instance.isSuperAdmin
-            ? AdminSidebar.superRestaurantsIndex
-            : AdminSidebar.posIndex;
+        _selectedIndex =
+            AdminAuthService.instance.isCashier ||
+                AdminAuthService.instance.isKitchen ||
+                AdminAuthService.instance.isDriver
+            ? 0
+            : (_isSuperAdmin
+                  ? AdminSidebar.superAnalyticsIndex
+                  : AdminSidebar.analyticsIndex);
       });
       _applyAuthenticatedDeepLink();
       await _restoreCashierSessionIfNeeded();
@@ -220,7 +243,8 @@ class _AdminDashboardState extends State<AdminDashboard>
   void _captureGuestDeepLink() {
     final uri = _locationUri;
     final orderRef = AdminDeepLink.parseOrderRef(uri);
-    final redirect = AdminDeepLink.parseRedirect(uri) ??
+    final redirect =
+        AdminDeepLink.parseRedirect(uri) ??
         (orderRef != null ? AdminDeepLink.orderPath(orderRef) : null) ??
         AdminDeepLink.sanitizeRedirect(readStoredAdminRedirect());
     if (redirect == null) return;
@@ -236,12 +260,14 @@ class _AdminDashboardState extends State<AdminDashboard>
 
   void _applyAuthenticatedDeepLink() {
     final uri = _locationUri;
-    final redirect = AdminDeepLink.parseRedirect(uri) ??
+    final redirect =
+        AdminDeepLink.parseRedirect(uri) ??
         AdminOrderFocusService.instance.consumeRedirect() ??
         AdminDeepLink.sanitizeRedirect(readStoredAdminRedirect());
     clearStoredAdminRedirect();
 
-    final orderRef = AdminDeepLink.parseOrderRef(uri) ??
+    final orderRef =
+        AdminDeepLink.parseOrderRef(uri) ??
         (redirect == null
             ? null
             : AdminDeepLink.parseOrderRef(Uri.parse(redirect)));
@@ -250,7 +276,10 @@ class _AdminDashboardState extends State<AdminDashboard>
     replaceAdminPath(AdminDeepLink.orderPath(orderRef));
     AdminOrderFocusService.instance.requestOrder(orderRef);
     unawaited(OrdersService.instance.refreshOrders());
-    if (_isCashierSession || _isKitchenSession || _isSuperAdmin) {
+    if (_isCashierSession ||
+        _isKitchenSession ||
+        _isDriverSession ||
+        _isSuperAdmin) {
       if (mounted) setState(() {});
       return;
     }
@@ -264,20 +293,44 @@ class _AdminDashboardState extends State<AdminDashboard>
     WidgetsBinding.instance.removeObserver(this);
     SuperAdminScopeService.instance.removeListener(_onSuperAdminScopeChanged);
     AdminOrderMonitorService.instance.stop();
-    _usernameController.dispose();
-    _slugController.dispose();
-    _cashierNameController.dispose();
-    _passwordController.dispose();
+    ScheduledOrdersController.instance.removeListener(_onScheduledDesk);
     _whatsappController.dispose();
     super.dispose();
   }
 
+  void _onScheduledDesk() {
+    final actions = ScheduledOrdersController.instance.drainActions();
+    for (final action in actions) {
+      switch (action.kind) {
+        case ScheduledDeskActionKind.kitchenRelease:
+          unawaited(dispatchScheduledKitchenRelease(action.order));
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('حان وقت الطباعة: الطلب المجدول دخل المطبخ.'),
+              ),
+            );
+          }
+        case ScheduledDeskActionKind.whatsappReminder:
+          unawaited(
+            openWhatsAppChat(
+              phone: action.order.phone,
+              message: scheduledReminderText(action.order),
+            ),
+          );
+        case ScheduledDeskActionKind.driverNotice:
+          break;
+      }
+    }
+  }
+
   Future<void> _loadSettings() async {
     try {
-      final restaurantId = SuperAdminScopeService.instance.effectiveRestaurantId;
+      final restaurantId =
+          SuperAdminScopeService.instance.effectiveRestaurantId;
       final settings = await RestaurantSettingsService.instance.load(
-  restaurantId: restaurantId,
-);
+        restaurantId: restaurantId,
+      );
       _loadedSettings = settings;
       _whatsappCountryCode = settings.whatsappCountryCode;
       _whatsappController.text = settings.whatsappPhone;
@@ -285,8 +338,8 @@ class _AdminDashboardState extends State<AdminDashboard>
           (_selectedIndex == AdminSidebar.tablesIndex ||
               _selectedIndex == AdminSidebar.superTablesIndex)) {
         _selectedIndex = _isSuperAdmin
-            ? AdminSidebar.superPosIndex
-            : AdminSidebar.posIndex;
+            ? AdminSidebar.superAnalyticsIndex
+            : AdminSidebar.analyticsIndex;
       }
       if (mounted) {
         setState(() {});
@@ -302,15 +355,16 @@ class _AdminDashboardState extends State<AdminDashboard>
 
   Future<void> _saveWhatsappNumber() async {
     if (_whatsappController.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('يرجى إدخال رقم الواتساب')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('يرجى إدخال رقم الواتساب')));
       return;
     }
     setState(() => _isSavingSettings = true);
 
     try {
-      final restaurantId = SuperAdminScopeService.instance.effectiveRestaurantId;
+      final restaurantId =
+          SuperAdminScopeService.instance.effectiveRestaurantId;
       await RestaurantSettingsService.instance.saveWhatsappNumber(
         restaurantId: restaurantId,
         countryCode: _whatsappCountryCode,
@@ -333,89 +387,64 @@ class _AdminDashboardState extends State<AdminDashboard>
       await _loadSettings();
     } catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('تعذر حفظ رقم الواتساب: $error')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('تعذر حفظ رقم الواتساب: $error')));
     } finally {
       if (mounted) setState(() => _isSavingSettings = false);
     }
   }
 
-  Future<void> _login() async {
+  Future<void> _onExternalLoginSuccess() async {
+    if (!mounted) return;
     setState(() {
-      _isLoggingIn = true;
-      _errorMessage = null;
+      _isAuthenticated = true;
+      _isSuperAdmin = AdminAuthService.instance.isSuperAdmin;
+      _restaurantLabel = AdminAuthService.instance.restaurantName;
+      _selectedIndex =
+          AdminAuthService.instance.isCashier ||
+              AdminAuthService.instance.isKitchen ||
+              AdminAuthService.instance.isDriver
+          ? 0
+          : (_isSuperAdmin
+              ? AdminSidebar.superAnalyticsIndex
+              : AdminSidebar.analyticsIndex);
     });
-
-    try {
-      if (_loginMode == 1) {
-        await AdminAuthService.instance.loginSuperAdmin(
-          username: _usernameController.text.trim(),
-          password: _passwordController.text,
-        );
-      } else if (_loginMode == 2) {
-        final result = await AdminAuthService.instance.loginCashier(
-          restaurantName: _slugController.text.trim(),
-          cashierName: _cashierNameController.text.trim(),
-          password: _passwordController.text,
-        );
-        if (!result.session.isKitchen) {
-          PosOperationsService.instance.applyCashierSession(result.cashierSession);
-        }
-      } else {
-        await AdminAuthService.instance.loginRestaurantAdmin(
-          restaurantSlug: _slugController.text.trim(),
-          password: _passwordController.text,
-        );
-      }
-
-      if (!mounted) return;
-      setState(() {
-        _isAuthenticated = true;
-        _isSuperAdmin = AdminAuthService.instance.isSuperAdmin;
-        _restaurantLabel = AdminAuthService.instance.restaurantName;
-        _selectedIndex = _isSuperAdmin
-            ? AdminSidebar.superRestaurantsIndex
-            : AdminSidebar.posIndex;
-      });
-      _applyAuthenticatedDeepLink();
-
-      OrderAlertSoundService.instance.unlockFromUserGesture();
-      await _initSuperAdminScope();
-      await _loadSettings();
-      if (!AdminAuthService.instance.isSuperAdmin &&
-          !AdminAuthService.instance.isCashier &&
-          !AdminAuthService.instance.isKitchen) {
-        await _startAdminMonitoring();
-      }
-    } catch (error) {
-      if (!mounted) return;
-      setState(() {
-        _errorMessage = error.toString().replaceFirst('Exception: ', '');
-      });
-    } finally {
-      if (mounted) setState(() => _isLoggingIn = false);
+    _applyAuthenticatedDeepLink();
+    OrderAlertSoundService.instance.unlockFromUserGesture();
+    await _initSuperAdminScope();
+    await _loadSettings();
+    if (!AdminAuthService.instance.isSuperAdmin &&
+        !AdminAuthService.instance.isCashier &&
+        !AdminAuthService.instance.isKitchen) {
+      await _startAdminMonitoring();
     }
   }
 
   Future<void> _confirmLogout() async {
+    final s = AppStrings.read(context);
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) {
         return AlertDialog(
-          title: const Text('تسجيل الخروج'),
-          content: const Text('هل تريد تسجيل الخروج من لوحة التحكم؟'),
+          title: Text(s.tr('تسجيل الخروج', 'Log out')),
+          content: Text(
+            s.tr(
+              'هل تريد تسجيل الخروج من لوحة التحكم؟',
+              'Do you want to log out of the dashboard?',
+            ),
+          ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context, false),
-              child: const Text('إلغاء'),
+              child: Text(s.cancel),
             ),
             FilledButton(
               style: FilledButton.styleFrom(
                 backgroundColor: const Color(0xFF6B1124),
               ),
               onPressed: () => Navigator.pop(context, true),
-              child: const Text('تسجيل الخروج'),
+              child: Text(s.tr('تسجيل الخروج', 'Log out')),
             ),
           ],
         );
@@ -434,16 +463,16 @@ class _AdminDashboardState extends State<AdminDashboard>
     await AdminAuthService.instance.logout();
     AdminOrderFocusService.instance.clear();
     clearStoredAdminRedirect();
-    replaceAdminPath('/admin');
+    replaceAdminPath(AdminDeepLink.managerLoginPath);
     if (!mounted) return;
     setState(() {
       _isAuthenticated = false;
       _isSuperAdmin = false;
       _restaurantLabel = null;
-      _passwordController.clear();
-      _cashierNameController.clear();
-      _selectedIndex = AdminSidebar.posIndex;
+      _selectedIndex = AdminSidebar.analyticsIndex;
     });
+    if (!mounted) return;
+    Navigator.of(context).pushReplacementNamed(AdminDeepLink.managerLoginPath);
   }
 
   Future<void> _restoreCashierSessionIfNeeded() async {
@@ -455,7 +484,9 @@ class _AdminDashboardState extends State<AdminDashboard>
         staff: StaffUser(
           id: session.staffId ?? 'cashier',
           name: session.staffName ?? 'كاشير',
-          roleId: stored?.roleId.isNotEmpty == true ? stored!.roleId : 'cashier',
+          roleId: stored?.roleId.isNotEmpty == true
+              ? stored!.roleId
+              : 'cashier',
         ),
         permissions: stored?.permissions ?? const {},
         roleId: stored?.roleId ?? 'cashier',
@@ -520,7 +551,10 @@ class _AdminDashboardState extends State<AdminDashboard>
               backgroundColor: const Color(0xFF6B1124),
             ),
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('تفعيل الإشعارات', style: TextStyle(color: Colors.white)),
+            child: const Text(
+              'تفعيل الإشعارات',
+              style: TextStyle(color: Colors.white),
+            ),
           ),
         ],
       ),
@@ -532,13 +566,13 @@ class _AdminDashboardState extends State<AdminDashboard>
     }
   }
 
-
   Future<void> _showItemDialog({MenuItemRecord? record}) async {
     final isEditing = record != null;
     final Map<String, dynamic>? data = isEditing ? record.data : null;
 
     final nameController = TextEditingController(
-      text: data?['nameAr']?.toString() ??
+      text:
+          data?['nameAr']?.toString() ??
           data?['name_ar']?.toString() ??
           data?['name']?.toString() ??
           '',
@@ -547,13 +581,15 @@ class _AdminDashboardState extends State<AdminDashboard>
       text: data?['nameEn']?.toString() ?? data?['name_en']?.toString() ?? '',
     );
     final descController = TextEditingController(
-      text: data?['descriptionAr']?.toString() ??
+      text:
+          data?['descriptionAr']?.toString() ??
           data?['description_ar']?.toString() ??
           data?['description']?.toString() ??
           '',
     );
     final descEnController = TextEditingController(
-      text: data?['descriptionEn']?.toString() ??
+      text:
+          data?['descriptionEn']?.toString() ??
           data?['description_en']?.toString() ??
           '',
     );
@@ -567,7 +603,8 @@ class _AdminDashboardState extends State<AdminDashboard>
           : '',
     );
     final originalPriceController = TextEditingController(
-      text: (data?['originalPrice'] ?? data?['original_price'] ?? '').toString(),
+      text: (data?['originalPrice'] ?? data?['original_price'] ?? '')
+          .toString(),
     );
     final categoryController = TextEditingController(
       text: data?['categoryName'] ?? 'أشهر الأصناف',
@@ -575,18 +612,37 @@ class _AdminDashboardState extends State<AdminDashboard>
     final imageUrlController = TextEditingController(
       text: normalizeMenuImageUrl(data?['imageUrl'] as String?),
     );
+    final videoWebmController = TextEditingController(
+      text: (data?['videoUrlWebm'] ?? data?['video_url_webm'] ?? '').toString(),
+    );
+    final videoMp4Controller = TextEditingController(
+      text: (data?['videoUrlMp4'] ?? data?['video_url_mp4'] ?? '').toString(),
+    );
+    var isStory =
+        data?['isStory'] == true ||
+        data?['is_story'] == true ||
+        data?['isStory'] == 1 ||
+        data?['is_story'] == 1;
     var isAvailable = data?['isAvailable'] as bool? ?? true;
+    final showOnWebsiteRaw = data?['showOnWebsite'] ?? data?['show_on_website'];
+    var showOnWebsite =
+        showOnWebsiteRaw != false &&
+        showOnWebsiteRaw != 0 &&
+        showOnWebsiteRaw != '0' &&
+        showOnWebsiteRaw != 'false';
     var addonOptions = (data?['options'] as List<dynamic>? ?? [])
         .whereType<Map>()
         .map((entry) => Map<String, dynamic>.from(entry))
         .toList();
-    var linkedItemIds = (data?['linkedItemIds'] as List<dynamic>? ??
-            data?['linked_item_ids'] as List<dynamic>? ??
-            [])
-        .map((id) => int.tryParse(id.toString()))
-        .whereType<int>()
-        .toList();
+    var linkedItemIds =
+        (data?['linkedItemIds'] as List<dynamic>? ??
+                data?['linked_item_ids'] as List<dynamic>? ??
+                [])
+            .map((id) => int.tryParse(id.toString()))
+            .whereType<int>()
+            .toList();
     final editingItemId = isEditing ? record.id : null;
+    var saving = false;
 
     await showDialog<void>(
       context: context,
@@ -602,164 +658,215 @@ class _AdminDashboardState extends State<AdminDashboard>
               content: SizedBox(
                 width: 520,
                 child: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    const Text(
-                      'أدخل الاسم والوصف بلغة واحدة — الترجمة للغة الأخرى تتم تلقائياً عند الحفظ.',
-                      style: TextStyle(fontSize: 13, color: Color(0xFF666666)),
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: nameController,
-                      decoration: const InputDecoration(
-                        labelText: 'اسم الصنف (عربي)',
-                        helperText: 'يُترجم تلقائياً للإنجليزية إذا تُرك الحقل الإنجليزي فارغاً',
-                        border: OutlineInputBorder(),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: nameEnController,
-                      decoration: const InputDecoration(
-                        labelText: 'Item name (English) — اختياري',
-                        helperText: 'أو أدخل الإنجليزية فقط لترجمة العربية تلقائياً',
-                        border: OutlineInputBorder(),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: descController,
-                      maxLines: 2,
-                      decoration: const InputDecoration(
-                        labelText: 'الوصف (عربي)',
-                        helperText: 'يُترجم تلقائياً عند الحفظ',
-                        border: OutlineInputBorder(),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: descEnController,
-                      maxLines: 2,
-                      decoration: const InputDecoration(
-                        labelText: 'Description (English) — optional',
-                        border: OutlineInputBorder(),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(
-                          child: TextField(
-                            controller: priceController,
-                            keyboardType: const TextInputType.numberWithOptions(
-                              decimal: true,
-                            ),
-                            decoration: const InputDecoration(
-                              labelText: 'السعر النهائي (د.ك)',
-                              helperText: 'السعر بعد الخصم إن وُجد',
-                              border: OutlineInputBorder(),
-                            ),
-                            onChanged: (_) => setDialogState(() {}),
-                          ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      const Text(
+                        'أدخل الاسم والوصف بلغة واحدة — الترجمة للغة الأخرى تتم تلقائياً عند الحفظ.',
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: Color(0xFF666666),
                         ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: TextField(
-                            controller: costPriceController,
-                            keyboardType: const TextInputType.numberWithOptions(
-                              decimal: true,
-                            ),
-                            decoration: const InputDecoration(
-                              labelText: 'تكلفة الطعام / Food Cost (د.ك)',
-                              helperText: 'تكلفة المكونات لكل حصة',
-                              border: OutlineInputBorder(),
-                            ),
-                            onChanged: (_) => setDialogState(() {}),
-                          ),
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: nameController,
+                        decoration: const InputDecoration(
+                          labelText: 'اسم الصنف (عربي)',
+                          helperText:
+                              'يُترجم تلقائياً للإنجليزية إذا تُرك الحقل الإنجليزي فارغاً',
+                          border: OutlineInputBorder(),
                         ),
-                      ],
-                    ),
-                    Builder(
-                      builder: (context) {
-                        final sellingPrice =
-                            double.tryParse(priceController.text.trim()) ?? 0;
-                        final costPrice =
-                            double.tryParse(costPriceController.text.trim());
-                        if (sellingPrice <= 0 ||
-                            costPrice == null ||
-                            costPrice < 0) {
-                          return const SizedBox.shrink();
-                        }
-                        return Padding(
-                          padding: const EdgeInsets.only(top: 8),
-                          child: FoodCostBadge(
-                            sellingPrice: sellingPrice,
-                            costPrice: costPrice,
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: nameEnController,
+                        decoration: const InputDecoration(
+                          labelText: 'Item name (English) — اختياري',
+                          helperText:
+                              'أو أدخل الإنجليزية فقط لترجمة العربية تلقائياً',
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: descController,
+                        maxLines: 2,
+                        decoration: const InputDecoration(
+                          labelText: 'الوصف (عربي)',
+                          helperText: 'يُترجم تلقائياً عند الحفظ',
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: descEnController,
+                        maxLines: 2,
+                        decoration: const InputDecoration(
+                          labelText: 'Description (English) — optional',
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: TextField(
+                              controller: priceController,
+                              keyboardType:
+                                  const TextInputType.numberWithOptions(
+                                    decimal: true,
+                                  ),
+                              decoration: const InputDecoration(
+                                labelText: 'السعر النهائي (د.ك)',
+                                helperText: 'السعر بعد الخصم إن وُجد',
+                                border: OutlineInputBorder(),
+                              ),
+                              onChanged: (_) => setDialogState(() {}),
+                            ),
                           ),
-                        );
-                      },
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: originalPriceController,
-                      keyboardType:
-                          const TextInputType.numberWithOptions(decimal: true),
-                      decoration: const InputDecoration(
-                        labelText: 'السعر قبل الخصم (اختياري)',
-                        helperText:
-                            'يظهر مشطوباً مع شارة الخصم إذا كان أكبر من السعر النهائي',
-                        border: OutlineInputBorder(),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: categoryController,
-                      decoration: const InputDecoration(
-                        labelText: 'اسم القسم / التصنيف (عربي)',
-                        border: OutlineInputBorder(),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: imageUrlController,
-                      keyboardType: TextInputType.url,
-                      decoration: const InputDecoration(
-                        labelText: 'مسار الصورة المحلية (اختياري)',
-                        hintText: '/menu-images/123456.jpg',
-                        border: OutlineInputBorder(),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    SwitchListTile(
-                      title: const Text('متوفر للطلب؟'),
-                      value: isAvailable,
-                      onChanged: (val) =>
-                          setDialogState(() => isAvailable = val),
-                    ),
-                    const SizedBox(height: 16),
-                    const Divider(),
-                    const SizedBox(height: 8),
-                    AdminItemAddonsEditor(
-                         options: addonOptions,
-                          itemId: int.tryParse(editingItemId?.toString() ?? ''),
-                         onChanged: (next) =>
-                          setState(() => addonOptions = next),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: TextField(
+                              controller: costPriceController,
+                              keyboardType:
+                                  const TextInputType.numberWithOptions(
+                                    decimal: true,
+                                  ),
+                              decoration: const InputDecoration(
+                                labelText: 'تكلفة الطعام / Food Cost (د.ك)',
+                                helperText: 'تكلفة المكونات لكل حصة',
+                                border: OutlineInputBorder(),
+                              ),
+                              onChanged: (_) => setDialogState(() {}),
+                            ),
                           ),
-                    const SizedBox(height: 16),
-                    const Divider(),
-                    const SizedBox(height: 8),
-                    AdminItemLinkedSidesEditor(
-                      linkedItemIds: linkedItemIds,
-                      currentItemId: int.tryParse(editingItemId?.toString() ?? ''),
-                      onChanged: (next) =>
-                          setDialogState(() => linkedItemIds = next),
-                    ),
-                  ],
+                        ],
+                      ),
+                      Builder(
+                        builder: (context) {
+                          final sellingPrice =
+                              double.tryParse(priceController.text.trim()) ?? 0;
+                          final costPrice = double.tryParse(
+                            costPriceController.text.trim(),
+                          );
+                          if (sellingPrice <= 0 ||
+                              costPrice == null ||
+                              costPrice < 0) {
+                            return const SizedBox.shrink();
+                          }
+                          return Padding(
+                            padding: const EdgeInsets.only(top: 8),
+                            child: FoodCostBadge(
+                              sellingPrice: sellingPrice,
+                              costPrice: costPrice,
+                            ),
+                          );
+                        },
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: originalPriceController,
+                        keyboardType: const TextInputType.numberWithOptions(
+                          decimal: true,
+                        ),
+                        decoration: const InputDecoration(
+                          labelText: 'السعر قبل الخصم (اختياري)',
+                          helperText:
+                              'يظهر مشطوباً مع شارة الخصم إذا كان أكبر من السعر النهائي',
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: categoryController,
+                        decoration: const InputDecoration(
+                          labelText: 'اسم القسم / التصنيف (عربي)',
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: imageUrlController,
+                        keyboardType: TextInputType.url,
+                        decoration: const InputDecoration(
+                          labelText: 'مسار الصورة المحلية (اختياري)',
+                          hintText: '/menu-images/123456.jpg',
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: videoWebmController,
+                        keyboardType: TextInputType.url,
+                        decoration: const InputDecoration(
+                          labelText: 'رابط فيديو WebM (اختياري)',
+                          helperText:
+                              'يُحمّل فقط عندما يضغط العميل على المشاهدة',
+                          hintText: 'https://cdn.example.com/dish.webm',
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: videoMp4Controller,
+                        keyboardType: TextInputType.url,
+                        decoration: const InputDecoration(
+                          labelText: 'رابط فيديو MP4 احتياطي (اختياري)',
+                          hintText: 'https://cdn.example.com/dish.mp4',
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                      SwitchListTile(
+                        title: const Text('إظهار ضمن القصص المميزة'),
+                        subtitle: const Text('يتطلب صورة وفيديو صالحين للصنف'),
+                        value: isStory,
+                        onChanged: (val) => setDialogState(() => isStory = val),
+                      ),
+                      const SizedBox(height: 12),
+                      SwitchListTile(
+                        title: const Text('متوفر للطلب؟'),
+                        subtitle: const Text(
+                          'إذا أُغلق يختفي من الكاشير والموقع',
+                        ),
+                        value: isAvailable,
+                        onChanged: (val) =>
+                            setDialogState(() => isAvailable = val),
+                      ),
+                      SwitchListTile(
+                        title: const Text('يظهر في الموقع الإلكتروني؟'),
+                        subtitle: const Text(
+                          'إذا أُغلق يبقى ظاهراً للكاشير فقط ولا يظهر للعملاء',
+                        ),
+                        value: showOnWebsite,
+                        onChanged: (val) =>
+                            setDialogState(() => showOnWebsite = val),
+                      ),
+                      const SizedBox(height: 16),
+                      const Divider(),
+                      const SizedBox(height: 8),
+                      AdminItemAddonsEditor(
+                        options: addonOptions,
+                        itemId: int.tryParse(editingItemId?.toString() ?? ''),
+                        onChanged: (next) =>
+                            setState(() => addonOptions = next),
+                      ),
+                      const SizedBox(height: 16),
+                      const Divider(),
+                      const SizedBox(height: 8),
+                      AdminItemLinkedSidesEditor(
+                        linkedItemIds: linkedItemIds,
+                        currentItemId: int.tryParse(
+                          editingItemId?.toString() ?? '',
+                        ),
+                        onChanged: (next) =>
+                            setDialogState(() => linkedItemIds = next),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
               ),
               actions: [
                 TextButton(
@@ -770,90 +877,143 @@ class _AdminDashboardState extends State<AdminDashboard>
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.brown,
                   ),
-                  onPressed: () async {
-                    if ((nameController.text.trim().isEmpty &&
-                            nameEnController.text.trim().isEmpty) ||
-                        priceController.text.isEmpty) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('يرجى ملء الاسم (عربي أو إنجليزي) والسعر'),
-                        ),
-                      );
-                      return;
-                    }
+                  onPressed: saving
+                      ? null
+                      : () async {
+                          if ((nameController.text.trim().isEmpty &&
+                                  nameEnController.text.trim().isEmpty) ||
+                              priceController.text.isEmpty) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text(
+                                  'يرجى ملء الاسم (عربي أو إنجليزي) والسعر',
+                                ),
+                              ),
+                            );
+                            return;
+                          }
 
-                    final nameAr = nameController.text.trim();
-                    final nameEn = nameEnController.text.trim();
-                    final descriptionAr = descController.text.trim();
-                    final descriptionEn = descEnController.text.trim();
+                          setDialogState(() => saving = true);
+                          try {
+                            final nameAr = nameController.text.trim();
+                            final nameEn = nameEnController.text.trim();
+                            final descriptionAr = descController.text.trim();
+                            final descriptionEn = descEnController.text.trim();
 
-                    final itemMap = <String, dynamic>{
-                      'name': nameAr.isNotEmpty ? nameAr : nameEn,
-                      'nameAr': nameAr,
-                      'nameEn': nameEn,
-                      'description':
-                          descriptionAr.isNotEmpty ? descriptionAr : descriptionEn,
-                      'descriptionAr': descriptionAr,
-                      'descriptionEn': descriptionEn,
-                      'price': double.tryParse(priceController.text) ?? 0.0,
-                      if (costPriceController.text.trim().isNotEmpty)
-                        'costPrice':
-                            double.tryParse(costPriceController.text.trim()),
-                      'originalPrice':
-                          double.tryParse(originalPriceController.text.trim()),
-                      'categoryName': categoryController.text.trim(),
-                      'categoryId': data?['categoryId'] ?? '',
-                      'imageUrl': normalizeMenuImageUrl(imageUrlController.text.trim()),
-                      'options': addonOptions
-                          .where(
-                            (option) =>
-                                (option['name']?.toString().trim().isNotEmpty ??
-                                    false),
-                          )
-                          .map((option) => Map<String, dynamic>.from(option))
-                          .toList(),
-                      'linkedItemIds': linkedItemIds,
-                      'isAvailable': isAvailable,
-                      if (data?['displayOrder'] != null)
-                        'displayOrder': data!['displayOrder'],
-                    };
+                            final itemMap = <String, dynamic>{
+                              'name': nameAr.isNotEmpty ? nameAr : nameEn,
+                              'nameAr': nameAr,
+                              'nameEn': nameEn,
+                              'description': descriptionAr.isNotEmpty
+                                  ? descriptionAr
+                                  : descriptionEn,
+                              'descriptionAr': descriptionAr,
+                              'descriptionEn': descriptionEn,
+                              'price':
+                                  double.tryParse(priceController.text) ?? 0.0,
+                              if (costPriceController.text.trim().isNotEmpty)
+                                'costPrice': double.tryParse(
+                                  costPriceController.text.trim(),
+                                ),
+                              'originalPrice': double.tryParse(
+                                originalPriceController.text.trim(),
+                              ),
+                              'categoryName': categoryController.text.trim(),
+                              'categoryId': data?['categoryId'] ?? '',
+                              'imageUrl': normalizeMenuImageUrl(
+                                imageUrlController.text.trim(),
+                              ),
+                              'videoUrlWebm': videoWebmController.text.trim(),
+                              'videoUrlMp4': videoMp4Controller.text.trim(),
+                              'isStory': isStory,
+                              'options': addonOptions
+                                  .where(
+                                    (option) =>
+                                        (option['name']
+                                            ?.toString()
+                                            .trim()
+                                            .isNotEmpty ??
+                                        false),
+                                  )
+                                  .map(
+                                    (option) =>
+                                        Map<String, dynamic>.from(option),
+                                  )
+                                  .toList(),
+                              'linkedItemIds': linkedItemIds,
+                              'isAvailable': isAvailable,
+                              'showOnWebsite': showOnWebsite,
+                              if (data?['displayOrder'] != null)
+                                'displayOrder': data!['displayOrder'],
+                            };
 
-                    if (isEditing) {
-                      if (AdminAuthService.instance.isLoggedIn) {
-                        await ApiService.instance.updateMenuItem(
-                          record.id,
-                          itemMap,
-                        );
-                      } else {
-                        await MenuStorageService.instance
-                            .updateItem(record.id, itemMap);
-                      }
-                    } else {
-                      itemMap['createdAt'] = DateTime.now().toIso8601String();
-                      if (AdminAuthService.instance.isLoggedIn) {
-                        await ApiService.instance.createMenuItem(itemMap);
-                      } else {
-                        await MenuStorageService.instance.addItem(itemMap);
-                      }
-                    }
+                            if (isEditing) {
+                              if (AdminAuthService.instance.isLoggedIn) {
+                                await ApiService.instance.updateMenuItem(
+                                  record.id,
+                                  itemMap,
+                                );
+                              } else {
+                                await MenuStorageService.instance.updateItem(
+                                  record.id,
+                                  itemMap,
+                                );
+                              }
+                            } else {
+                              itemMap['createdAt'] = DateTime.now()
+                                  .toIso8601String();
+                              if (AdminAuthService.instance.isLoggedIn) {
+                                await ApiService.instance.createMenuItem(
+                                  itemMap,
+                                );
+                              } else {
+                                await MenuStorageService.instance.addItem(
+                                  itemMap,
+                                );
+                              }
+                            }
 
-                    if (context.mounted) {
-                      Navigator.pop(context);
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(
-                            isEditing
-                                ? 'تم حفظ الصنف مع الترجمة التلقائية'
-                                : 'تمت إضافة الصنف مع الترجمة التلقائية',
+                            if (context.mounted) {
+                              Navigator.pop(context);
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(
+                                    isEditing
+                                        ? 'تم حفظ الصنف'
+                                        : 'تمت إضافة الصنف',
+                                  ),
+                                ),
+                              );
+                            }
+                          } catch (error) {
+                            if (context.mounted) {
+                              setDialogState(() => saving = false);
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(
+                                    error.toString().replaceFirst(
+                                      'Exception: ',
+                                      '',
+                                    ),
+                                  ),
+                                ),
+                              );
+                            }
+                          }
+                        },
+                  child: saving
+                      ? const SizedBox(
+                          width: 22,
+                          height: 22,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
                           ),
+                        )
+                      : Text(
+                          isEditing ? 'حفظ التعديلات' : 'إضافة الصنف',
+                          style: const TextStyle(color: Colors.white),
                         ),
-                      );
-                    }
-                  },
-                  child: Text(
-                    isEditing ? 'حفظ التعديلات' : 'إضافة الصنف',
-                    style: const TextStyle(color: Colors.white),
-                  ),
                 ),
               ],
             );
@@ -864,7 +1024,8 @@ class _AdminDashboardState extends State<AdminDashboard>
   }
 
   Future<void> _deleteItem(String docId) async {
-    final confirm = await showDialog<bool>(
+    final confirm =
+        await showDialog<bool>(
           context: context,
           builder: (ctx) => AlertDialog(
             title: const Text('تأكيد الحذف'),
@@ -898,10 +1059,11 @@ class _AdminDashboardState extends State<AdminDashboard>
   String get _activeRestaurantId {
     final scoped = SuperAdminScopeService.instance.effectiveRestaurantId;
     if (scoped.isNotEmpty) return scoped;
-    return AdminAuthService.instance.restaurantId ?? ApiService.defaultRestaurantId;
+    return AdminAuthService.instance.restaurantId ??
+        ApiService.defaultRestaurantId;
   }
 
-  Future<void> _processAndSaveTalabatMenu({
+  Future<bool> _processAndSaveTalabatMenu({
     required String url,
     required void Function(String message) onProgress,
     required void Function(int added, int skipped, int updated) onComplete,
@@ -963,7 +1125,8 @@ class _AdminDashboardState extends State<AdminDashboard>
                       Text(
                         statusMessage!,
                         style: TextStyle(
-                          color: statusMessage!.contains('نجاح') ||
+                          color:
+                              statusMessage!.contains('نجاح') ||
                                   statusMessage!.contains('تمت')
                               ? Colors.green
                               : Colors.brown,
@@ -1014,14 +1177,13 @@ class _AdminDashboardState extends State<AdminDashboard>
                             statusMessage = 'جاري الاتصال وسحب المنيو...';
                           });
 
-                          await _processAndSaveTalabatMenu(
+                          final ok = await _processAndSaveTalabatMenu(
                             url: url,
                             onProgress: (msg) {
                               setDialogState(() => statusMessage = msg);
                             },
                             onComplete: (added, skipped, updated) {
                               setDialogState(() {
-                                isLoading = false;
                                 if (added > 0 || skipped > 0 || updated > 0) {
                                   statusMessage =
                                       'تمت التعبئة! أُضيف $added، وتم تحديث $updated، وتجاهل $skipped.';
@@ -1035,6 +1197,15 @@ class _AdminDashboardState extends State<AdminDashboard>
                               }
                             },
                           );
+                          setDialogState(() {
+                            isLoading = false;
+                            if (!ok &&
+                                (statusMessage == null ||
+                                    statusMessage!.contains('جاري'))) {
+                              statusMessage =
+                                  'فشل الاستيراد — تأكد من الرابط أو حاول مرة أخرى';
+                            }
+                          });
                         },
                 ),
               ],
@@ -1047,166 +1218,19 @@ class _AdminDashboardState extends State<AdminDashboard>
 
   @override
   Widget build(BuildContext context) {
+    final s = AppStrings.of(context);
     if (!_isAuthenticated) {
-      return Scaffold(
-        backgroundColor: const Color(0xFFF4F6F8),
-        body: Directionality(
-          textDirection: TextDirection.rtl,
-          child: Center(
-            child: Container(
-              constraints: const BoxConstraints(maxWidth: 420),
-              padding: const EdgeInsets.all(28),
-              margin: const EdgeInsets.symmetric(horizontal: 20),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.08),
-                    blurRadius: 16,
-                  ),
-                ],
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF6B1124).withValues(alpha: 0.1),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(
-                      Icons.admin_panel_settings,
-                      size: 52,
-                      color: Color(0xFF6B1124),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  const Text(
-                    'Almenupro',
-                    style: TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
-                      color: Color(0xFF6B1124),
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  const Text(
-                    'دخول لوحة الإدارة',
-                    style: TextStyle(fontSize: 16, color: Colors.grey),
-                  ),
-                  const SizedBox(height: 20),
-                  SegmentedButton<int>(
-                    showSelectedIcon: false,
-                    style: const ButtonStyle(
-                      visualDensity: VisualDensity.compact,
-                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    ),
-                    segments: const [
-                      ButtonSegment(value: 0, label: Text('مدير')),
-                      ButtonSegment(value: 2, label: Text('كاشير / مطبخ')),
-                      ButtonSegment(value: 1, label: Text('AlMenuPro')),
-                    ],
-                    selected: {_loginMode},
-                    onSelectionChanged: (value) {
-                      setState(() {
-                        _loginMode = value.first;
-                        _errorMessage = null;
-                      });
-                    },
-                  ),
-                  const SizedBox(height: 20),
-                  if (_loginMode == 1)
-                    TextField(
-                      controller: _usernameController,
-                      decoration: const InputDecoration(
-                        labelText: 'اسم المستخدم',
-                        border: OutlineInputBorder(),
-                        prefixIcon: Icon(Icons.person),
-                      ),
-                    )
-                  else ...[
-                    TextField(
-                      controller: _slugController,
-                      decoration: InputDecoration(
-                        labelText: _loginMode == 2
-                            ? 'اسم المطعم'
-                            : 'معرف المطعم (slug)',
-                        hintText: _loginMode == 2
-                            ? 'Molton Cookies أو molton-cookies'
-                            : 'molton-cookies',
-                        border: const OutlineInputBorder(),
-                        prefixIcon: const Icon(Icons.store),
-                      ),
-                    ),
-                    if (_loginMode == 2) ...[
-                      const SizedBox(height: 12),
-                      TextField(
-                        controller: _cashierNameController,
-                        textCapitalization: TextCapitalization.words,
-                        decoration: const InputDecoration(
-                          labelText: 'اسم المستخدم',
-                          hintText: 'اسم الكاشير أو مستخدم المطبخ',
-                          border: OutlineInputBorder(),
-                          prefixIcon: Icon(Icons.badge_outlined),
-                        ),
-                      ),
-                    ],
-                  ],
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: _passwordController,
-                    obscureText: true,
-                    onSubmitted: (_) => _login(),
-                    decoration: InputDecoration(
-                      labelText: _loginMode == 2 ? 'كلمة المرور / PIN' : 'كلمة المرور',
-                      errorText: _errorMessage,
-                      border: const OutlineInputBorder(),
-                      prefixIcon: const Icon(Icons.lock),
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  SizedBox(
-                    width: double.infinity,
-                    height: 48,
-                    child: ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF6B1124),
-                      ),
-                      onPressed: _isLoggingIn ? null : _login,
-                      child: _isLoggingIn
-                          ? const SizedBox(
-                              width: 22,
-                              height: 22,
-                              child: CircularProgressIndicator(
-                                color: Colors.white,
-                                strokeWidth: 2,
-                              ),
-                            )
-                          : Text(
-                              _loginMode == 1
-                                  ? 'دخول Super Admin'
-                                  : _loginMode == 2
-                                      ? 'دخول الكاشير / المطبخ'
-                                      : 'دخول لوحة المطعم',
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 16,
-                              ),
-                            ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
+      final redirect =
+          AdminDeepLink.parseRedirect(_locationUri) ??
+          AdminDeepLink.sanitizeRedirect(readStoredAdminRedirect());
+      return ManagerLoginScreen(
+        redirect: redirect,
+        onAuthenticated: _onExternalLoginSuccess,
       );
     }
 
     return Directionality(
-      textDirection: TextDirection.rtl,
+      textDirection: s.isArabic ? TextDirection.rtl : TextDirection.ltr,
       child: _buildAuthenticatedShell(),
     );
   }
@@ -1232,6 +1256,9 @@ class _AdminDashboardState extends State<AdminDashboard>
   }
 
   Widget _buildAuthenticatedShell() {
+    if (_isDriverSession) {
+      return DriverStationScreen(onLogout: _confirmLogout);
+    }
     if (_isKitchenSession) {
       return KitchenStationScreen(onLogout: _confirmLogout);
     }
@@ -1281,7 +1308,11 @@ class _AdminDashboardState extends State<AdminDashboard>
       final content = Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _buildTopHeader(onMenuTap: mobile ? () => _shellScaffoldKey.currentState?.openDrawer() : null),
+          _buildTopHeader(
+            onMenuTap: mobile
+                ? () => _shellScaffoldKey.currentState?.openDrawer()
+                : null,
+          ),
           if (_shouldShowWhatsappBanner) _buildWhatsappMissingBanner(),
           Expanded(
             child: ListenableBuilder(
@@ -1344,13 +1375,15 @@ class _AdminDashboardState extends State<AdminDashboard>
   }
 
   List<Widget> get _menuHeaderActions {
+    final s = AppStrings.of(context);
     if (!_isMenuTabSelected) return const [];
-    final canImport = !_isSuperAdmin || SuperAdminScopeService.instance.hasSelection;
+    final canImport =
+        !_isSuperAdmin || SuperAdminScopeService.instance.hasSelection;
     return [
       OutlinedButton.icon(
         onPressed: canImport ? _showAutofillDialog : null,
         icon: const Icon(Icons.cloud_download_outlined, size: 18),
-        label: const Text('جلب المنيو من طلبات'),
+        label: Text(s.tr('جلب المنيو من طلبات', 'Import menu from Talabat')),
         style: OutlinedButton.styleFrom(
           foregroundColor: const Color(0xFF6B1124),
           side: const BorderSide(color: Color(0xFF6B1124)),
@@ -1367,7 +1400,7 @@ class _AdminDashboardState extends State<AdminDashboard>
         ),
         onPressed: () => _showItemDialog(),
         icon: const Icon(Icons.add, size: 18),
-        label: const Text('إضافة صنف جديد'),
+        label: Text(s.tr('إضافة صنف جديد', 'Add new item')),
       ),
     ];
   }
@@ -1407,8 +1440,7 @@ class _AdminDashboardState extends State<AdminDashboard>
   Widget _buildDeliveryZonesPanel() {
     final scope = SuperAdminScopeService.instance;
     final restaurantId = scope.effectiveRestaurantId;
-    final canManage =
-        !_isSuperAdmin || scope.hasSelection;
+    final canManage = !_isSuperAdmin || scope.hasSelection;
 
     return AdminDeliveryZonesPanel(
       key: ValueKey('delivery-zones-$restaurantId'),
@@ -1431,13 +1463,17 @@ class _AdminDashboardState extends State<AdminDashboard>
   }
 
   Widget _buildPosTab() {
+    final s = AppStrings.of(context);
     final scope = SuperAdminScopeService.instance;
     if (_isSuperAdmin && !scope.hasSelection) {
-      return const Center(
+      return Center(
         child: Padding(
-          padding: EdgeInsets.all(24),
+          padding: const EdgeInsets.all(24),
           child: Text(
-            'اختر مطعماً من تبويب المطاعم أولاً لفتح نقطة البيع.',
+            s.tr(
+              'اختر مطعماً من تبويب المطاعم أولاً لفتح نقطة البيع.',
+              'Select a restaurant first to open POS.',
+            ),
             textAlign: TextAlign.center,
             style: TextStyle(fontSize: 16),
           ),
@@ -1465,6 +1501,7 @@ class _AdminDashboardState extends State<AdminDashboard>
   }
 
   Widget _buildStaffTab() {
+    final s = AppStrings.of(context);
     return ListenableBuilder(
       listenable: SuperAdminScopeService.instance,
       builder: (context, _) {
@@ -1476,9 +1513,9 @@ class _AdminDashboardState extends State<AdminDashboard>
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  const Text(
-                    'الموظفين والكاشير',
-                    style: TextStyle(
+                  Text(
+                    s.tr('الموظفين والكاشير', 'Staff & Cashiers'),
+                    style: const TextStyle(
                       fontSize: 22,
                       fontWeight: FontWeight.bold,
                       color: Color(0xFF6B1124),
@@ -1487,8 +1524,14 @@ class _AdminDashboardState extends State<AdminDashboard>
                   const SizedBox(height: 8),
                   Text(
                     _isSuperAdmin
-                        ? 'عرض موظفي كل مطعم من قاعدة البيانات. اختر مطعماً لإضافة موظف أو تعديل الصلاحيات.'
-                        : 'موظفون وكاشير هذا المطعم من قاعدة البيانات، مع إضافة موظف وتسجيل الدخول.',
+                        ? s.tr(
+                            'عرض موظفي كل مطعم من قاعدة البيانات. اختر مطعماً لإضافة موظف أو تعديل الصلاحيات.',
+                            'View each restaurant’s staff. Select a restaurant to add staff or edit permissions.',
+                          )
+                        : s.tr(
+                            'موظفون وكاشير هذا المطعم من قاعدة البيانات، مع إضافة موظف وتسجيل الدخول.',
+                            'Manage this restaurant’s staff and cashier accounts.',
+                          ),
                   ),
                   const SizedBox(height: 20),
                   if (!_isSuperAdmin ||
@@ -1516,6 +1559,9 @@ class _AdminDashboardState extends State<AdminDashboard>
   }
 
   Widget _buildActiveTab() {
+    if (_isDriverSession) {
+      return DriverStationScreen(onLogout: _confirmLogout);
+    }
     if (_isKitchenSession) {
       return KitchenStationScreen(onLogout: _confirmLogout);
     }
@@ -1531,8 +1577,7 @@ class _AdminDashboardState extends State<AdminDashboard>
             key: ValueKey(
               '${SuperAdminScopeService.instance.selectedRestaurantId ?? 'super-menu-none'}-$_menuRevision',
             ),
-            restaurantId:
-                SuperAdminScopeService.instance.effectiveRestaurantId,
+            restaurantId: SuperAdminScopeService.instance.effectiveRestaurantId,
             onAddItem: () => _showItemDialog(),
             onEditItem: (record) => _showItemDialog(record: record),
             onDeleteItem: _deleteItem,
@@ -1543,10 +1588,17 @@ class _AdminDashboardState extends State<AdminDashboard>
             canManageItems: SuperAdminScopeService.instance.hasSelection,
             onStatusChanged: _onMenuPanelStatusChanged,
           );
+        case AdminSidebar.superPlatformMappingIndex:
+          return AdminPlatformMenuMappingPanel(
+            restaurantId: SuperAdminScopeService.instance.effectiveRestaurantId,
+            canManage: SuperAdminScopeService.instance.hasSelection,
+          );
         case AdminSidebar.superRestaurantsIndex:
           return const AdminSuperRestaurantsPanel();
         case AdminSidebar.superDeliveryZonesIndex:
           return _buildDeliveryZonesPanel();
+        case AdminSidebar.superDriversIndex:
+          return const AdminDriversPanel();
         case AdminSidebar.superOffersIndex:
           return _buildOffersPanel();
         case AdminSidebar.superAnalyticsIndex:
@@ -1565,10 +1617,16 @@ class _AdminDashboardState extends State<AdminDashboard>
             activeTab: _activeSettingsTab(),
             restaurantLabel: _restaurantLabel,
           );
+        case AdminSidebar.superWhatsappBroadcastIndex:
+          return const SmartWhatsappHubPage();
+        case AdminSidebar.superReservationsIndex:
+          return const ScheduledOrdersPage();
+        case AdminSidebar.superHrIndex:
+          return const HrModulePage();
         case AdminSidebar.superTablesIndex:
           return const AdminTablesPanel();
         default:
-          return _buildDeliveryZonesPanel();
+          return _buildAnalyticsTab();
       }
     }
 
@@ -1591,6 +1649,10 @@ class _AdminDashboardState extends State<AdminDashboard>
           canManageItems: true,
           onStatusChanged: _onMenuPanelStatusChanged,
         );
+      case AdminSidebar.platformMappingIndex:
+        return AdminPlatformMenuMappingPanel(
+          restaurantId: SuperAdminScopeService.instance.effectiveRestaurantId,
+        );
       case AdminSidebar.deliveryZonesIndex:
         return _buildDeliveryZonesPanel();
       case AdminSidebar.offersIndex:
@@ -1611,12 +1673,18 @@ class _AdminDashboardState extends State<AdminDashboard>
           activeTab: _activeSettingsTab(),
           restaurantLabel: _restaurantLabel,
         );
+      case AdminSidebar.whatsappBroadcastIndex:
+        return const SmartWhatsappHubPage();
+      case AdminSidebar.reservationsIndex:
+        return const ScheduledOrdersPage();
+      case AdminSidebar.hrIndex:
+        return const HrModulePage();
       case AdminSidebar.tablesIndex:
         return const AdminTablesPanel();
       case AdminSidebar.posIndex:
         return _buildPosTab();
       default:
-        return AdminOrdersPanel(key: _ordersPanelKey);
+        return _buildAnalyticsTab();
     }
   }
 
@@ -1748,7 +1816,9 @@ class _AdminDashboardState extends State<AdminDashboard>
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  configured ? 'رقم الواتساب مُفعَّل' : 'لم يُعيَّن رقم واتساب بعد',
+                  configured
+                      ? 'رقم الواتساب مُفعَّل'
+                      : 'لم يُعيَّن رقم واتساب بعد',
                   style: TextStyle(
                     fontWeight: FontWeight.bold,
                     fontSize: 17,
@@ -1830,10 +1900,7 @@ class _AdminDashboardState extends State<AdminDashboard>
                 children: [
                   const Text(
                     'تعديل رقم الواتساب',
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16,
-                    ),
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                   ),
                   const SizedBox(height: 12),
                   Row(
@@ -1896,7 +1963,8 @@ class _AdminDashboardState extends State<AdminDashboard>
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.brown,
                       ),
-                      onPressed: (_isSavingSettings ||
+                      onPressed:
+                          (_isSavingSettings ||
                               (_isSuperAdmin && !scope.hasSelection))
                           ? null
                           : _saveWhatsappNumber,
@@ -1932,6 +2000,11 @@ class _AdminDashboardState extends State<AdminDashboard>
   }
 
   Widget _buildAnalyticsTab() {
-    return const AdminAnalyticsReportsPanel();
+    final hrIndex = _isSuperAdmin
+        ? AdminSidebar.superHrIndex
+        : AdminSidebar.hrIndex;
+    return AdminAnalyticsReportsPanel(
+      onOpenHr: () => setState(() => _selectedIndex = hrIndex),
+    );
   }
 }

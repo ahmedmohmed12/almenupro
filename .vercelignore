@@ -1,10 +1,13 @@
 .dart_tool/
+.flutter/
 .flutter-plugins
 .flutter-plugins-dependencies
 .packages
 .pub-cache/
 .pub/
+node_modules/
 functions/node_modules/
+build/
 android/
 ios/
 linux/

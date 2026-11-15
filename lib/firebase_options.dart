@@ -34,11 +34,11 @@ class DefaultFirebaseOptions {
   );
 
   static const FirebaseOptions android = FirebaseOptions(
-    apiKey: 'YOUR_ANDROID_API_KEY',
-    appId: 'YOUR_ANDROID_APP_ID',
-    messagingSenderId: 'YOUR_MESSAGING_SENDER_ID',
-    projectId: 'YOUR_PROJECT_ID',
-    storageBucket: 'YOUR_PROJECT_ID.appspot.com',
+    apiKey: 'AIzaSyBwF9gjS5QgrlEJ3dbotx0xKZoJH_YGnsI',
+    appId: '1:730974038808:android:2b55b6b0c62aa669f80c6d',
+    messagingSenderId: '730974038808',
+    projectId: 'almenupro',
+    storageBucket: 'almenupro.firebasestorage.app',
   );
 
   static const FirebaseOptions ios = FirebaseOptions(

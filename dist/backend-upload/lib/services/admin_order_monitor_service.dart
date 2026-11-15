@@ -1,0 +1,126 @@
+import 'dart:async';
+
+import 'package:flutter/foundation.dart';
+
+import '../models/order.dart';
+import '../utils/order_channel_utils.dart';
+import 'incoming_order_auto_accept_service.dart';
+import 'order_alert_sound_service.dart';
+import 'order_browser_notification_service.dart';
+import 'orders_service.dart';
+
+typedef AdminNewOrderHandler = void Function(Order order);
+
+/// Background order watcher for the admin dashboard (all sidebar tabs).
+class AdminOrderMonitorService {
+  AdminOrderMonitorService._();
+
+  static final AdminOrderMonitorService instance = AdminOrderMonitorService._();
+
+  final ValueNotifier<int> pendingCount = ValueNotifier(0);
+  final ValueNotifier<bool> alertLoopActive = ValueNotifier(false);
+
+  StreamSubscription<List<Order>>? _ordersSubscription;
+  final Set<String> _knownOrderIds = <String>{};
+  var _initializedSnapshot = false;
+  var _isRunning = false;
+  AdminNewOrderHandler? onNewPendingOrder;
+
+  bool get isRunning => _isRunning;
+
+  Future<void> start() async {
+    if (_isRunning) return;
+    _isRunning = true;
+
+    await OrderAlertSoundService.instance.initialize();
+
+    _ordersSubscription = OrdersService.instance.watchOrders().listen(
+      _handleOrders,
+      onError: (Object error, StackTrace stackTrace) {
+        if (kDebugMode) {
+          debugPrint('Admin order monitor stream error: $error');
+        }
+      },
+    );
+
+    unawaited(OrdersService.instance.refreshOrders());
+  }
+
+  Future<void> resumeRealtime() async {
+    if (!_isRunning) {
+      await start();
+      return;
+    }
+    unawaited(OrdersService.instance.refreshOrders());
+    if (OrderAlertSoundService.instance.isAlertLoopActive) {
+      unawaited(OrderAlertSoundService.instance.startAlertLoop());
+    }
+    _syncAlertLoopFlag();
+  }
+
+  Future<void> stop() async {
+    _isRunning = false;
+    await _ordersSubscription?.cancel();
+    _ordersSubscription = null;
+    _initializedSnapshot = false;
+    _knownOrderIds.clear();
+    await OrderAlertSoundService.instance.stopAllAlerts();
+    IncomingOrderAutoAcceptService.instance.syncPendingIds({});
+    _syncAlertLoopFlag();
+    pendingCount.value = 0;
+  }
+
+  Future<void> acknowledgeOrder(String orderId) =>
+      OrderAlertSoundService.instance.acknowledgeOrder(orderId);
+
+  Future<void> stopAllAlerts() async {
+    await OrderAlertSoundService.instance.stopAllAlerts();
+    _syncAlertLoopFlag();
+  }
+
+  Future<void> _handleOrders(List<Order> orders) async {
+    final pendingOrders = orders.where(isPendingOnlineMenuOrder).toList();
+    final pendingIds = pendingOrders.map((order) => order.id).toSet();
+
+    pendingCount.value = pendingOrders.length;
+
+    if (!_initializedSnapshot) {
+      _knownOrderIds
+        ..clear()
+        ..addAll(orders.map((order) => order.id));
+      _initializedSnapshot = true;
+      await OrderAlertSoundService.instance.syncPendingAlerts(pendingIds);
+      _syncAlertLoopFlag();
+      return;
+    }
+
+    final newlyDetected = <String>{};
+
+    for (final order in orders) {
+      if (_knownOrderIds.contains(order.id)) continue;
+      if (order.isDemoOrder) continue;
+      final isHeardOnline = isPendingOnlineMenuOrder(order);
+      if (!isHeardOnline) continue;
+      newlyDetected.add(order.id);
+      _knownOrderIds.add(order.id);
+      onNewPendingOrder?.call(order);
+      IncomingOrderAutoAcceptService.instance.trackNewOrder(order);
+      await OrderBrowserNotificationService.instance.notifyNewOrder(order);
+    }
+
+    await OrderAlertSoundService.instance.syncPendingAlerts(
+      pendingIds,
+      newlyDetected: newlyDetected,
+    );
+    IncomingOrderAutoAcceptService.instance.syncPendingIds(pendingIds);
+    _syncAlertLoopFlag();
+
+    _knownOrderIds
+      ..clear()
+      ..addAll(orders.map((order) => order.id));
+  }
+
+  void _syncAlertLoopFlag() {
+    alertLoopActive.value = OrderAlertSoundService.instance.isAlertLoopActive;
+  }
+}

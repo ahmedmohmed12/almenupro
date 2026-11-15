@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "730974038808",
+    "project_id": "almenupro",
+    "storage_bucket": "almenupro.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:730974038808:android:2b55b6b0c62aa669f80c6d",
+        "android_client_info": {
+          "package_name": "com.example.almenupro"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBwF9gjS5QgrlEJ3dbotx0xKZoJH_YGnsI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:730974038808:android:2b55b6b0c62aa669f80c6d",
+        "android_client_info": {
+          "package_name": "com.example.almenupro.admin"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBwF9gjS5QgrlEJ3dbotx0xKZoJH_YGnsI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -9,6 +9,7 @@ import '../../l10n/app_strings.dart';
 import '../../models/customer_restaurant_context.dart';
 import '../../models/delivery_address_details.dart';
 import '../../models/invoice_language.dart';
+import '../../models/order.dart';
 import '../../models/delivery_zone.dart';
 import '../../models/menu_item.dart';
 import '../../models/payment_method_config.dart';
@@ -136,7 +137,19 @@ class _MenuCheckoutSheetState extends State<MenuCheckoutSheet> {
 
   double get _zoneDeliveryFee => _selectedZone?.deliveryFee ?? 0;
 
+  double get _zoneMinOrder {
+    if (_session.isQrDineIn) return 0;
+    return _selectedZone?.minOrder ?? 0;
+  }
+
+  bool _meetsZoneMinOrder(double subtotal) {
+    final min = _zoneMinOrder;
+    if (min <= 0) return true;
+    return subtotal + 1e-9 >= min;
+  }
+
   double _deliveryFeeFor(double subtotal) {
+    if (_session.isQrDineIn) return 0;
     final settings = _settings;
     if (settings != null && settings.unlocksFreeDelivery(subtotal)) {
       return 0;
@@ -260,6 +273,7 @@ class _MenuCheckoutSheetState extends State<MenuCheckoutSheet> {
         restaurantId: _restaurantId,
         limit: 200,
         lite: true,
+        channel: 'website',
       );
       if (!mounted) return;
       setState(() => _menuItems = items);
@@ -329,6 +343,18 @@ class _MenuCheckoutSheetState extends State<MenuCheckoutSheet> {
       return;
     }
 
+    final subtotalBeforeSubmit = cart.totalPrice;
+    if (!_meetsZoneMinOrder(subtotalBeforeSubmit)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            strings.minOrderNotMet(_zoneMinOrder.toStringAsFixed(3)),
+          ),
+        ),
+      );
+      return;
+    }
+
     setState(() => _submitting = true);
 
     try {
@@ -353,11 +379,15 @@ class _MenuCheckoutSheetState extends State<MenuCheckoutSheet> {
       final invoiceAddress =
           invoiceLanguage.isArabic ? addressArabic : addressEnglish;
 
+      final dineInTableId = _session.dineInTableId;
+      final dineInName = _session.dineInTableName?.trim() ?? '';
       final created = await OrdersService.instance.submitOrderFromCart(
         cartItems: List.from(cart.items),
         customerName: _nameController.text.trim(),
         phone: _phoneController.text.trim(),
-        address: addressArabic,
+        address: dineInTableId != null
+            ? (dineInName.isEmpty ? 'طاولة QR' : dineInName)
+            : addressArabic,
         paymentMethod: _paymentMethod,
         invoiceNumber: invoiceNumber,
         restaurantId: _restaurantId,
@@ -366,7 +396,9 @@ class _MenuCheckoutSheetState extends State<MenuCheckoutSheet> {
         areaName: _selectedZone?.areaName,
         deliveryZoneId: _selectedZone?.id,
         addressDetails: _addressDetails,
-        orderSource: 'customer_web',
+        orderSource: dineInTableId != null ? 'qr-dine-in' : 'customer_web',
+        orderType: dineInTableId != null ? OrderType.dineIn : null,
+        tableId: dineInTableId,
         walletRedeemAmount: walletRedeem > 0 ? walletRedeem : null,
         subtotal: cart.totalPrice,
         discountAmount:
@@ -506,6 +538,37 @@ class _MenuCheckoutSheetState extends State<MenuCheckoutSheet> {
             currency: strings.currency,
             highlight: freeDelivery || _selectedZone != null,
           ),
+          if (_zoneMinOrder > 0) ...[
+            const SizedBox(height: 8),
+            Align(
+              alignment: AlignmentDirectional.centerStart,
+              child: Text(
+                strings.minOrderForZone(_zoneMinOrder.toStringAsFixed(3)),
+                style: TextStyle(
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w600,
+                  color: _meetsZoneMinOrder(subtotal)
+                      ? Colors.green.shade800
+                      : Colors.red.shade700,
+                  height: 1.35,
+                ),
+              ),
+            ),
+            if (!_meetsZoneMinOrder(subtotal)) ...[
+              const SizedBox(height: 4),
+              Align(
+                alignment: AlignmentDirectional.centerStart,
+                child: Text(
+                  strings.minOrderNotMet(_zoneMinOrder.toStringAsFixed(3)),
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.red.shade700,
+                    height: 1.35,
+                  ),
+                ),
+              ),
+            ],
+          ],
           if (wallet > 0) ...[
             const SizedBox(height: 6),
             _TotalRow(
@@ -838,7 +901,11 @@ class _MenuCheckoutSheetState extends State<MenuCheckoutSheet> {
                                       (zone) => DropdownMenuItem(
                                         value: zone.id,
                                         child: Text(
-                                          '${zone.areaName} (${zone.deliveryFee.toStringAsFixed(3)} ${strings.currency})',
+                                          zone.minOrder > 0
+                                              ? (strings.isArabic
+                                                  ? '${zone.areaName} (${zone.deliveryFee.toStringAsFixed(3)} ${strings.currency} · حد أدنى ${zone.minOrder.toStringAsFixed(3)})'
+                                                  : '${zone.areaName} (${zone.deliveryFee.toStringAsFixed(3)} ${strings.currency} · min ${zone.minOrder.toStringAsFixed(3)})')
+                                              : '${zone.areaName} (${zone.deliveryFee.toStringAsFixed(3)} ${strings.currency})',
                                           overflow: TextOverflow.ellipsis,
                                         ),
                                       ),
@@ -1044,7 +1111,9 @@ class _MenuCheckoutSheetState extends State<MenuCheckoutSheet> {
                         backgroundColor: AppTheme.brandMaroon,
                         minimumSize: const Size.fromHeight(52),
                       ),
-                      onPressed: _submitting
+                      onPressed: _submitting ||
+                              (_checkoutStep == 2 &&
+                                  !_meetsZoneMinOrder(cart.totalPrice))
                           ? null
                           : () {
                               if (_checkoutStep == 1) {
@@ -1070,9 +1139,13 @@ class _MenuCheckoutSheetState extends State<MenuCheckoutSheet> {
                                     ? (strings.isArabic
                                         ? 'متابعة إلى التوصيل والدفع'
                                         : 'Continue to details')
-                                    : strings.sendOrder(
-                                        grandTotal.toStringAsFixed(3),
-                                      ),
+                                    : (!_meetsZoneMinOrder(cart.totalPrice)
+                                        ? strings.minOrderNotMet(
+                                            _zoneMinOrder.toStringAsFixed(3),
+                                          )
+                                        : strings.sendOrder(
+                                            grandTotal.toStringAsFixed(3),
+                                          )),
                                 maxLines: 1,
                                 style: TextStyle(
                                   fontSize: compact ? 14 : 16,

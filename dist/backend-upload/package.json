@@ -1,0 +1,21 @@
+{
+  "name": "almenupro-api",
+  "version": "1.6.0",
+  "private": true,
+  "main": "apiServer.js",
+  "scripts": {
+    "start": "node apiServer.js",
+    "seed": "node seedFromTalabat.js",
+    "test:cors": "node scripts/cors-smoke.js",
+    "test:mysql": "node scripts/mysql-smoke.js",
+    "export:mysql": "node scripts/export-mysql-dump.js"
+  },
+  "engines": {
+    "node": "22.x"
+  },
+  "dependencies": {
+    "@langchain/anthropic": "^1.5.4",
+    "mongodb": "^6.16.0",
+    "mysql2": "^3.24.5"
+  }
+}

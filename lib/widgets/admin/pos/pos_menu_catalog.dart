@@ -7,6 +7,7 @@ import '../../../services/pos_operations_service.dart';
 enum PosRoute {
   home('/admin/pos'),
   dineIn('/admin/pos/dine-in'),
+  pendingPickup('/admin/pos/pending-pickup'),
   orders('/admin/pos/orders'),
   handoff('/admin/pos/driver-handoff'),
   shiftClose('/admin/pos/shift-close'),
@@ -75,6 +76,13 @@ abstract final class PosMenuCatalog {
       label: 'طاولات الصالة',
       requiredPermission: PosPermissionKeys.processOrders,
       route: PosRoute.dineIn,
+    ),
+    PosSidebarMenuItem(
+      id: 'pending_pickup',
+      icon: Icons.pause_circle_outline,
+      label: 'فواتير معلّقة / دفع لاحق',
+      requiredPermission: PosPermissionKeys.processOrders,
+      route: PosRoute.pendingPickup,
     ),
     PosSidebarMenuItem(
       id: 'online_orders',
