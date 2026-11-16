@@ -147,6 +147,7 @@ const {
 } = require('./lib/shiftOrderBinding');
 
 const PORT = Number(process.env.PORT || 3000);
+const HOST = String(process.env.HOST || '0.0.0.0').trim() || '0.0.0.0';
 const PKG = require('./package.json');
 
 function rootStatusPayload() {
@@ -298,11 +299,43 @@ function requestFrontendOrigin(req) {
     .trim();
   if (
     host &&
-    !/backend-henna|backend\.u-menus\.com|almenupro-api|onrender\.com|localhost/i.test(host)
+    !/backend|\.railway\.app$|u-menus\.com|almenupro-api|onrender\.com|vercel\.app|localhost/i.test(
+      host,
+    )
   ) {
     return `${proto}://${host}`.replace(/\/+$/, '');
   }
-  return process.env.FRONTEND_ORIGIN || 'https://u-menus.com';
+  return (
+    process.env.FRONTEND_URL ||
+    process.env.FRONTEND_ORIGIN ||
+    'https://u-menus.com'
+  ).replace(/\/+$/, '');
+}
+
+function backendPublicOrigin(req) {
+  const fromEnv = String(
+    process.env.BACKEND_PUBLIC_URL || process.env.PUBLIC_API_URL || '',
+  )
+    .trim()
+    .replace(/\/+$/, '');
+  if (fromEnv) return fromEnv;
+  const host = String(req?.headers?.host || '').split(':')[0];
+  const proto = String(req?.headers?.['x-forwarded-proto'] || 'https')
+    .split(',')[0]
+    .trim();
+  if (host) return `${proto}://${host}`.replace(/\/+$/, '');
+  return 'https://backend.u-menus.com';
+}
+
+function defaultFrontendAssetOrigin() {
+  const base = String(
+    process.env.FRONTEND_URL ||
+      process.env.FRONTEND_ORIGIN ||
+      'https://u-menus.com',
+  )
+    .trim()
+    .replace(/\/+$/, '');
+  return base || 'https://u-menus.com';
 }
 
 function publicRestaurant(entry) {
@@ -853,7 +886,7 @@ async function routeRequest(req, res, url, pathname) {
         '',
     ).trim();
     const source =
-      logoUrl || 'https://frontend-six-lime-13.vercel.app/icons/Icon-512.png';
+      logoUrl || `${defaultFrontendAssetOrigin()}/icons/Icon-512.png`;
     const result = await fetchUpstreamImage(source);
     if (result.error) {
       sendJson(res, result.status || 502, { error: result.error });
@@ -3667,7 +3700,7 @@ async function routeRequest(req, res, url, pathname) {
         };
         // Menu previews keep the generated OG card; link hub uses the restaurant logo.
         if (kind !== 'links') {
-          ogOptions.ogImageUrl = `https://backend-henna-chi-76.vercel.app/api/og-image/${encodeURIComponent(slug)}`;
+          ogOptions.ogImageUrl = `${backendPublicOrigin(req)}/api/og-image/${encodeURIComponent(slug)}`;
         }
         const ogData = buildRestaurantOgData(
           {
@@ -3754,10 +3787,10 @@ function listenWhenFree(server, port, onReady) {
           console.error(retryError);
           process.exit(1);
         });
-        server.listen(port, onReady);
+        server.listen(port, HOST, onReady);
       }, 500);
     });
-    server.listen(port, onReady);
+    server.listen(port, HOST, onReady);
   };
   setTimeout(start, 300);
 }
@@ -3765,7 +3798,7 @@ function listenWhenFree(server, port, onReady) {
 if (require.main === module) {
   const server = http.createServer(vercelHandler);
   listenWhenFree(server, PORT, () => {
-    console.log(`AlMenuPro API listening on http://localhost:${PORT}`);
+    console.log(`AlMenuPro API listening on http://${HOST}:${PORT}`);
     dataStore
       .initDataStore()
       .then(() => persistPlatformCustomerBackfill())

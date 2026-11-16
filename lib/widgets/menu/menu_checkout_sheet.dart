@@ -22,6 +22,7 @@ import '../../services/api_service.dart';
 import '../../services/orders_service.dart';
 import '../../services/pending_review_service.dart';
 import '../../theme/app_theme.dart';
+import '../../utils/frontend_origin.dart';
 import '../../utils/upsell_item_resolver.dart';
 import '../../utils/whatsapp_launcher.dart';
 import '../../utils/whatsapp_order_message.dart';
@@ -443,9 +444,7 @@ class _MenuCheckoutSheetState extends State<MenuCheckoutSheet> {
         discountAmount: cart.offerDiscountTotal,
         walletRedeemAmount: walletRedeem,
         orderId: created.id,
-        frontendUrl: kIsWeb
-            ? Uri.base.origin
-            : 'https://frontend-six-lime-13.vercel.app',
+        frontendUrl: FrontendOrigin.resolve(),
       );
       unawaited(openWhatsAppChat(phone: _whatsappNumber, message: message));
 

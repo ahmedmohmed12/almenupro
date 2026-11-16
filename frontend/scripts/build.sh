@@ -16,9 +16,28 @@ fi
 
 FLUTTER_VERSION="${FLUTTER_VERSION:-stable}"
 FLUTTER_HOME="${FLUTTER_HOME:-$PROJECT_ROOT/.flutter}"
-# Production API. Do not inherit a stale preview API_BASE_URL.
-API_BASE_URL="https://backend.u-menus.com/api"
 DIST_DIR="$FRONTEND_DIR/dist"
+
+resolve_api_base_url() {
+  if [ -n "${API_BASE_URL:-}" ]; then
+    echo "${API_BASE_URL%/}"
+    return
+  fi
+  if [ -n "${VITE_API_URL:-}" ]; then
+    local base="${VITE_API_URL%/}"
+    if [[ "$base" == */api ]]; then
+      echo "$base"
+    else
+      echo "$base/api"
+    fi
+    return
+  fi
+  echo "https://backend.u-menus.com/api"
+}
+
+API_BASE_URL="$(resolve_api_base_url)"
+FRONTEND_BASE_URL="${FRONTEND_BASE_URL:-${FRONTEND_URL:-https://u-menus.com}}"
+FRONTEND_BASE_URL="${FRONTEND_BASE_URL%/}"
 
 if [ ! -x "$FLUTTER_HOME/bin/flutter" ]; then
   echo "Installing Flutter ($FLUTTER_VERSION)..."
@@ -33,7 +52,8 @@ flutter precache --web
 flutter pub get
 flutter build web \
   --release \
-  --dart-define=API_BASE_URL="$API_BASE_URL"
+  --dart-define=API_BASE_URL="$API_BASE_URL" \
+  --dart-define=FRONTEND_BASE_URL="$FRONTEND_BASE_URL"
 
 rm -rf "$DIST_DIR"
 mkdir -p "$DIST_DIR"
@@ -64,4 +84,9 @@ elif [ -f "$FRONTEND_DIR/landing/logo.png" ]; then
   cp "$FRONTEND_DIR/landing/logo.png" "$DIST_DIR/logo.png"
 fi
 
+if [ -f "$FRONTEND_DIR/public/_redirects" ]; then
+  cp "$FRONTEND_DIR/public/_redirects" "$DIST_DIR/_redirects"
+fi
+
 echo "Flutter web build complete: $DIST_DIR"
+echo "API_BASE_URL=$API_BASE_URL FRONTEND_BASE_URL=$FRONTEND_BASE_URL"

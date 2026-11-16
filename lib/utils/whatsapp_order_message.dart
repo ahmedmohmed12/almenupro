@@ -1,5 +1,6 @@
 import '../models/cart_item.dart';
 import '../models/invoice_language.dart';
+import 'frontend_origin.dart';
 
 /// WhatsApp order invoice — one language, same as the restaurant print setting.
 class WhatsAppOrderMessage {
@@ -74,10 +75,7 @@ class WhatsAppOrderMessage {
       ar ? 'شكراً لطلبك' : 'Thank you',
     ]);
 
-    final origin = ((frontendUrl ?? '').trim().isEmpty
-            ? 'https://frontend-six-lime-13.vercel.app'
-            : frontendUrl!.trim())
-        .replaceAll(RegExp(r'/+$'), '');
+    final origin = FrontendOrigin.resolve(override: frontendUrl);
     final ref = (orderId ?? '').trim();
     if (ref.isNotEmpty) {
       lines.addAll([

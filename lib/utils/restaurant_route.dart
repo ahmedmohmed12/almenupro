@@ -1,5 +1,7 @@
 import 'package:flutter/foundation.dart';
 
+import 'frontend_origin.dart';
+
 /// Parses customer menu and link-hub URLs into a restaurant slug.
 ///
 /// Supported patterns:
@@ -128,11 +130,7 @@ class RestaurantRoute {
 
   /// Absolute public hub URL for sharing / QR.
   static String publicLinksUrl(String slug, {String? origin}) {
-    final base = (origin ??
-            (kIsWeb
-                ? Uri.base.origin
-                : 'https://frontend-six-lime-13.vercel.app'))
-        .replaceAll(RegExp(r'/+$'), '');
+    final base = FrontendOrigin.resolve(override: origin);
     return '$base${linksPathForSlug(slug)}';
   }
 }

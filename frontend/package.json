@@ -5,6 +5,8 @@
     "node": "22.x"
   },
   "scripts": {
-    "vercel-build": "bash scripts/build.sh"
+    "build": "bash scripts/build.sh",
+    "vercel-build": "bash scripts/build.sh",
+    "deploy:pages": "npm run build && npx wrangler pages deploy dist --project-name=almenupro-frontend"
   }
 }

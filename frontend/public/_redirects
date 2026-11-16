@@ -1,0 +1,24 @@
+# Cloudflare Pages SPA routing (mirrors frontend/vercel.json).
+# Static files are served first; these apply when no file matches.
+
+/customers        /customers.html        200
+/ar/customers     /customers.html        200
+/smart-seller     /smart-seller.html     200
+/create           /create.html           200
+/ar/create        /create.html           200
+/login            /app.html              200
+/manager/login    /app.html              200
+/super-admin/login /app.html             200
+/pos/login        /app.html              200
+/cashier/login    /app.html              200
+/admin            /app.html              200
+/admin/*          /app.html              200
+/menu/*           /app.html              200
+/restaurant/*     /app.html              200
+/r/*              /app.html              200
+/legacy-menu      /app.html              200
+/driver           /app.html              200
+/order/*          /app.html              200
+/table/*          /app.html              200
+/restaurants      /app.html              200
+/*                /app.html              200
