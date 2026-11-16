@@ -32,6 +32,7 @@ import 'utils/configure_url_strategy.dart';
 import 'utils/firebase_config.dart';
 import 'utils/restaurant_route.dart';
 import 'utils/table_qr_route.dart';
+import 'utils/web_initial_route.dart';
 import 'widgets/app_error_boundary.dart';
 
 Future<void> main() async {
@@ -77,8 +78,22 @@ class MyApp extends StatelessWidget {
     return route.isEmpty ? '/' : route;
   }
 
+  static String resolveActivePath(String? routeName) {
+    var path = normalizeRoute(routeName);
+    if (kIsWeb) {
+      final live = normalizeRoute(currentWebPath());
+      if (AuthLoginRoutes.isStaffPath(live)) {
+        return live;
+      }
+      if ((path == '/' || path.isEmpty) && live != '/') {
+        return live;
+      }
+    }
+    return path;
+  }
+
   static Route<dynamic> onGenerateRoute(RouteSettings settings) {
-    final path = normalizeRoute(settings.name);
+    final path = resolveActivePath(settings.name);
     final uri = Uri.tryParse(settings.name ?? path) ?? Uri(path: path);
     final query = <String, String>{
       if (kIsWeb) ...Uri.base.queryParameters,
@@ -240,11 +255,8 @@ class MyApp extends StatelessWidget {
   }
 
   static List<Route<dynamic>> onGenerateInitialRoutes(String initialRoute) {
-    final fromBrowser = kIsWeb ? Uri.base.path : '';
-    final route = normalizeRoute(
-      fromBrowser.isNotEmpty && fromBrowser != '/'
-          ? fromBrowser
-          : (initialRoute.isNotEmpty ? initialRoute : fromBrowser),
+    final route = resolveActivePath(
+      kIsWeb ? currentWebPath() : (initialRoute.isNotEmpty ? initialRoute : '/'),
     );
     return [onGenerateRoute(RouteSettings(name: route))];
   }

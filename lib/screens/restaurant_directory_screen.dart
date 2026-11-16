@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -6,7 +7,9 @@ import '../models/marketplace_restaurant.dart';
 import '../providers/locale_provider.dart';
 import '../services/api_service.dart';
 import '../theme/app_theme.dart';
+import '../utils/auth_login_routes.dart';
 import '../utils/restaurant_route.dart';
+import '../utils/web_initial_route.dart';
 import '../widgets/language_toggle_button.dart';
 import '../widgets/network_menu_image.dart';
 
@@ -48,10 +51,13 @@ class _RestaurantDirectoryScreenState extends State<RestaurantDirectoryScreen> {
       final catalog = await ApiService.instance.fetchMarketplaceCatalog();
       if (!mounted) return;
       if (catalog.restaurants.length == 1) {
-        Navigator.of(context).pushReplacementNamed(
-          RestaurantRoute.menuPathForSlug(catalog.restaurants.first.slug),
-        );
-        return;
+        final path = kIsWeb ? currentWebPath() : '/';
+        if (!AuthLoginRoutes.isStaffPath(path)) {
+          Navigator.of(context).pushReplacementNamed(
+            RestaurantRoute.menuPathForSlug(catalog.restaurants.first.slug),
+          );
+          return;
+        }
       }
       setState(() {
         _catalog = catalog;

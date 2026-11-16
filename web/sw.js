@@ -1,7 +1,5 @@
-const CACHE_NAME = 'almenupro-pos-v3';
+const CACHE_NAME = 'almenupro-pos-v5';
 const PRECACHE_URLS = [
-  '/',
-  '/admin',
   '/index.html',
   '/manifest.json',
   '/favicon.png',
@@ -16,8 +14,6 @@ const PRECACHE_URLS = [
 
 function isStaticAsset(pathname) {
   if (
-    pathname === '/' ||
-    pathname === '/admin' ||
     pathname === '/index.html' ||
     pathname === '/manifest.json' ||
     pathname === '/favicon.png' ||
@@ -101,23 +97,22 @@ self.addEventListener('fetch', (event) => {
   if (url.origin !== self.location.origin) return;
   if (shouldBypass(url.pathname)) return;
 
-  // HTML navigations: network first, cache fallback for offline POS boot.
+  // HTML navigations: always network first; never substitute cached "/" for /admin paths.
   if (request.mode === 'navigate' || request.headers.get('accept')?.includes('text/html')) {
     event.respondWith(
-      fetch(request)
+      fetch(request, { cache: 'no-store', redirect: 'follow' })
         .then((response) => {
-          if (response.ok) {
+          if (response.ok && !response.redirected && response.url === request.url) {
             const copy = response.clone();
             caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
           }
           return response;
         })
         .catch(async () => {
-          const cached =
-            (await caches.match(request)) ||
-            (await caches.match('/index.html')) ||
-            (await caches.match('/'));
+          const cached = await caches.match(request);
           if (cached) return cached;
+          const shell = await caches.match('/index.html');
+          if (shell) return shell;
           return Response.error();
         }),
     );
