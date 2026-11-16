@@ -1,0 +1,12 @@
+# Keep Railway/Railpack images small — API only needs Node + data/.
+.flutter/
+frontend/dist/
+dist/
+desktop/
+.git/
+node_modules/
+build/
+.dart_tool/
+*.apk
+.env*
+!.env.example

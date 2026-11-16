@@ -3772,7 +3772,12 @@ function freeListenPort(port) {
 }
 
 function listenWhenFree(server, port, onReady) {
-  freeListenPort(port);
+  const onRailway = Boolean(
+    process.env.RAILWAY_ENVIRONMENT_NAME ||
+      process.env.RAILWAY_SERVICE_ID ||
+      process.env.RAILWAY_PROJECT_ID,
+  );
+  if (!onRailway) freeListenPort(port);
   const start = () => {
     server.once('error', (error) => {
       if (error.code !== 'EADDRINUSE') {
@@ -3792,7 +3797,7 @@ function listenWhenFree(server, port, onReady) {
     });
     server.listen(port, HOST, onReady);
   };
-  setTimeout(start, 300);
+  setTimeout(start, onRailway ? 0 : 300);
 }
 
 if (require.main === module) {

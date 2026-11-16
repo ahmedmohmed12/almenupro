@@ -59,12 +59,21 @@ rm -rf "$DIST_DIR"
 mkdir -p "$DIST_DIR"
 cp -R "$PROJECT_ROOT/build/web/." "$DIST_DIR/"
 
+# SITE_HOME=app → Flutter at / (index.html). Default landing keeps marketing page at /.
+if [ "${SITE_HOME:-}" = "" ] && [[ "${FRONTEND_BASE_URL:-}" == *"almenupro.pages.dev"* ]]; then
+  SITE_HOME="app"
+fi
+
 if [ -f "$FRONTEND_DIR/landing/index.html" ]; then
   cp "$FRONTEND_DIR/landing/index.html" "$DIST_DIR/landing.html"
-  if [ -f "$DIST_DIR/index.html" ]; then
+  if [ "$SITE_HOME" = "app" ]; then
+    if [ -f "$DIST_DIR/index.html" ]; then
+      cp "$DIST_DIR/index.html" "$DIST_DIR/app.html"
+    fi
+  elif [ -f "$DIST_DIR/index.html" ]; then
     mv "$DIST_DIR/index.html" "$DIST_DIR/app.html"
+    cp "$FRONTEND_DIR/landing/index.html" "$DIST_DIR/index.html"
   fi
-  cp "$FRONTEND_DIR/landing/index.html" "$DIST_DIR/index.html"
 fi
 if [ -f "$FRONTEND_DIR/landing/customers.html" ]; then
   cp "$FRONTEND_DIR/landing/customers.html" "$DIST_DIR/customers.html"
