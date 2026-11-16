@@ -1,0 +1,11 @@
+# Force Node.js only — repo root also has pubspec.yaml (Flutter) which must not trigger Dart.
+providers = ["node"]
+
+[variables]
+NIXPACKS_NODE_VERSION = "22"
+
+[phases.install]
+cmds = ["npm install"]
+
+[start]
+cmd = "npm start"

@@ -2,7 +2,7 @@
 
 Restaurant menu + admin/POS Flutter app with a Node API (`apiServer.js`). Configure Flutter web via `--dart-define=API_BASE_URL=…/api` (build: `npm run build:frontend`). Legacy default in Dart: `https://backend.u-menus.com/api`.
 
-**Deploy targets:** API on **Railway** (`npm start`, `HOST=0.0.0.0`, `railway.toml` / `Procfile`); static site on **Cloudflare Pages** (`frontend/dist`, `_redirects`, `wrangler pages deploy`).
+**Deploy targets:** API on **Railway** (repo **root**: root `package.json` + `apiServer.js`; set Railway **Root Directory** empty or `/`; `nixpacks.toml` `providers = ["node"]` skips Dart/`pubspec.yaml`; `npm start`, `HOST=0.0.0.0`, `railway.json` / `railway.toml` / `Procfile`); static site on **Cloudflare Pages** (`frontend/dist`, `_redirects`, `wrangler pages deploy`).
 
 ## Cursor Cloud specific instructions
 
