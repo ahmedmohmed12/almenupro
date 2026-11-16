@@ -10,7 +10,8 @@
     "test:external-orders": "node --test test/externalOrders.test.js",
     "test:mysql": "node scripts/mysql-smoke.js",
     "process:platform-sales:today": "node scripts/process-todays-platform-orders.js",
-    "export:mysql": "node scripts/export-mysql-dump.js"
+    "export:mysql": "node scripts/export-mysql-dump.js",
+    "build": "node scripts/preparePublicUploads.js"
   },
   "engines": {
     "node": "22.x"

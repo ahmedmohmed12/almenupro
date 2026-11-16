@@ -54,6 +54,8 @@ class AdminSettingsPage extends StatelessWidget {
         return const AdminSoundSettingsCard();
       case AdminSettingsTab.printer:
         return const AdminPrinterSettingsCard();
+      case AdminSettingsTab.linkHub:
+        return const AdminLinkHubPanel();
     }
   }
 
