@@ -96,6 +96,15 @@ String resolveImageUrl(String url) {
   }
 
   if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+    final uri = Uri.tryParse(trimmed);
+    final host = uri?.host.toLowerCase() ?? '';
+    if (host == 'localhost' ||
+        host == '127.0.0.1' ||
+        host.endsWith('.localhost')) {
+      final path = uri?.path.isNotEmpty == true ? uri!.path : '';
+      final query = uri?.hasQuery == true ? '?${uri!.query}' : '';
+      return '$menuImageApiOrigin$path$query';
+    }
     if (isLegacyTalabatImageUrl(trimmed)) {
       return '$menuImageApiOrigin/api/image-proxy?url=${Uri.encodeComponent(trimmed)}';
     }

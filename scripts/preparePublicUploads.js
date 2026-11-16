@@ -6,7 +6,11 @@ const targetDir = path.join(__dirname, '..', 'public', 'menu-images');
 const legacyPublicApiDir = path.join(__dirname, '..', 'public', 'api');
 
 if (!fs.existsSync(sourceDir)) {
-  console.log('No uploads/menu directory found, skipping public copy.');
+  if (!fs.existsSync(targetDir)) {
+    console.log('No uploads/menu or public/menu-images; skipping.');
+    process.exit(0);
+  }
+  console.log('No uploads/menu; menu images served from public/menu-images only.');
   process.exit(0);
 }
 

@@ -4,6 +4,7 @@ WORKDIR /app
 
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev
+# Bundle committed menu photos into the image (uploads/ is optional at runtime).
 
 COPY apiServer.js nixpacks.toml railway.json railway.toml Procfile ./
 COPY lib ./lib
