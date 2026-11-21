@@ -2490,91 +2490,71 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            Flexible(
+              flex: 0,
+              child: SingleChildScrollView(
+                padding: EdgeInsets.fromLTRB(pad, 8, pad, 0),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    if (!_isDineIn) ...[
+                      PosPlatformSelector(
+                        platforms: _salesPlatforms,
+                        selection: _platformSelection,
+                        orderTotal: _grandTotal,
+                        externalOrderIdController: _externalOrderIdController,
+                        deliveryFeeController: _platformDeliveryFeeController,
+                        showSourceToggle: false,
+                        compactHeader: true,
+                        onChanged: (next) {
+                          setState(() {
+                            _platformSelection = next;
+                            if (next.isExternal) {
+                              _orderMode = 'platforms';
+                            } else if (_isPickup &&
+                                (_orderMode == 'platforms' ||
+                                    _orderMode == 'local')) {
+                              _orderMode = 'takeaway';
+                            }
+                          });
+                          WidgetsBinding.instance.addPostFrameCallback((_) {
+                            if (!mounted) return;
+                            _formKey.currentState?.reset();
+                          });
+                        },
+                      ),
+                      const SizedBox(height: 8),
+                    ],
+                    _buildCustomerFields(),
+                    if (!_isDineIn &&
+                        !_isPickup &&
+                        (_orderMode == 'delivery' ||
+                            _orderMode == 'scheduled')) ...[
+                      const SizedBox(height: 8),
+                      _buildDeliverySummary(),
+                    ],
+                    if (_isDineIn) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        '${s.tr('طلب صالة', 'Dine-in order')} — ${widget.dineInTable!.displayName}',
+                        style: const TextStyle(fontWeight: FontWeight.w700),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
             Expanded(
               child: ListView(
                 padding: EdgeInsets.fromLTRB(pad, 8, pad, 8),
-                children: [
-                  if (!_isDineIn) ...[
-                    PosPlatformSelector(
-                      platforms: _salesPlatforms,
-                      selection: _platformSelection,
-                      orderTotal: _grandTotal,
-                      externalOrderIdController: _externalOrderIdController,
-                      deliveryFeeController: _platformDeliveryFeeController,
-                      showSourceToggle: false,
-                      compactHeader: true,
-                      onChanged: (next) {
-                        setState(() {
-                          _platformSelection = next;
-                          if (next.isExternal) {
-                            _orderMode = 'platforms';
-                          } else if (_isPickup &&
-                              (_orderMode == 'platforms' ||
-                                  _orderMode == 'local')) {
-                            _orderMode = 'takeaway';
-                          }
-                        });
-                        WidgetsBinding.instance.addPostFrameCallback((_) {
-                          if (!mounted) return;
-                          _formKey.currentState?.reset();
-                        });
-                      },
-                    ),
-                    const SizedBox(height: 8),
-                  ],
-                  _buildCustomerFields(),
-                  if (!_isDineIn &&
-                      !_isPickup &&
-                      (_orderMode == 'delivery' || _orderMode == 'scheduled')) ...[
-                    const SizedBox(height: 8),
-                    _buildDeliverySummary(),
-                  ],
-                  if (_isDineIn) ...[
-                    const SizedBox(height: 8),
-                    Text(
-                      '${s.tr('طلب صالة', 'Dine-in order')} — ${widget.dineInTable!.displayName}',
-                      style: const TextStyle(fontWeight: FontWeight.w700),
-                    ),
-                  ],
-                  const SizedBox(height: 10),
-                  ..._buildCartListChildren(compact: compact),
-                  if (commission != null && commission > 0) ...[
-                    const SizedBox(height: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 8,
-                      ),
-                      decoration: BoxDecoration(
-                        color: PosTheme.orangeSoft,
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Text(
-                        'عمولة المنصة: ${commission.toStringAsFixed(3)} د.ك',
-                        style: const TextStyle(
-                          fontWeight: FontWeight.w700,
-                          color: PosTheme.orange,
-                          fontSize: 12.5,
-                        ),
-                      ),
-                    ),
-                  ],
-                  const SizedBox(height: 8),
-                  DecoratedBox(
-                    decoration: BoxDecoration(
-                      color: PosTheme.surfaceAlt,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: PosTheme.border),
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.all(10),
-                      child: _buildCheckoutSummarySection(compact: compact),
-                    ),
-                  ),
-                ],
+                children: _buildCartListChildren(compact: compact),
               ),
             ),
-            _buildCheckoutPinnedActions(compact: compact),
+            _buildCheckoutBottomDock(
+              compact: compact,
+              platformCommission: commission,
+            ),
           ],
         ),
       ),
@@ -3189,7 +3169,75 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
     );
   }
 
-  /// Totals + payment mode (scrolls with cart; keeps vertical space for actions).
+  /// Subtotal, payment, totals, split/hold, kitchen/invoice — pinned at panel bottom.
+  Widget _buildCheckoutBottomDock({
+    bool compact = false,
+    double? platformCommission,
+  }) {
+    return Material(
+      color: PosTheme.surfaceAlt,
+      elevation: 4,
+      shadowColor: Colors.black26,
+      child: SafeArea(
+        top: false,
+        child: LayoutBuilder(
+          builder: (context, _) {
+            final maxDockHeight =
+                (MediaQuery.sizeOf(context).height * 0.52).clamp(220.0, 560.0);
+            return Container(
+              width: double.infinity,
+              decoration: const BoxDecoration(
+                border: Border(top: BorderSide(color: PosTheme.border)),
+              ),
+              child: ConstrainedBox(
+                constraints: BoxConstraints(maxHeight: maxDockHeight),
+                child: SingleChildScrollView(
+                  physics: const ClampingScrollPhysics(),
+                  padding: EdgeInsets.fromLTRB(
+                    compact ? 10 : 12,
+                    compact ? 8 : 10,
+                    compact ? 10 : 12,
+                    compact ? 10 : 12,
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      if (platformCommission != null && platformCommission > 0) ...[
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 8,
+                          ),
+                          decoration: BoxDecoration(
+                            color: PosTheme.orangeSoft,
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Text(
+                            'عمولة المنصة: ${platformCommission.toStringAsFixed(3)} د.ك',
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w700,
+                              color: PosTheme.orange,
+                              fontSize: 12.5,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                      ],
+                      _buildCheckoutSummarySection(compact: compact),
+                      const SizedBox(height: 8),
+                      _buildCheckoutActionRows(compact: compact),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+
   Widget _buildCheckoutSummarySection({bool compact = false}) {
     final s = AppStrings.of(context);
     return Column(
@@ -3331,29 +3379,16 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
     );
   }
 
-  /// Split / hold + kitchen / invoice — pinned so flex overflow cannot clip them.
-  Widget _buildCheckoutPinnedActions({bool compact = false}) {
+  Widget _buildCheckoutActionRows({bool compact = false}) {
     final s = AppStrings.of(context);
     final btnH = compact ? 56.0 : 62.0;
-    return Material(
-      color: PosTheme.surfaceAlt,
-      child: Container(
-        padding: EdgeInsets.fromLTRB(
-          compact ? 10 : 12,
-          compact ? 8 : 10,
-          compact ? 10 : 12,
-          compact ? 10 : 12,
-        ),
-        decoration: const BoxDecoration(
-          border: Border(top: BorderSide(color: PosTheme.border)),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
                 Expanded(
                   child: _PaymentModeButton(
                     label: s.tr(
@@ -3465,9 +3500,7 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
                 ),
               ],
             ),
-          ],
-        ),
-      ),
+      ],
     );
   }
 }
