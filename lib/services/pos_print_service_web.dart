@@ -3,6 +3,9 @@ import 'dart:html' as html;
 
 import 'pos_receipt_document.dart';
 
+/// Serializes browser print so one user action cannot open two dialogs.
+bool _posReceiptPrintInFlight = false;
+
 /// Prints a full HTML thermal receipt on Flutter web.
 ///
 /// Uses a hidden same-origin iframe or an in-page print host — never opens a
@@ -11,19 +14,31 @@ Future<void> printPosReceiptHtml(
   String htmlContent, {
   bool zeroClick = false,
 }) async {
+  if (_posReceiptPrintInFlight) return;
+
   final baseHtml = normalizePosReceiptDocument(htmlContent);
   if (baseHtml.trim().isEmpty) return;
-  final selfPrintingHtml = withPosReceiptAutoPrintScript(baseHtml);
 
-  final viaIframe = await _printViaHiddenIframe(
-    selfPrintingHtml,
-    sizedForThermal: zeroClick,
-  );
-  if (viaIframe) return;
+  _posReceiptPrintInFlight = true;
+  try {
+    final electron = _isElectronShell();
+    // Auto-print script OR manual print — never both on the same document.
+    final iframeHtml = electron
+        ? withPosReceiptAutoPrintScript(baseHtml)
+        : baseHtml;
 
-  if (await _printViaInvisibleHost(baseHtml)) return;
+    final viaIframe = await _printViaHiddenIframe(
+      iframeHtml,
+      sizedForThermal: zeroClick,
+      manualPrint: !electron,
+    );
+    if (viaIframe) return;
 
-  await _printViaInvisibleHost(selfPrintingHtml);
+    await _printViaInvisibleHost(baseHtml);
+  } finally {
+    await Future<void>.delayed(const Duration(milliseconds: 800));
+    _posReceiptPrintInFlight = false;
+  }
 }
 
 bool _isElectronShell() {
@@ -37,6 +52,7 @@ bool _isElectronShell() {
 Future<bool> _printViaHiddenIframe(
   String documentHtml, {
   bool sizedForThermal = false,
+  bool manualPrint = true,
 }) async {
   final body = html.document.body;
   if (body == null) return false;
@@ -54,6 +70,7 @@ Future<bool> _printViaHiddenIframe(
   StreamSubscription<html.Event>? loadSub;
   Timer? safety;
   String? blobUrl;
+  var printHandled = false;
 
   void finish(bool ok) {
     if (completer.isCompleted) return;
@@ -76,6 +93,7 @@ Future<bool> _printViaHiddenIframe(
   body.append(iframe);
 
   loadSub = iframe.onLoad.listen((_) async {
+    if (printHandled) return;
     await Future<void>.delayed(const Duration(milliseconds: 280));
     try {
       final dynamic frame = iframe;
@@ -99,14 +117,18 @@ Future<bool> _printViaHiddenIframe(
         return;
       }
 
-      final electron = _isElectronShell();
-      if (!electron) {
+      printHandled = true;
+
+      if (manualPrint) {
         try {
           win.print();
-        } catch (_) {}
+        } catch (_) {
+          finish(false);
+          return;
+        }
       } else {
-        // Electron: receipt document includes a single guarded auto-print.
-        await Future<void>.delayed(const Duration(milliseconds: 800));
+        // Electron: single auto-print script inside the receipt document.
+        await Future<void>.delayed(const Duration(milliseconds: 1000));
       }
       await Future<void>.delayed(const Duration(milliseconds: 400));
       finish(true);

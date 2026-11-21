@@ -25,6 +25,8 @@ String withPosReceiptAutoPrintScript(String htmlContent) {
   const autoPrintScript = '''
 <script $marker="1">
 (function () {
+  if (window.__almenuproReceiptPrintFired) return;
+  window.__almenuproReceiptPrintFired = true;
   function triggerPrint() {
     try {
       window.focus();
@@ -35,7 +37,7 @@ String withPosReceiptAutoPrintScript(String htmlContent) {
     setTimeout(triggerPrint, 180);
   }
   if (document.readyState === 'complete') schedule();
-  else window.addEventListener('load', schedule);
+  else window.addEventListener('load', schedule, { once: true });
 })();
 </script>
 ''';

@@ -17,6 +17,7 @@ void main() {
     final twice = withPosReceiptAutoPrintScript(once);
     expect(once, contains('data-almenupro-autoprint'));
     expect(once, contains('window.print'));
+    expect(once, contains('__almenuproReceiptPrintFired'));
     expect(twice, same(once));
   });
 }
