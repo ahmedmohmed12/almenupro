@@ -3160,21 +3160,6 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
             ),
           ],
         ),
-        const SizedBox(height: 8),
-        _PaymentModeButton(
-          label: s.tr('تقسيم دفع (كاش + كي نت)', 'Split (Cash + K-Net)'),
-          icon: Icons.call_split,
-          color: const Color(0xFF7C3AED),
-          selected: _payMode == PosPayMode.split,
-          onTap: () => setState(() {
-            _payMode = PosPayMode.split;
-            _syncPaymentMethodFromMode();
-            if (_splitCashController.text.trim().isEmpty) {
-              _splitCashController.text = '0.000';
-              _splitKnetController.text = _grandTotal.toStringAsFixed(3);
-            }
-          }),
-        ),
         if (_payMode == PosPayMode.split) ...[
           const SizedBox(height: 10),
           PosSplitCashKnetFields(
@@ -3337,22 +3322,66 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
             ),
             const SizedBox(height: 10),
           ],
-          if (_canHoldLocalPickup) ...[
-            OutlinedButton.icon(
-              style: OutlinedButton.styleFrom(
-                foregroundColor: PosTheme.headerMaroon,
-                side: const BorderSide(color: PosTheme.headerMaroon),
-                minimumSize: const Size.fromHeight(44),
+          const SizedBox(height: 8),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Expanded(
+                child: _PaymentModeButton(
+                  label: s.tr(
+                    'تقسيم دفع (كاش + كي نت)',
+                    'Split (Cash + K-Net)',
+                  ),
+                  icon: Icons.call_split,
+                  color: const Color(0xFF7C3AED),
+                  compact: true,
+                  selected: _payMode == PosPayMode.split,
+                  onTap: () => setState(() {
+                    _payMode = PosPayMode.split;
+                    _syncPaymentMethodFromMode();
+                    if (_splitCashController.text.trim().isEmpty) {
+                      _splitCashController.text = '0.000';
+                      _splitKnetController.text =
+                          _grandTotal.toStringAsFixed(3);
+                    }
+                  }),
+                ),
               ),
-              onPressed: _submitting ? null : () => unawaited(_holdPickupOrder()),
-              icon: const Icon(Icons.pause_circle_outline),
-              label: Text(
-                s.tr('تعليق الفاتورة / دفع لاحقاً', 'Hold invoice / pay later'),
-                style: const TextStyle(fontWeight: FontWeight.w800),
-              ),
-            ),
-            const SizedBox(height: 10),
-          ],
+              if (_canHoldLocalPickup) ...[
+                const SizedBox(width: 8),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: PosTheme.headerMaroon,
+                      side: const BorderSide(color: PosTheme.headerMaroon),
+                      minimumSize: const Size.fromHeight(44),
+                      padding: const EdgeInsets.symmetric(horizontal: 6),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    onPressed: _submitting
+                        ? null
+                        : () => unawaited(_holdPickupOrder()),
+                    icon: const Icon(Icons.pause_circle_outline, size: 18),
+                    label: Text(
+                      s.tr(
+                        'تعليق الفاتورة / دفع لاحقاً',
+                        'Hold invoice / pay later',
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w800,
+                        fontSize: 12.5,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+          const SizedBox(height: 8),
           Row(
             children: [
               Expanded(
@@ -3421,6 +3450,7 @@ class _PaymentModeButton extends StatelessWidget {
     required this.color,
     required this.selected,
     required this.onTap,
+    this.compact = false,
   });
 
   final String label;
@@ -3428,6 +3458,7 @@ class _PaymentModeButton extends StatelessWidget {
   final Color color;
   final bool selected;
   final VoidCallback onTap;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
@@ -3452,16 +3483,21 @@ class _PaymentModeButton extends StatelessWidget {
             children: [
               Icon(
                 icon,
-                size: 18,
+                size: compact ? 17 : 18,
                 color: selected ? Colors.white : color,
               ),
-              const SizedBox(width: 6),
-              Text(
-                label,
-                style: TextStyle(
-                  fontWeight: FontWeight.w800,
-                  fontSize: 13.5,
-                  color: selected ? Colors.white : PosTheme.textPrimary,
+              SizedBox(width: compact ? 4 : 6),
+              Flexible(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontWeight: FontWeight.w800,
+                    fontSize: compact ? 12.5 : 13.5,
+                    color: selected ? Colors.white : PosTheme.textPrimary,
+                  ),
                 ),
               ),
             ],

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'almenupro-pos-v14';
+const CACHE_NAME = 'almenupro-pos-v16';
 const PRECACHE_URLS = [
   '/index.html',
   '/manifest.json',
