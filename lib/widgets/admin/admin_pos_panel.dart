@@ -166,6 +166,30 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
 
   bool get _isDineIn => widget.dineInTable != null;
 
+  bool get _isWalkInPickupMode =>
+      _orderMode == 'takeaway' || _orderMode == 'local';
+
+  /// Phone/name optional only for dine-in table sessions and walk-in pickup.
+  bool get _customerContactOptional => _isDineIn || _isWalkInPickupMode;
+
+  String _posCustomerPhone() {
+    final value = _phoneController.text.trim();
+    if (value.length >= 8) return value;
+    return '00000000';
+  }
+
+  String _posCustomerName() {
+    final value = _nameController.text.trim();
+    if (value.isNotEmpty) return value;
+    if (_isDineIn) {
+      return widget.dineInTable?.displayName ?? 'طاولة';
+    }
+    if (_isPickup) {
+      return AppStrings.read(context).tr('استلام من المحل', 'Walk-in pickup');
+    }
+    return value;
+  }
+
   bool get _dineInLocked => widget.dineInTable?.isAwaitingCheck ?? false;
 
   double get _subtotal => _cart.fold(0.0, (sum, item) => sum + item.totalPrice);
@@ -817,7 +841,9 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
     if (matchedZone != null) {
       _selectedGovernorate = matchedZone.governorate;
       _selectedZone = matchedZone;
-      _isPickup = false;
+      if (!_isWalkInPickupMode && !_isDineIn) {
+        _isPickup = false;
+      }
     } else {
       _syncDefaultArea();
     }
@@ -1068,7 +1094,9 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
       );
       return false;
     }
-    if (_isDineIn) return true;
+    if (_customerContactOptional) {
+      return true;
+    }
     if (!(_formKey.currentState?.validate() ?? false)) {
       _showMessage(
         s.tr(
@@ -1338,8 +1366,8 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
       final dispatchedCart = stampKitchenDispatched(_cart);
       final order = await OrdersService.instance.submitHeldPickupFromCart(
         cartItems: dispatchedCart,
-        customerName: _nameController.text.trim(),
-        phone: _phoneController.text.trim(),
+        customerName: _posCustomerName(),
+        phone: _posCustomerPhone(),
         invoiceNumber: invoiceNumber,
         restaurantId: _restaurantId,
         shiftId: shift?.id,
@@ -1445,8 +1473,12 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
       final schedule = _isScheduled ? _scheduleSnapshot() : null;
       final order = await OrdersService.instance.submitOrderFromCart(
         cartItems: List.from(_cart),
-        customerName: _nameController.text.trim(),
-        phone: _phoneController.text.trim(),
+        customerName: _customerContactOptional
+            ? _posCustomerName()
+            : _nameController.text.trim(),
+        phone: _customerContactOptional
+            ? _posCustomerPhone()
+            : _phoneController.text.trim(),
         address: _isPickup ? 'استلام من المحل' : _formattedAddress(),
         paymentMethod: _paymentMethod,
         invoiceNumber: invoiceNumber,
@@ -1632,8 +1664,9 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
     final cartSnapshot = List<CartItem>.from(_cart);
     final snapshot = (
       cart: cartSnapshot,
-      customerName: _nameController.text.trim(),
-      phone: _phoneController.text.trim(),
+      customerName:
+          _customerContactOptional ? _posCustomerName() : _nameController.text.trim(),
+      phone: _customerContactOptional ? _posCustomerPhone() : _phoneController.text.trim(),
       paymentMethod: _paymentMethod,
       isPickup: _isPickup,
       orderMode: _orderMode,
@@ -2157,6 +2190,11 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
       }
     });
 
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _formKey.currentState?.validate();
+    });
+
     if (mode == 'delivery' || mode == 'scheduled') {
       unawaited(_openDeliveryAddressDialog());
     }
@@ -2385,7 +2423,9 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
                 controller: _phoneController,
                 keyboardType: TextInputType.phone,
                 decoration: InputDecoration(
-                  labelText: s.tr('الهاتف', 'Phone'),
+                  labelText: _customerContactOptional
+                      ? s.tr('الهاتف (اختياري)', 'Phone (optional)')
+                      : s.tr('الهاتف', 'Phone'),
                   isDense: true,
                   suffixIcon: _lookupInProgress
                       ? const Padding(
@@ -2402,7 +2442,7 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
                   ),
                 ),
                 validator: (value) {
-                  if (_isDineIn) return null;
+                  if (_customerContactOptional) return null;
                   return (value == null || value.trim().length < 8)
                       ? s.required
                       : null;
@@ -2415,7 +2455,9 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
               child: TextFormField(
                 controller: _nameController,
                 decoration: InputDecoration(
-                  labelText: s.customerName,
+                  labelText: _customerContactOptional
+                      ? s.tr('اسم العميل (اختياري)', 'Customer name (optional)')
+                      : s.customerName,
                   isDense: true,
                   prefixIcon: const Icon(Icons.person_outline, size: 20),
                   border: OutlineInputBorder(
@@ -2423,7 +2465,7 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
                   ),
                 ),
                 validator: (value) {
-                  if (_isDineIn) return null;
+                  if (_customerContactOptional) return null;
                   return (value == null || value.trim().isEmpty)
                       ? s.required
                       : null;
