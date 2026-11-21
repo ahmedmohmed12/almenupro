@@ -206,6 +206,11 @@ abstract final class PosMenuCatalog {
       if (item.route == PosRoute.approvals) {
         return pos.canReviewRemoteApprovals();
       }
+      if (item.route == PosRoute.kitchenVoidLiabilities) {
+        return pos.canReviewRemoteApprovals() ||
+            pos.allows(PosPermissionKeys.processOrders) ||
+            pos.allows(PosPermissionKeys.posAccess);
+      }
       return pos.allows(item.requiredPermission);
     }).toList(growable: false);
   }

@@ -7,13 +7,19 @@ import 'admin_food_cost_report_panel.dart';
 import 'admin_profit_loss_card.dart';
 import 'admin_shift_reports_card.dart';
 import 'hr/hr_summary_card.dart';
+import 'admin_kitchen_void_liabilities_card.dart';
 import 'manager/admin_manager_reports_panel.dart';
 
 class AdminAnalyticsReportsPanel extends StatelessWidget {
-  const AdminAnalyticsReportsPanel({super.key, this.onOpenHr});
+  const AdminAnalyticsReportsPanel({
+    super.key,
+    this.onOpenHr,
+    this.onOpenKitchenVoidLiabilities,
+  });
 
   static const burgundy = Color(0xFF6B1124);
   final VoidCallback? onOpenHr;
+  final VoidCallback? onOpenKitchenVoidLiabilities;
 
   @override
   Widget build(BuildContext context) {
@@ -51,11 +57,20 @@ class AdminAnalyticsReportsPanel extends StatelessWidget {
           Expanded(
             child: TabBarView(
               children: [
-                _LiveDesk(onOpenHr: onOpenHr),
+                _LiveDesk(
+                  onOpenHr: onOpenHr,
+                  onOpenKitchenVoidLiabilities: onOpenKitchenVoidLiabilities,
+                ),
                 SingleChildScrollView(
                   padding: EdgeInsets.all(16),
                   child: Column(
                     children: [
+                      if (onOpenKitchenVoidLiabilities != null) ...[
+                        AdminKitchenVoidLiabilitiesCard(
+                          onOpenReview: onOpenKitchenVoidLiabilities!,
+                        ),
+                        const SizedBox(height: 16),
+                      ],
                       AdminDailySalesCard(),
                       SizedBox(height: 16),
                       AdminProfitLossCard(),
@@ -76,14 +91,22 @@ class AdminAnalyticsReportsPanel extends StatelessWidget {
 }
 
 class _LiveDesk extends StatelessWidget {
-  const _LiveDesk({this.onOpenHr});
+  const _LiveDesk({this.onOpenHr, this.onOpenKitchenVoidLiabilities});
 
   final VoidCallback? onOpenHr;
+  final VoidCallback? onOpenKitchenVoidLiabilities;
 
   @override
   Widget build(BuildContext context) {
     return Column(
       children: [
+        if (onOpenKitchenVoidLiabilities != null)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+            child: AdminKitchenVoidLiabilitiesCard(
+              onOpenReview: onOpenKitchenVoidLiabilities!,
+            ),
+          ),
         HrSummaryCard(onOpen: onOpenHr),
         const Expanded(child: AdminManagerReportsPanel()),
       ],

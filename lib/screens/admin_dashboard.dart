@@ -36,6 +36,7 @@ import '../widgets/admin/admin_analytics_reports_panel.dart';
 import '../widgets/admin/admin_corner_toast.dart';
 import '../widgets/admin/admin_pos_roles_staff_card.dart';
 import '../widgets/admin/pos/pos_cashier_login_panel.dart';
+import '../widgets/admin/pos/pos_kitchen_void_liabilities_page.dart';
 import '../widgets/admin/pos/pos_shift_shell.dart';
 import '../widgets/admin/kitchen_station_screen.dart';
 import '../widgets/admin/driver_station_screen.dart';
@@ -1999,12 +2000,37 @@ class _AdminDashboardState extends State<AdminDashboard>
     );
   }
 
+  void _openKitchenVoidLiabilitiesReview() {
+    showDialog<void>(
+      context: context,
+      useSafeArea: false,
+      builder: (dialogContext) => Scaffold(
+        appBar: AppBar(
+          backgroundColor: const Color(0xFF6B1124),
+          foregroundColor: Colors.white,
+          title: const Text('مسؤوليات إلغاء المطبخ'),
+          leading: CloseButton(
+            color: Colors.white,
+            onPressed: () => Navigator.of(dialogContext).pop(),
+          ),
+        ),
+        body: const PosKitchenVoidLiabilitiesPage(),
+      ),
+    );
+  }
+
   Widget _buildAnalyticsTab() {
     final hrIndex = _isSuperAdmin
         ? AdminSidebar.superHrIndex
         : AdminSidebar.hrIndex;
+  final canReview =
+        AdminAuthService.instance.isRestaurantAdmin ||
+        AdminAuthService.instance.isSuperAdmin ||
+        PosOperationsService.instance.canReviewRemoteApprovals();
     return AdminAnalyticsReportsPanel(
       onOpenHr: () => setState(() => _selectedIndex = hrIndex),
+      onOpenKitchenVoidLiabilities:
+          canReview ? _openKitchenVoidLiabilitiesReview : null,
     );
   }
 }

@@ -97,17 +97,22 @@ class _PosShiftShellState extends State<PosShiftShell> {
   @override
   void didUpdateWidget(covariant PosShiftShell oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.tableManagementEnabled == widget.tableManagementEnabled) {
-      return;
-    }
-    setState(() {
-      _tableManagementEnabled = widget.tableManagementEnabled;
-      if (!_tableManagementEnabled) {
-        if (_selectedRoute == PosRoute.dineIn) {
-          _selectedRoute = PosRoute.home;
+    final routeFromUrl = readPosRouteFromLocation();
+    final tableChanged =
+        oldWidget.tableManagementEnabled != widget.tableManagementEnabled;
+    if (routeFromUrl != _selectedRoute || tableChanged) {
+      setState(() {
+        if (routeFromUrl != _selectedRoute) {
+          _selectedRoute = routeFromUrl;
         }
-      }
-    });
+        if (tableChanged) {
+          _tableManagementEnabled = widget.tableManagementEnabled;
+          if (!_tableManagementEnabled && _selectedRoute == PosRoute.dineIn) {
+            _selectedRoute = PosRoute.home;
+          }
+        }
+      });
+    }
   }
 
   @override

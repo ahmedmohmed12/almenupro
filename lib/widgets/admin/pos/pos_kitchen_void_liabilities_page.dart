@@ -40,7 +40,7 @@ class _PosKitchenVoidLiabilitiesPageState extends State<PosKitchenVoidLiabilitie
     final manager = PosOperationsService.instance.canReviewRemoteApprovals();
     try {
       final result = await PosOperationsService.instance.fetchKitchenVoidLiabilities(
-        shiftId: shift?.id,
+        shiftId: manager ? null : shift?.id,
         cashierId: manager ? null : cashier?.staff.id,
         status: manager ? 'PENDING' : 'ALL',
       );
@@ -98,6 +98,11 @@ class _PosKitchenVoidLiabilitiesPageState extends State<PosKitchenVoidLiabilitie
             style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
           ),
           const SizedBox(height: 6),
+          const Text(
+            'الموافقة = إعفاء الكاشير؛ الرفض = مديونية تظهر عند إغلاق الوردية.',
+            style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+          ),
+          const SizedBox(height: 4),
           Text(
             'معلّقة: ${_summary.pendingCount} (${_summary.pendingAmount.toStringAsFixed(3)} د.ك) — '
             'مديونية: ${_summary.rejectedAmount.toStringAsFixed(3)} د.ك',
