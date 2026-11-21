@@ -345,6 +345,10 @@ class PosOperationsService extends ChangeNotifier {
     String? cashierName,
     double? openingFloat,
     String? roleId,
+    String? managerPin,
+    String? pendingCloseReason,
+    String? authorizedById,
+    String? authorizedByName,
   }) async {
     final response = await http
         .post(
@@ -359,6 +363,12 @@ class PosOperationsService extends ChangeNotifier {
             'cashierName': cashierName ?? closedByName ?? _activeShift?.cashierName,
             'openingFloat': openingFloat ?? _activeShift?.openingFloat ?? 0,
             'roleId': roleId ?? _activeShift?.roleId,
+            if (managerPin != null && managerPin.trim().isNotEmpty)
+              'managerPin': managerPin.trim(),
+            if (pendingCloseReason != null && pendingCloseReason.trim().isNotEmpty)
+              'pendingCloseReason': pendingCloseReason.trim(),
+            if (authorizedById != null) 'authorizedById': authorizedById,
+            if (authorizedByName != null) 'authorizedByName': authorizedByName,
           }),
         )
         .timeout(const Duration(seconds: 30));

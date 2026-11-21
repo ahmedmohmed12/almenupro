@@ -7,6 +7,7 @@ import '../../../services/api_service.dart';
 import '../../../services/pos_operations_service.dart';
 import '../../../utils/order_channel_utils.dart';
 import '../../../utils/order_payment_utils.dart';
+import '../../../utils/pos_pending_orders.dart';
 
 Future<ShiftSession?> showPosCloseShiftDialog(
   BuildContext context, {
@@ -147,11 +148,20 @@ class _PosCloseShiftDialog extends StatefulWidget {
 class _PosCloseShiftDialogState extends State<_PosCloseShiftDialog> {
   final _cashController = TextEditingController();
   final _notesController = TextEditingController();
+  final _pendingReasonController = TextEditingController();
+  final _supervisorPinController = TextEditingController();
   var _submitting = false;
   var _loadingSummary = true;
   String? _error;
   late ShiftSession _shift;
   ShiftSummary _summary = const ShiftSummary();
+  ShiftPendingSnapshot _pending = const ShiftPendingSnapshot(
+    total: 0,
+    pickup: 0,
+    dineIn: 0,
+    online: 0,
+    orders: [],
+  );
 
   @override
   void initState() {
@@ -165,6 +175,8 @@ class _PosCloseShiftDialogState extends State<_PosCloseShiftDialog> {
   void dispose() {
     _cashController.dispose();
     _notesController.dispose();
+    _pendingReasonController.dispose();
+    _supervisorPinController.dispose();
     super.dispose();
   }
 
@@ -187,6 +199,7 @@ class _PosCloseShiftDialogState extends State<_PosCloseShiftDialog> {
         _shift = shift;
         // Prefer server live summary (includes channel breakdown).
         _summary = live?.summary ?? _summarizeOrders(orders, shift, requests);
+        _pending = pendingOrdersForShift(orders, shift.id);
         _loadingSummary = false;
       });
     } catch (_) {
@@ -205,13 +218,41 @@ class _PosCloseShiftDialogState extends State<_PosCloseShiftDialog> {
       return;
     }
 
+    final cashier = PosOperationsService.instance.cashierSession;
+    final roleId = cashier?.staff.roleId ?? _shift.roleId;
+  if (_pending.hasPending) {
+      final reason = _pendingReasonController.text.trim().isNotEmpty
+          ? _pendingReasonController.text.trim()
+          : _notesController.text.trim();
+      if (reason.length < 3) {
+        setState(
+          () => _error =
+              'أدخل سبب إغلاق الوردية (يوجد طلبات معلّقة)',
+        );
+        return;
+      }
+      if (shiftCloseGuardCashierOnly(roleId)) {
+        final pin = _supervisorPinController.text.trim();
+        if (pin.length < 4) {
+          setState(
+            () => _error = 'أدخل PIN مشرف وردية أو مدير POS',
+          );
+          return;
+        }
+      }
+    }
+
     setState(() {
       _submitting = true;
       _error = null;
     });
 
     try {
-      final cashier = PosOperationsService.instance.cashierSession;
+      final pendingReason = _pending.hasPending
+          ? (_pendingReasonController.text.trim().isNotEmpty
+              ? _pendingReasonController.text.trim()
+              : _notesController.text.trim())
+          : null;
       final closed = await PosOperationsService.instance.closeShift(
         shiftId: _shift.id,
         closingCashCounted: counted,
@@ -221,7 +262,11 @@ class _PosCloseShiftDialogState extends State<_PosCloseShiftDialog> {
         cashierId: _shift.cashierId,
         cashierName: _shift.cashierName,
         openingFloat: _shift.openingFloat,
-        roleId: _shift.roleId,
+        roleId: roleId,
+        managerPin: _pending.hasPending && shiftCloseGuardCashierOnly(roleId)
+            ? _supervisorPinController.text.trim()
+            : null,
+        pendingCloseReason: pendingReason,
       );
       if (!mounted) return;
       Navigator.of(context).pop(closed);
@@ -257,6 +302,13 @@ class _PosCloseShiftDialogState extends State<_PosCloseShiftDialog> {
         summary.cashSales -
         summary.refundTotal -
         summary.deliveryExpenses;
+    final roleId =
+        PosOperationsService.instance.cashierSession?.staff.roleId ??
+        _shift.roleId;
+    final cashierOnly =
+        _pending.hasPending && shiftCloseGuardCashierOnly(roleId);
+    final supervisorBypass =
+        _pending.hasPending && shiftCloseGuardRoleCanBypass(roleId);
 
     return AlertDialog(
       title: const Text('إغلاق الوردية — جرد مالي'),
@@ -310,6 +362,71 @@ class _PosCloseShiftDialogState extends State<_PosCloseShiftDialog> {
                 _summaryRow(
                   'النقد المتوقع',
                   '${expectedCash.toStringAsFixed(3)} د.ك',
+                ),
+              ],
+              if (!_loadingSummary && _pending.hasPending) ...[
+                const SizedBox(height: 12),
+                Material(
+                  color: const Color(0xFFFFF4E5),
+                  borderRadius: BorderRadius.circular(10),
+                  child: Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'طلبات معلّقة على هذه الوردية',
+                          style: TextStyle(fontWeight: FontWeight.w800),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          'الإجمالي: ${_pending.total} — استلام: ${_pending.pickup} — طاولات: ${_pending.dineIn} — موقع: ${_pending.online}',
+                        ),
+                        const SizedBox(height: 8),
+                        for (final order in _pending.orders.take(5))
+                          Text(
+                            '• #${order.invoiceNumber ?? order.id} — ${order.customerName}',
+                            style: const TextStyle(fontSize: 12),
+                          ),
+                        if (_pending.orders.length > 5)
+                          Text(
+                            '… و${_pending.orders.length - 5} أخرى',
+                            style: const TextStyle(fontSize: 12),
+                          ),
+                        if (cashierOnly)
+                          const Padding(
+                            padding: EdgeInsets.only(top: 8),
+                            child: Text(
+                              'الكاشير: PIN مشرف/مدير + سبب الإغلاق مطلوبان.',
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+                if (cashierOnly) ...[
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: _supervisorPinController,
+                    keyboardType: TextInputType.number,
+                    obscureText: true,
+                    decoration: const InputDecoration(
+                      labelText: 'PIN مشرف وردية / مدير POS',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 12),
+                TextField(
+                  controller: _pendingReasonController,
+                  minLines: 2,
+                  maxLines: 3,
+                  decoration: InputDecoration(
+                    labelText: cashierOnly || supervisorBypass
+                        ? 'سبب الإغلاق (مطلوب)'
+                        : 'سبب الإغلاق',
+                    border: const OutlineInputBorder(),
+                  ),
                 ),
               ],
               const SizedBox(height: 12),
