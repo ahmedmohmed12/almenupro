@@ -156,6 +156,27 @@ class _PosCompactToolbarState extends State<PosCompactToolbar> {
                             widget.onSelectOrderMode('takeaway'),
                       ),
                       const SizedBox(width: 8),
+                    ],
+                    if (widget.onOpenTables != null &&
+                        widget.tableManagementEnabled) ...[
+                      _OpsChip(
+                        label: 'الطاولات',
+                        icon: Icons.table_restaurant_rounded,
+                        count: _tableBadge,
+                        tone: _tableTone,
+                        onTap: widget.onOpenTables!,
+                      ),
+                      const SizedBox(width: 8),
+                    ],
+                    if (widget.showOrderModes) ...[
+                      _ModeChip(
+                        label: 'منصات',
+                        icon: Icons.hub_outlined,
+                        selected: widget.orderMode == 'platforms',
+                        onSelected: () =>
+                            widget.onSelectOrderMode('platforms'),
+                      ),
+                      const SizedBox(width: 8),
                       _ModeChip(
                         label: 'توصيل',
                         icon: Icons.delivery_dining_rounded,
@@ -170,14 +191,6 @@ class _PosCompactToolbarState extends State<PosCompactToolbar> {
                         selected: widget.orderMode == 'scheduled',
                         onSelected: () =>
                             widget.onSelectOrderMode('scheduled'),
-                      ),
-                      const SizedBox(width: 8),
-                      _ModeChip(
-                        label: 'منصات',
-                        icon: Icons.hub_outlined,
-                        selected: widget.orderMode == 'platforms',
-                        onSelected: () =>
-                            widget.onSelectOrderMode('platforms'),
                       ),
                     ],
                     if (widget.onOpenPendingPickup != null) ...[
@@ -198,17 +211,6 @@ class _PosCompactToolbarState extends State<PosCompactToolbar> {
                             onTap: widget.onOpenPendingPickup!,
                           );
                         },
-                      ),
-                    ],
-                    if (widget.onOpenTables != null &&
-                        widget.tableManagementEnabled) ...[
-                      if (widget.showOrderModes) const SizedBox(width: 10),
-                      _OpsChip(
-                        label: 'طاولات',
-                        icon: Icons.table_restaurant_rounded,
-                        count: _tableBadge,
-                        tone: _tableTone,
-                        onTap: widget.onOpenTables!,
                       ),
                     ],
                     const SizedBox(width: 8),
