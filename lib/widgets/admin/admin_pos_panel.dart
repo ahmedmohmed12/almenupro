@@ -36,6 +36,7 @@ import '../../theme/app_theme.dart';
 import '../../utils/order_payment_utils.dart';
 import '../../utils/kitchen_dispatch.dart';
 import '../../utils/pos_cart_from_order.dart';
+import '../../utils/pos_customer_contact.dart';
 import 'pos/pos_kitchen_line_override_dialog.dart';
 import '../../utils/pos_receipt_html.dart';
 import '../../utils/whatsapp_phone.dart';
@@ -166,28 +167,33 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
 
   bool get _isDineIn => widget.dineInTable != null;
 
-  bool get _isWalkInPickupMode =>
-      _orderMode == 'takeaway' || _orderMode == 'local';
+  bool get _customerContactRequired => posCustomerContactRequired(
+        isDineIn: _isDineIn,
+        orderMode: _orderMode,
+        isExternalPlatform: _platformSelection.isExternal,
+      );
 
-  /// Phone/name optional only for dine-in table sessions and walk-in pickup.
-  bool get _customerContactOptional => _isDineIn || _isWalkInPickupMode;
+  /// Phone/name optional for dine-in and walk-in pickup (not delivery / external platforms).
+  bool get _customerContactOptional => !_customerContactRequired;
 
-  String _posCustomerPhone() {
-    final value = _phoneController.text.trim();
-    if (value.length >= 8) return value;
-    return '00000000';
-  }
+  String _posCustomerPhone() => posDefaultCustomerPhone(_phoneController.text);
 
-  String _posCustomerName() {
-    final value = _nameController.text.trim();
-    if (value.isNotEmpty) return value;
-    if (_isDineIn) {
-      return widget.dineInTable?.displayName ?? 'طاولة';
+  String _posCustomerName() => posDefaultCustomerName(
+        context: context,
+        raw: _nameController.text,
+        isDineIn: _isDineIn,
+        tableDisplayName: widget.dineInTable?.displayName,
+        contactOptional: _customerContactOptional,
+      );
+
+  ({String name, String phone}) _resolvedCustomerContact() {
+    if (_customerContactOptional) {
+      return (name: _posCustomerName(), phone: _posCustomerPhone());
     }
-    if (_isPickup) {
-      return AppStrings.read(context).tr('استلام من المحل', 'Walk-in pickup');
-    }
-    return value;
+    return (
+      name: _nameController.text.trim(),
+      phone: _phoneController.text.trim(),
+    );
   }
 
   bool get _dineInLocked => widget.dineInTable?.isAwaitingCheck ?? false;
@@ -565,13 +571,14 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
         );
         return;
       }
+      final contact = _resolvedCustomerContact();
       await PosSyncService.instance.saveActiveOrder(
         id: _localCartId,
         restaurantId: _restaurantId,
         tableId: widget.dineInTable?.id,
         cartItems: _cart.map(DiningTablesService.cartItemToSessionMap).toList(),
-        customerName: _nameController.text.trim(),
-        phone: _phoneController.text.trim(),
+        customerName: contact.name,
+        phone: contact.phone,
         paymentMethod: _paymentMethod,
       );
     } catch (_) {}
@@ -582,11 +589,12 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
     if (table == null) return;
     try {
       final cashier = PosOperationsService.instance.cashierSession;
+      final contact = _resolvedCustomerContact();
       final updated = await DiningTablesService.instance.updateSession(
         table.id,
         cartItems: List.from(_cart),
-        customerName: _nameController.text.trim(),
-        phone: _phoneController.text.trim(),
+        customerName: contact.name,
+        phone: contact.phone,
         managerPin: _pendingKitchenOverride?.managerPin,
         kitchenVoidReason: _pendingKitchenOverride?.reason,
         performedById: cashier?.staff.id,
@@ -841,7 +849,7 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
     if (matchedZone != null) {
       _selectedGovernorate = matchedZone.governorate;
       _selectedZone = matchedZone;
-      if (!_isWalkInPickupMode && !_isDineIn) {
+      if (_customerContactRequired) {
         _isPickup = false;
       }
     } else {
@@ -1202,15 +1210,12 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
     _submitting = true;
     _cartTick.value++;
     try {
+      final contact = _resolvedCustomerContact();
       final result = await DiningTablesService.instance.sendKitchen(
         table.id,
         cartItems: List.from(_cart),
-        customerName: _nameController.text.trim().isEmpty
-            ? table.displayName
-            : _nameController.text.trim(),
-        phone: _phoneController.text.trim().isEmpty
-            ? '00000000'
-            : _phoneController.text.trim(),
+        customerName: contact.name,
+        phone: contact.phone,
         paymentMethod: _paymentMethod,
       );
       widget.onDineInSessionUpdated?.call(result.table);
@@ -1271,12 +1276,9 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
       final invoiceNumber = DateTime.now().millisecondsSinceEpoch
           .toString()
           .substring(5);
-      final customerName = _nameController.text.trim().isEmpty
-          ? table.displayName
-          : _nameController.text.trim();
-      final phone = _phoneController.text.trim().isEmpty
-          ? '00000000'
-          : _phoneController.text.trim();
+      final contact = _resolvedCustomerContact();
+      final customerName = contact.name;
+      final phone = contact.phone;
       final requestedPayment = table.requestedPaymentMethod;
       final checkoutPaymentMethod = table.isAwaitingCheck
           ? (requestedPayment == 'knet' ? 'K-Net' : 'كاش')
@@ -1514,20 +1516,26 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
         await _rememberScheduledHold(order, schedule!);
       }
 
-      await CustomerCheckoutCacheService.instance.saveProfile(
-        _restaurantId,
-        CustomerCheckoutProfile(
-          phone: _phoneController.text.trim(),
-          customerName: _nameController.text.trim(),
-          governorate: _selectedZone?.governorate ?? _selectedGovernorate ?? '',
-          areaName: _selectedZone?.areaName ?? '',
-          deliveryZoneId: _selectedZone?.id,
-          addressDetails: _isPickup
-              ? const DeliveryAddressDetails()
-              : _addressDetails,
-          paymentMethod: _paymentMethod,
-        ),
-      );
+      if (posShouldPersistCustomerProfile(
+        contactOptional: _customerContactOptional,
+        phone: _phoneController.text,
+        name: _nameController.text,
+      )) {
+        await CustomerCheckoutCacheService.instance.saveProfile(
+          _restaurantId,
+          CustomerCheckoutProfile(
+            phone: _phoneController.text.trim(),
+            customerName: _nameController.text.trim(),
+            governorate: _selectedZone?.governorate ?? _selectedGovernorate ?? '',
+            areaName: _selectedZone?.areaName ?? '',
+            deliveryZoneId: _selectedZone?.id,
+            addressDetails: _isPickup
+                ? const DeliveryAddressDetails()
+                : _addressDetails,
+            paymentMethod: _paymentMethod,
+          ),
+        );
+      }
 
       _clearCart();
       if (schedule != null) _resetScheduledMode();
@@ -1639,8 +1647,7 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
       if (!_validateOrder()) return;
       _submitting = true;
       final cartSnapshot = List<CartItem>.from(_cart);
-      final nameSnapshot = _nameController.text;
-      final phoneSnapshot = _phoneController.text;
+      final contact = _resolvedCustomerContact();
       final paymentSnapshot = _paymentMethod;
       _clearCart();
       _submitting = false;
@@ -1650,8 +1657,8 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
       unawaited(
         _checkoutDineInOptimistic(
           cartSnapshot: cartSnapshot,
-          customerName: nameSnapshot,
-          phone: phoneSnapshot,
+          customerName: contact.name,
+          phone: contact.phone,
           paymentMethod: paymentSnapshot,
         ),
       );
@@ -2192,7 +2199,7 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      _formKey.currentState?.validate();
+      _formKey.currentState?.reset();
     });
 
     if (mode == 'delivery' || mode == 'scheduled') {
@@ -2301,7 +2308,14 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
                       _platformSelection = next;
                       if (next.isExternal) {
                         _orderMode = 'platforms';
+                      } else if (_isPickup &&
+                          (_orderMode == 'platforms' || _orderMode == 'local')) {
+                        _orderMode = 'takeaway';
                       }
+                    });
+                    WidgetsBinding.instance.addPostFrameCallback((_) {
+                      if (!mounted) return;
+                      _formKey.currentState?.reset();
                     });
                   },
                 ),

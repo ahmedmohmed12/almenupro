@@ -124,6 +124,7 @@ const { computeFoodCostReport } = require('./lib/foodCostReportAnalytics');
 const { computeUpsellAnalytics, normalizeIncomingEvent, trimEvents } = require('./lib/upsellAnalytics');
 const { previewEarnedCashback, applyLoyaltyCashbackToOrder, redeemCustomerWallet, normalizeLoyaltySettings, isDeliveredStatus } = require('./lib/loyaltyCashback');
 const { normalizeOffer, isOfferLive, collectOfferIdsFromOrder, evaluateOfferUsage, findExhaustedOfferIds, repriceOrderIfOffersExhausted, assertOffersUsageAllowed, OFFER_USAGE_LIMIT_MESSAGE } = require('./lib/offers');
+const { normalizePosOrderCustomerContact } = require('./lib/posCustomerContact');
 const {
   enrichCustomersForRestaurant,
   upsertCustomerFromSource,
@@ -2322,7 +2323,7 @@ async function routeRequest(req, res, url, pathname) {
     }
 
     const offerIds = collectOfferIdsFromOrder(body);
-    let orderPayload = { ...body };
+    let orderPayload = normalizePosOrderCustomerContact({ ...body });
     if (offerIds.length > 0) {
       const offers = filterByRestaurant(await extraStore.offers.read(), restaurantId)
         .map((offer) => normalizeOffer(offer, restaurantId));
