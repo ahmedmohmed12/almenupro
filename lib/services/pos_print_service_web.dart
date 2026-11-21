@@ -1,18 +1,19 @@
 import 'dart:async';
 import 'dart:html' as html;
 
+import 'pos_receipt_document.dart';
+
 /// Prints a full HTML thermal receipt on Flutter web.
 ///
-/// Zero-click path uses a hidden same-origin iframe (80mm thermal layout)
-/// plus an invisible print-only host. The OS print dialog can still appear
-/// unless the workstation enables silent/kiosk printing.
+/// Uses a hidden same-origin iframe or an in-page print host — never opens a
+/// new browser tab (no `window.open`).
 Future<void> printPosReceiptHtml(
   String htmlContent, {
   bool zeroClick = false,
 }) async {
-  final baseHtml = _normalizeDocument(htmlContent);
+  final baseHtml = normalizePosReceiptDocument(htmlContent);
   if (baseHtml.trim().isEmpty) return;
-  final selfPrintingHtml = _withAutoPrintScript(baseHtml);
+  final selfPrintingHtml = withPosReceiptAutoPrintScript(baseHtml);
 
   final viaIframe = await _printViaHiddenIframe(
     selfPrintingHtml,
@@ -20,12 +21,17 @@ Future<void> printPosReceiptHtml(
   );
   if (viaIframe) return;
 
-  if (zeroClick) {
-    final viaHost = await _printViaInvisibleHost(baseHtml);
-    if (viaHost) return;
-  }
+  if (await _printViaInvisibleHost(baseHtml)) return;
 
-  await _printViaBlobPopup(selfPrintingHtml);
+  await _printViaInvisibleHost(selfPrintingHtml);
+}
+
+bool _isElectronShell() {
+  try {
+    return html.window.navigator.userAgent.toLowerCase().contains('electron');
+  } catch (_) {
+    return false;
+  }
 }
 
 Future<bool> _printViaHiddenIframe(
@@ -92,10 +98,17 @@ Future<bool> _printViaHiddenIframe(
         finish(false);
         return;
       }
-      // Electron does not reliably honor contentWindow.print() when invoked
-      // from the parent WebContentsView. The receipt document contains one
-      // guarded auto-print command, so do not trigger a second print here.
-      await Future<void>.delayed(const Duration(milliseconds: 800));
+
+      final electron = _isElectronShell();
+      if (!electron) {
+        try {
+          win.print();
+        } catch (_) {}
+      } else {
+        // Electron: receipt document includes a single guarded auto-print.
+        await Future<void>.delayed(const Duration(milliseconds: 800));
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 400));
       finish(true);
     } catch (_) {
       finish(false);
@@ -157,7 +170,7 @@ Future<bool> _printViaInvisibleHost(String documentHtml) async {
     );
     body.append(host);
 
-    await Future<void>.delayed(const Duration(milliseconds: 220));
+    await Future<void>.delayed(const Duration(milliseconds: 320));
     html.window.print();
     await Future<void>.delayed(const Duration(milliseconds: 700));
     return true;
@@ -179,70 +192,4 @@ String _readBodyHtml(dynamic doc) {
     if (value is String) return value.trim();
   } catch (_) {}
   return '';
-}
-
-Future<void> _printViaBlobPopup(String documentHtml) async {
-  final blob = html.Blob([documentHtml], 'text/html;charset=utf-8');
-  final url = html.Url.createObjectUrlFromBlob(blob);
-
-  html.window.open(url, '_blank');
-
-  unawaited(
-    Future<void>.delayed(const Duration(seconds: 90), () {
-      html.Url.revokeObjectUrl(url);
-    }),
-  );
-
-  await Future<void>.delayed(const Duration(milliseconds: 700));
-}
-
-String _normalizeDocument(String raw) {
-  var htmlContent = raw.trim();
-  if (htmlContent.isEmpty) return '';
-
-  if (!htmlContent.toLowerCase().contains('<html')) {
-    htmlContent = '''
-<!DOCTYPE html>
-<html lang="ar" dir="rtl">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Receipt</title>
-</head>
-<body>$htmlContent</body>
-</html>''';
-  }
-  return htmlContent;
-}
-
-String _withAutoPrintScript(String htmlContent) {
-  const marker = 'data-almenupro-autoprint';
-  if (htmlContent.contains(marker)) return htmlContent;
-
-  const autoPrintScript = '''
-<script $marker="1">
-(function () {
-  function triggerPrint() {
-    try {
-      window.focus();
-      window.print();
-    } catch (e) {}
-  }
-  function schedule() {
-    setTimeout(triggerPrint, 180);
-  }
-  if (document.readyState === 'complete') schedule();
-  else window.addEventListener('load', schedule);
-})();
-</script>
-''';
-
-  final lower = htmlContent.toLowerCase();
-  final bodyClose = lower.lastIndexOf('</body>');
-  if (bodyClose != -1) {
-    return htmlContent.substring(0, bodyClose) +
-        autoPrintScript +
-        htmlContent.substring(bodyClose);
-  }
-  return '$htmlContent$autoPrintScript';
 }
