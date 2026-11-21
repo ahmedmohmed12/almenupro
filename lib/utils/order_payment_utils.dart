@@ -1,5 +1,8 @@
 import '../models/order.dart';
 
+import 'pos_pending_orders.dart'
+    show isPendingPosPickupOrder, pendingPosPickupOrders;
+
 /// POS pickup orders can be held unpaid until the customer pays at pickup.
 class OrderPaymentStatus {
   const OrderPaymentStatus._(this.storageValue);
@@ -23,11 +26,8 @@ class OrderPaymentStatus {
 }
 
 bool isPendingPickupPayment(Order order) {
-  if (order.orderType != OrderType.pickup) return false;
-  if (!order.createdFromPos) return false;
-  if (order.status == OrderStatus.cancelled) return false;
-  final payment = OrderPaymentStatus.normalize(order.paymentStatus);
-  return payment == OrderPaymentStatus.pending;
+  // Kept for shift revenue + legacy callers; prefer pos_pending_orders.dart.
+  return isPendingPosPickupOrder(order);
 }
 
 /// Unpaid held pickup orders still open at the counter.
@@ -37,7 +37,5 @@ bool countsTowardShiftRevenue(Order order) {
   return true;
 }
 
-List<Order> unsettledPickupOrders(Iterable<Order> orders) {
-  return orders.where(isPendingPickupPayment).toList()
-    ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
-}
+List<Order> unsettledPickupOrders(Iterable<Order> orders) =>
+    pendingPosPickupOrders(orders);

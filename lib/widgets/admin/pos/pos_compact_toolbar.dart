@@ -8,7 +8,7 @@ import '../../../services/dining_tables_service.dart';
 import '../../../services/orders_demo_service.dart';
 import '../../../services/orders_service.dart';
 import '../../../utils/order_channel_utils.dart';
-import '../../../utils/order_payment_utils.dart';
+import '../../../utils/pos_pending_orders.dart';
 import '../scheduled_orders_page.dart';
 import 'pos_sync_status_badge.dart';
 import 'pos_theme.dart';
@@ -186,9 +186,9 @@ class _PosCompactToolbarState extends State<PosCompactToolbar> {
                         stream: OrdersService.instance.watchOrders(),
                         initialData: OrdersDemoService.loadedOrders,
                         builder: (context, snapshot) {
-                          final held =
-                              unsettledPickupOrders(snapshot.data ?? const [])
-                                  .length;
+                          final held = countPendingPosWalkInOrders(
+                            snapshot.data ?? const [],
+                          );
                           return _OpsChip(
                             label: 'معلق',
                             icon: Icons.pause_circle_outline,

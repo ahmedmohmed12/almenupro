@@ -12,9 +12,15 @@ import 'pos_sync_status_badge.dart';
 import 'pos_table_floor_map.dart';
 
 class PosDineInPage extends StatefulWidget {
-  const PosDineInPage({super.key, this.restaurantId, this.onOrderSubmitted});
+  const PosDineInPage({
+    super.key,
+    this.restaurantId,
+    this.initialTableId,
+    this.onOrderSubmitted,
+  });
 
   final String? restaurantId;
+  final String? initialTableId;
   final VoidCallback? onOrderSubmitted;
 
   @override
@@ -111,6 +117,21 @@ class _PosDineInPageState extends State<PosDineInPage> {
           }
         }
       }
+      final focusId = widget.initialTableId?.trim();
+      if (active == null && focusId != null && focusId.isNotEmpty) {
+        for (final table in tables) {
+          if (table.id == focusId) {
+            active = table;
+            break;
+          }
+        }
+        if (active != null && active.activeSession == null) {
+          try {
+            active = await DiningTablesService.instance.openSession(active.id);
+          } catch (_) {}
+        }
+      }
+      if (!mounted) return;
       setState(() {
         _tables = tables;
         _activeTable = active;

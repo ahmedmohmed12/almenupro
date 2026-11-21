@@ -1219,6 +1219,7 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
         paymentMethod: _paymentMethod,
       );
       widget.onDineInSessionUpdated?.call(result.table);
+      OrdersDemoService.replaceVisibleOrder(result.order);
       final sessionItems = result.table.activeSession?.cartItems ?? [];
       if (sessionItems.isNotEmpty) {
         _cart
@@ -1252,6 +1253,7 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
       if (mounted) {
         widget.onDineInKitchenSent?.call();
       }
+      (widget.onOrderSubmitted ?? widget.onOrdersSubmitted)?.call();
       return result.order;
     } catch (error) {
       _showMessage(error.toString().replaceFirst('Exception: ', ''));
@@ -1299,6 +1301,8 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
         cashierName: shift?.cashierName,
         tableId: table.id,
         initialStatus: OrderStatus.delivered,
+        paymentStatus: OrderPaymentStatus.paid.storageValue,
+        paidAt: DateTime.now().toUtc(),
       );
       final requestedTip = table.requestedTip;
       if (table.isAwaitingCheck) {
@@ -1746,9 +1750,31 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
             snapshot.deliveryFee,
       );
       final shift = PosOperationsService.instance.activeShift;
-      final cartForSubmit = snapshot.kind == PosReceiptKind.kitchen && !snapshot.scheduled
+      final kitchenOnly =
+          snapshot.kind == PosReceiptKind.kitchen && !snapshot.scheduled;
+      final payNow = snapshot.kind == PosReceiptKind.customer;
+      final cartForSubmit = kitchenOnly
           ? stampKitchenDispatched(snapshot.cart)
           : snapshot.cart;
+
+      if (snapshot.isPickup && kitchenOnly) {
+        final order = await OrdersService.instance.submitHeldPickupFromCart(
+          cartItems: cartForSubmit,
+          customerName: snapshot.customerName,
+          phone: snapshot.phone,
+          invoiceNumber: invoiceNumber,
+          restaurantId: _restaurantId,
+          shiftId: shift?.id,
+          cashierId: shift?.cashierId,
+          cashierName: shift?.cashierName,
+        );
+        (widget.onOrderSubmitted ?? widget.onOrdersSubmitted)?.call();
+        unawaited(
+          PosPrintHelper.printOrder(order: order, kind: PosReceiptKind.kitchen),
+        );
+        return;
+      }
+
       final order = await OrdersService.instance.submitOrderFromCart(
         cartItems: cartForSubmit,
         customerName: snapshot.customerName,
@@ -1758,7 +1784,9 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
                 governorate: snapshot.zone?.governorate ?? snapshot.governorate ?? '',
                 areaName: snapshot.zone?.areaName ?? '',
               ),
-        paymentMethod: snapshot.paymentMethod,
+        paymentMethod: payNow
+            ? snapshot.paymentMethod
+            : (kitchenOnly ? 'غير مدفوع' : snapshot.paymentMethod),
         invoiceNumber: invoiceNumber,
         restaurantId: _restaurantId,
         deliveryFee: snapshot.deliveryFee,
@@ -1780,7 +1808,17 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
         shiftId: shift?.id,
         cashierId: shift?.cashierId,
         cashierName: shift?.cashierName,
-        status: snapshot.scheduled ? OrderStatus.scheduled : null,
+        status: snapshot.scheduled
+            ? OrderStatus.scheduled
+            : (payNow
+                ? OrderStatus.delivered
+                : (kitchenOnly ? OrderStatus.preparing : null)),
+        paymentStatus: payNow
+            ? OrderPaymentStatus.paid.storageValue
+            : (kitchenOnly && snapshot.isPickup
+                ? OrderPaymentStatus.pending.storageValue
+                : null),
+        paidAt: payNow ? DateTime.now().toUtc() : null,
         deliveryDate: snapshot.scheduledTarget,
         targetDeliveryTime: snapshot.scheduledTarget,
         prepTimeMinutes: snapshot.scheduled ? snapshot.prepMinutes : null,

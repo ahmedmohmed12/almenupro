@@ -31,7 +31,8 @@ import 'pos_staff_empty_state.dart';
 import 'pos_staff_page.dart';
 import 'pos_void_orders_page.dart';
 import 'pos_dine_in_page.dart';
-import 'pos_pending_pickup_page.dart';
+import 'pos_pending_orders_page.dart';
+import 'pos_previous_orders_page.dart';
 import '../../../models/order.dart';
 import 'pos_in_page_overlay.dart';
 import 'pos_printer_settings_dialog.dart';
@@ -73,6 +74,7 @@ class _PosShiftShellState extends State<PosShiftShell> {
   var _tableManagementEnabled = false;
   var _homeSheet = _PosHomeSheet.none;
   Order? _resumeHeldPickup;
+  String? _focusDineInTableId;
 
   @override
   void initState() {
@@ -361,6 +363,25 @@ class _PosShiftShellState extends State<PosShiftShell> {
     navigateToAdminPath(PosRoute.home.path);
   }
 
+  void _resumeDineInForSettlement(Order order) {
+    final tableId = order.tableId?.trim();
+    if (tableId == null || tableId.isEmpty) {
+      _openDineInTables();
+      return;
+    }
+    setState(() {
+      _focusDineInTableId = tableId;
+      _selectedRoute = PosRoute.dineIn;
+      _homeSheet = _PosHomeSheet.none;
+    });
+    navigateToAdminPath(PosRoute.dineIn.path);
+  }
+
+  void _clearFocusDineInTable() {
+    if (_focusDineInTableId == null) return;
+    setState(() => _focusDineInTableId = null);
+  }
+
   void _clearResumeHeldPickup() {
     if (_resumeHeldPickup == null) return;
     setState(() => _resumeHeldPickup = null);
@@ -400,12 +421,19 @@ class _PosShiftShellState extends State<PosShiftShell> {
         color: const Color(0xFFF4F6F8),
         child: PosDineInPage(
           restaurantId: widget.restaurantId,
-          onOrderSubmitted: widget.onOrderSubmitted,
+          initialTableId: _focusDineInTableId,
+          onOrderSubmitted: () {
+            _clearFocusDineInTable();
+            widget.onOrderSubmitted?.call();
+          },
         ),
       ),
-      PosRoute.pendingPickup => PosPendingPickupPage(
-        onResumeForSettlement: _resumeHeldPickupForSettlement,
+      PosRoute.pendingPickup => PosPendingOrdersPage(
+        tableManagementEnabled: _tableManagementEnabled,
+        onResumePickup: _resumeHeldPickupForSettlement,
+        onResumeDineIn: _resumeDineInForSettlement,
       ),
+      PosRoute.previousOrders => const PosPreviousOrdersPage(),
       PosRoute.shiftClose => _buildShiftClosePlaceholder(),
     };
 

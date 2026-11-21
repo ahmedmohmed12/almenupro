@@ -8,6 +8,7 @@ enum PosRoute {
   home('/admin/pos'),
   dineIn('/admin/pos/dine-in'),
   pendingPickup('/admin/pos/pending-pickup'),
+  previousOrders('/admin/pos/previous-orders'),
   orders('/admin/pos/orders'),
   handoff('/admin/pos/driver-handoff'),
   shiftClose('/admin/pos/shift-close'),
@@ -80,9 +81,16 @@ abstract final class PosMenuCatalog {
     PosSidebarMenuItem(
       id: 'pending_pickup',
       icon: Icons.pause_circle_outline,
-      label: 'فواتير معلّقة / دفع لاحق',
+      label: 'الطلبات المعلّقة',
       requiredPermission: PosPermissionKeys.processOrders,
       route: PosRoute.pendingPickup,
+    ),
+    PosSidebarMenuItem(
+      id: 'previous_orders',
+      icon: Icons.history_rounded,
+      label: 'الطلبات السابقة',
+      requiredPermission: PosPermissionKeys.processOrders,
+      route: PosRoute.previousOrders,
     ),
     PosSidebarMenuItem(
       id: 'online_orders',

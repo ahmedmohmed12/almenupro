@@ -2,6 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 
 const { computeShiftSummary } = require('../lib/shiftSessions');
+const { isPendingPaymentOrder } = require('../lib/orderPaymentStatus');
 
 test('held pickup orders are excluded from shift revenue until paid', () => {
   const shift = {
@@ -37,4 +38,17 @@ test('held pickup orders are excluded from shift revenue until paid', () => {
   assert.equal(summary.grossSales, 3);
   assert.equal(summary.takeawaySales, 3);
   assert.equal(summary.cashSales, 3);
+});
+
+test('dine-in kitchen orders stay pending until checkout marks paid', () => {
+  assert.equal(
+    isPendingPaymentOrder({
+      orderType: 'dineIn',
+      orderSource: 'pos-dine-in',
+      createdFromPos: true,
+      paymentStatus: 'pending_payment',
+      status: 'preparing',
+    }),
+    true,
+  );
 });
