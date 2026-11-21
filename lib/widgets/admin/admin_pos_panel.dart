@@ -2412,6 +2412,32 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
 
   Widget _buildCustomerFields() {
     final s = AppStrings.of(context);
+    final optional = _customerContactOptional;
+    final phoneDecoration = InputDecoration(
+      labelText: optional
+          ? s.tr('الهاتف (اختياري)', 'Phone (optional)')
+          : s.tr('الهاتف', 'Phone'),
+      isDense: true,
+      suffixIcon: _lookupInProgress
+          ? const Padding(
+              padding: EdgeInsets.all(10),
+              child: SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+            )
+          : const Icon(Icons.person_search, size: 20),
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+    );
+    final nameDecoration = InputDecoration(
+      labelText: optional
+          ? s.tr('اسم العميل (اختياري)', 'Customer name (optional)')
+          : s.customerName,
+      isDense: true,
+      prefixIcon: const Icon(Icons.person_outline, size: 20),
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+    );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -2419,58 +2445,40 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
           children: [
             Expanded(
               flex: 2,
-              child: TextFormField(
-                controller: _phoneController,
-                keyboardType: TextInputType.phone,
-                decoration: InputDecoration(
-                  labelText: _customerContactOptional
-                      ? s.tr('الهاتف (اختياري)', 'Phone (optional)')
-                      : s.tr('الهاتف', 'Phone'),
-                  isDense: true,
-                  suffixIcon: _lookupInProgress
-                      ? const Padding(
-                          padding: EdgeInsets.all(10),
-                          child: SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          ),
-                        )
-                      : const Icon(Icons.person_search, size: 20),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                ),
-                validator: (value) {
-                  if (_customerContactOptional) return null;
-                  return (value == null || value.trim().length < 8)
-                      ? s.required
-                      : null;
-                },
-              ),
+              child: optional
+                  ? TextField(
+                      controller: _phoneController,
+                      keyboardType: TextInputType.phone,
+                      decoration: phoneDecoration,
+                    )
+                  : TextFormField(
+                      controller: _phoneController,
+                      keyboardType: TextInputType.phone,
+                      decoration: phoneDecoration,
+                      validator: (value) {
+                        return (value == null || value.trim().length < 8)
+                            ? s.required
+                            : null;
+                      },
+                    ),
             ),
             const SizedBox(width: 8),
             Expanded(
               flex: 3,
-              child: TextFormField(
-                controller: _nameController,
-                decoration: InputDecoration(
-                  labelText: _customerContactOptional
-                      ? s.tr('اسم العميل (اختياري)', 'Customer name (optional)')
-                      : s.customerName,
-                  isDense: true,
-                  prefixIcon: const Icon(Icons.person_outline, size: 20),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                ),
-                validator: (value) {
-                  if (_customerContactOptional) return null;
-                  return (value == null || value.trim().isEmpty)
-                      ? s.required
-                      : null;
-                },
-              ),
+              child: optional
+                  ? TextField(
+                      controller: _nameController,
+                      decoration: nameDecoration,
+                    )
+                  : TextFormField(
+                      controller: _nameController,
+                      decoration: nameDecoration,
+                      validator: (value) {
+                        return (value == null || value.trim().isEmpty)
+                            ? s.required
+                            : null;
+                      },
+                    ),
             ),
           ],
         ),
