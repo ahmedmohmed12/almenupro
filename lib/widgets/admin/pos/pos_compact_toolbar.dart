@@ -157,26 +157,20 @@ class _PosCompactToolbarState extends State<PosCompactToolbar> {
                       ),
                       const SizedBox(width: 8),
                     ],
-                    if (widget.onOpenTables != null &&
-                        widget.tableManagementEnabled) ...[
+                    if (widget.onOpenTables != null) ...[
                       _OpsChip(
-                        label: 'الطاولات',
+                        label: 'طاولات',
                         icon: Icons.table_restaurant_rounded,
-                        count: _tableBadge,
-                        tone: _tableTone,
+                        count:
+                            widget.tableManagementEnabled ? _tableBadge : 0,
+                        tone: widget.tableManagementEnabled
+                            ? _tableTone
+                            : _OpsTone.ready,
                         onTap: widget.onOpenTables!,
                       ),
                       const SizedBox(width: 8),
                     ],
                     if (widget.showOrderModes) ...[
-                      _ModeChip(
-                        label: 'منصات',
-                        icon: Icons.hub_outlined,
-                        selected: widget.orderMode == 'platforms',
-                        onSelected: () =>
-                            widget.onSelectOrderMode('platforms'),
-                      ),
-                      const SizedBox(width: 8),
                       _ModeChip(
                         label: 'توصيل',
                         icon: Icons.delivery_dining_rounded,
@@ -191,6 +185,14 @@ class _PosCompactToolbarState extends State<PosCompactToolbar> {
                         selected: widget.orderMode == 'scheduled',
                         onSelected: () =>
                             widget.onSelectOrderMode('scheduled'),
+                      ),
+                      const SizedBox(width: 8),
+                      _ModeChip(
+                        label: 'منصات',
+                        icon: Icons.hub_outlined,
+                        selected: widget.orderMode == 'platforms',
+                        onSelected: () =>
+                            widget.onSelectOrderMode('platforms'),
                       ),
                     ],
                     if (widget.onOpenPendingPickup != null) ...[
