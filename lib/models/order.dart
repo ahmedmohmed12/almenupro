@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 import 'cart_item.dart';
 import 'delivery_address_details.dart';
+import 'order_payment_line.dart';
 
 enum OrderType {
   delivery,
@@ -317,6 +318,7 @@ class OrderStatusTimeline {
 
 class OrderLineItem {
   const OrderLineItem({
+    this.id = '',
     required this.menuItemId,
     required this.name,
     required this.unitPrice,
@@ -329,6 +331,7 @@ class OrderLineItem {
     this.sentToKitchenAt,
   });
 
+  final String id;
   final String menuItemId;
   final String name;
   final double unitPrice;
@@ -346,6 +349,7 @@ class OrderLineItem {
     final rawOptions = map['selectedOptions'] as List<dynamic>? ?? [];
 
     return OrderLineItem(
+      id: map['id']?.toString() ?? '',
       menuItemId:
           map['menuItemId']?.toString() ??
           map['menu_item_id']?.toString() ??
@@ -383,6 +387,7 @@ class OrderLineItem {
 
   Map<String, dynamic> toMap() {
     return {
+      if (id.isNotEmpty) 'id': id,
       'menuItemId': menuItemId,
       'name': name,
       'unitPrice': unitPrice,
@@ -406,6 +411,7 @@ class OrderLineItem {
 
   factory OrderLineItem.fromCartItem(CartItem cartItem) {
     return OrderLineItem(
+      id: cartItem.id,
       menuItemId: cartItem.menuItem.id.toString(),
       name: cartItem.menuItem.name,
       unitPrice: cartItem.unitPrice,
@@ -433,6 +439,7 @@ class Order {
     required this.createdAt,
     this.invoiceNumber,
     this.paymentMethod,
+    this.payments,
     this.subtotal,
     this.deliveryFee,
     this.governorate,
@@ -501,6 +508,7 @@ class Order {
   final DateTime createdAt;
   final String? invoiceNumber;
   final String? paymentMethod;
+  final List<OrderPaymentLine>? payments;
   final double? subtotal;
   final double? deliveryFee;
   final String? governorate;
@@ -730,6 +738,12 @@ class Order {
       createdAt: _parseDateTime(map['createdAt']),
       invoiceNumber: map['invoiceNumber']?.toString(),
       paymentMethod: map['paymentMethod']?.toString(),
+      payments: (map['payments'] as List<dynamic>?)
+          ?.whereType<Map>()
+          .map(
+            (row) => OrderPaymentLine.fromMap(Map<String, dynamic>.from(row)),
+          )
+          .toList(),
       subtotal: (map['subtotal'] as num?)?.toDouble(),
       deliveryFee:
           (map['deliveryFee'] as num?)?.toDouble() ??
@@ -903,6 +917,7 @@ class Order {
     OrderStatus? status,
     String? invoiceNumber,
     String? paymentMethod,
+    List<OrderPaymentLine>? payments,
     double? subtotal,
     double? deliveryFee,
     double? totalPrice,
@@ -973,6 +988,7 @@ class Order {
       createdAt: createdAt,
       invoiceNumber: invoiceNumber ?? this.invoiceNumber,
       paymentMethod: paymentMethod ?? this.paymentMethod,
+      payments: payments ?? this.payments,
       subtotal: subtotal ?? this.subtotal,
       deliveryFee: deliveryFee ?? this.deliveryFee,
       governorate: governorate,
@@ -1063,6 +1079,8 @@ class Order {
         'invoiceNumber': invoiceNumber,
       if (paymentMethod != null && paymentMethod!.isNotEmpty)
         'paymentMethod': paymentMethod,
+      if (payments != null && payments!.isNotEmpty)
+        'payments': payments!.map((line) => line.toMap()).toList(),
       if (paymentStatus != null && paymentStatus!.isNotEmpty) ...{
         'paymentStatus': paymentStatus,
         'payment_status': paymentStatus,

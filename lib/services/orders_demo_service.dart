@@ -4,6 +4,7 @@ import '../models/cart_item.dart';
 import '../models/delivery_address_details.dart';
 import '../models/menu_item.dart';
 import '../models/order.dart';
+import '../models/order_payment_line.dart';
 import 'admin_auth_service.dart';
 import 'api_service.dart';
 import 'offline/offline_tx_id.dart';
@@ -387,6 +388,7 @@ class OrdersDemoService {
     required String phone,
     required String address,
     required String paymentMethod,
+    List<OrderPaymentLine>? payments,
     required String invoiceNumber,
     double? deliveryFee,
     String? governorate,
@@ -463,6 +465,7 @@ class OrdersDemoService {
       createdAt: DateTime.now(),
       invoiceNumber: invoiceNumber,
       paymentMethod: paymentMethod,
+      payments: payments,
       governorate: governorate,
       areaName: areaName,
       deliveryZoneId: deliveryZoneId,

@@ -9,6 +9,7 @@ import '../../../services/api_service.dart';
 import '../../../services/pos_operations_service.dart';
 import '../../../utils/order_channel_utils.dart';
 import '../../../utils/order_payment_utils.dart';
+import '../../../utils/order_payments.dart';
 import '../../../models/kitchen_void_liability.dart';
 import '../../../models/pos_approval_request.dart';
 import '../../../utils/pos_pending_orders.dart';
@@ -63,7 +64,11 @@ ShiftSummary _summarizeOrders(
     }
     orderCount += 1;
     final total = order.totalPrice;
-    if (isCashPaymentMethod(order.paymentMethod)) {
+    final split = shiftPaymentBreakdown(order);
+    if (split.cash > 0 || split.knet > 0) {
+      cashSales += split.cash;
+      knetSales += split.knet;
+    } else if (isCashPaymentMethod(order.paymentMethod)) {
       cashSales += total;
     } else if (isKnetPaymentMethod(order.paymentMethod)) {
       knetSales += total;

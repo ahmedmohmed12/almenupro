@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 
 import '../../models/cart_item.dart';
+import '../../models/order_payment_line.dart';
 import '../../models/menu_item.dart';
 import '../../models/order.dart';
 import '../../models/shift_session.dart';
@@ -244,6 +245,7 @@ class PosSyncService extends ChangeNotifier {
     required String tableId,
     required List<CartItem> cartItems,
     required String paymentMethod,
+    List<OrderPaymentLine>? payments,
     String? customerName,
     String? phone,
     String? invoiceNumber,
@@ -256,6 +258,7 @@ class PosSyncService extends ChangeNotifier {
           tableId,
           cartItems: cartItems,
           paymentMethod: paymentMethod,
+          payments: payments,
           customerName: customerName,
           phone: phone,
           invoiceNumber: invoiceNumber,

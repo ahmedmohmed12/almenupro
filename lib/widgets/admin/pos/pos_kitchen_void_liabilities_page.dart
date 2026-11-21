@@ -41,7 +41,6 @@ class _PosKitchenVoidLiabilitiesPageState extends State<PosKitchenVoidLiabilitie
     try {
       final result = await PosOperationsService.instance.fetchKitchenVoidLiabilities(
         shiftId: manager ? null : shift?.id,
-        cashierId: manager ? null : cashier?.staff.id,
         status: manager ? 'PENDING' : 'ALL',
       );
       if (!mounted) return;

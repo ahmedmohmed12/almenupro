@@ -1,4 +1,5 @@
 import '../models/cart_item.dart';
+import '../models/order_payment_line.dart';
 import '../models/dining_table.dart';
 import '../models/menu_item.dart';
 import '../models/order.dart';
@@ -84,6 +85,8 @@ class DiningTablesService {
     String? approvalRequestId,
     String? cartItemId,
     String? shiftId,
+    String? cashierId,
+    String? cashierName,
     String? performedById,
     String? performedByName,
   }) async {
@@ -98,6 +101,9 @@ class DiningTablesService {
             'approvalRequestId': approvalRequestId,
           if (cartItemId != null && cartItemId.isNotEmpty) 'cartItemId': cartItemId,
           if (shiftId != null && shiftId.isNotEmpty) 'shiftId': shiftId,
+          if (cashierId != null && cashierId.isNotEmpty) 'cashierId': cashierId,
+          if (cashierName != null && cashierName.isNotEmpty)
+            'cashierName': cashierName,
           if (performedById != null) 'performedById': performedById,
           if (performedByName != null) 'performedByName': performedByName,
           if (customerName != null) 'customerName': customerName,
@@ -179,6 +185,7 @@ class DiningTablesService {
     String tableId, {
     required List<CartItem> cartItems,
     required String paymentMethod,
+    List<OrderPaymentLine>? payments,
     String? customerName,
     String? phone,
     String? invoiceNumber,
@@ -193,6 +200,8 @@ class DiningTablesService {
         .postJson('/tables/$tableId/checkout', {
           'cartItems': cartItems.map(cartItemToSessionMap).toList(),
           'paymentMethod': paymentMethod,
+          if (payments != null && payments.isNotEmpty)
+            'payments': payments.map((line) => line.toMap()).toList(),
           if (customerName != null) 'customerName': customerName,
           if (phone != null) 'phone': phone,
           if (invoiceNumber != null) 'invoiceNumber': invoiceNumber,

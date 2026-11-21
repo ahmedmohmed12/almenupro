@@ -33,7 +33,9 @@ import '../../services/pos/pos_barcode_listener.dart';
 import '../../services/pos/pos_hardware_bridge.dart';
 import '../../services/pos/pos_platform_profile.dart';
 import '../../theme/app_theme.dart';
+import '../../models/order_payment_line.dart';
 import '../../utils/order_payment_utils.dart';
+import '../../utils/order_payments.dart';
 import '../../utils/kitchen_dispatch.dart';
 import '../../utils/pos_cart_from_order.dart';
 import '../../utils/pos_customer_contact.dart';
@@ -48,6 +50,7 @@ import 'pos/pos_print_preview_dialog.dart';
 import 'pos/pos_delivery_dispatch.dart';
 import 'pos/pos_fast_modifiers_dialog.dart';
 import 'pos/pos_platform_selector.dart';
+import 'pos/pos_split_cash_knet_fields.dart';
 import 'pos/pos_compact_toolbar.dart';
 import 'pos/pos_theme.dart';
 import 'pos/pos_ui_components.dart';
@@ -130,6 +133,7 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
   );
   Timer? _lookupDebounce;
   Timer? _sessionSaveTimer;
+  Timer? _pickupHoldSaveTimer;
   Timer? _localCartTimer;
   final _cartTick = ValueNotifier<int>(0);
   var _dineInHydrated = false;
@@ -141,6 +145,9 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
   var _orderMode = 'takeaway';
   String _selectedCategory = _allCategory;
   String _paymentMethod = 'كاش';
+  PosPayMode _payMode = PosPayMode.cash;
+  final _splitCashController = TextEditingController();
+  final _splitKnetController = TextEditingController();
   String? _selectedGovernorate;
   DeliveryZone? _selectedZone;
   List<DeliveryZone> _zones = const [];
@@ -214,6 +221,43 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
       _subtotal +
       _deliveryFee +
       (_dineInLocked ? (widget.dineInTable?.requestedTip ?? 0) : 0);
+
+  String get _checkoutPaymentMethod {
+    switch (_payMode) {
+      case PosPayMode.cash:
+        return 'كاش';
+      case PosPayMode.knet:
+        return 'K-Net';
+      case PosPayMode.split:
+        return 'كاش + كي نت';
+    }
+  }
+
+  List<OrderPaymentLine>? get _checkoutPayments {
+    if (_payMode != PosPayMode.split) return null;
+    final cash =
+        double.tryParse(_splitCashController.text.trim().replaceAll(',', '')) ??
+        0;
+    final knet =
+        double.tryParse(_splitKnetController.text.trim().replaceAll(',', '')) ??
+        0;
+    return buildSplitPayments(cashAmount: cash, knetAmount: knet);
+  }
+
+  bool get _splitPaymentReady {
+    if (_payMode != PosPayMode.split) return true;
+    final payments = _checkoutPayments;
+    if (payments == null) return false;
+    return validateSplitPayments(
+          payments: payments,
+          orderTotal: _grandTotal,
+        ) ==
+        null;
+  }
+
+  void _syncPaymentMethodFromMode() {
+    _paymentMethod = _checkoutPaymentMethod;
+  }
 
 
   @override
@@ -308,6 +352,9 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
     _scheduledPrepController.dispose();
     _scheduledRouteController.dispose();
     _scheduledBufferController.dispose();
+    _splitCashController.dispose();
+    _splitKnetController.dispose();
+    _pickupHoldSaveTimer?.cancel();
     super.dispose();
   }
 
@@ -557,9 +604,18 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
     });
   }
 
+  void _schedulePickupHoldSave() {
+    if (_settlingHeldOrder == null) return;
+    _pickupHoldSaveTimer?.cancel();
+    _pickupHoldSaveTimer = Timer(const Duration(milliseconds: 700), () {
+      unawaited(_persistPickupHoldOrder());
+    });
+  }
+
   void _bumpCart() {
     _cartTick.value++;
     _scheduleDineInSave();
+    _schedulePickupHoldSave();
   }
 
   Future<void> _persistLocalCart() async {
@@ -589,6 +645,7 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
     if (table == null) return;
     try {
       final cashier = PosOperationsService.instance.cashierSession;
+      final shift = PosOperationsService.instance.activeShift;
       final contact = _resolvedCustomerContact();
       final updated = await DiningTablesService.instance.updateSession(
         table.id,
@@ -599,7 +656,9 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
         kitchenVoidReason: _pendingKitchenOverride?.reason,
         approvalRequestId: _pendingKitchenOverride?.approvalRequestId,
         cartItemId: _pendingKitchenOverride?.cartItemId,
-        shiftId: PosOperationsService.instance.activeShift?.id,
+        shiftId: shift?.id,
+        cashierId: shift?.cashierId ?? cashier?.staff.id,
+        cashierName: shift?.cashierName ?? cashier?.staff.name,
         performedById: cashier?.staff.id,
         performedByName: cashier?.staff.name,
       );
@@ -608,6 +667,43 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
     } catch (error) {
       final message = error.toString().replaceFirst('Exception: ', '');
       if (message.contains('KITCHEN_DISPATCH') ||
+          message.contains('المشرف') ||
+          message.contains('سبب')) {
+        _showMessage(message);
+      }
+    }
+  }
+
+  Future<void> _persistPickupHoldOrder() async {
+    final held = _settlingHeldOrder;
+    if (held == null || _cart.isEmpty) return;
+    try {
+      final shift = PosOperationsService.instance.activeShift;
+      final cashier = PosOperationsService.instance.cashierSession;
+      final subtotal = _cart.fold<double>(0, (sum, item) => sum + item.totalPrice);
+      final saved = await ApiService.instance.patchPickupHoldOrder(
+        held,
+        items: _cart.map(OrderLineItem.fromCartItem).toList(),
+        subtotal: subtotal,
+        totalPrice: subtotal,
+        shiftId: shift?.id ?? held.shiftId,
+        cashierId: shift?.cashierId ?? cashier?.staff.id,
+        cashierName: shift?.cashierName ?? cashier?.staff.name,
+        managerPin: _pendingKitchenOverride?.managerPin,
+        kitchenVoidReason: _pendingKitchenOverride?.reason,
+        approvalRequestId: _pendingKitchenOverride?.approvalRequestId,
+        cartItemId: _pendingKitchenOverride?.cartItemId,
+        performedById: cashier?.staff.id,
+        performedByName: cashier?.staff.name,
+      );
+      _pendingKitchenOverride = null;
+      if (saved != null) {
+        _settlingHeldOrder = saved;
+        OrdersDemoService.replaceVisibleOrder(saved);
+      }
+    } catch (error) {
+      final message = error.toString().replaceFirst('Exception: ', '');
+      if (message.contains('KITCHEN') ||
           message.contains('المشرف') ||
           message.contains('سبب')) {
         _showMessage(message);
@@ -1158,6 +1254,31 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
     return true;
   }
 
+  bool _validatePaidCheckout(PosReceiptKind kind) {
+    _syncPaymentMethodFromMode();
+    if (kind != PosReceiptKind.customer) return true;
+    if (_payMode != PosPayMode.split) return true;
+    final payments = _checkoutPayments;
+    if (payments == null) {
+      _showMessage(
+        AppStrings.read(context).tr(
+          'أدخل مبالغ كاش وكي نت',
+          'Enter cash and K-Net amounts',
+        ),
+      );
+      return false;
+    }
+    final error = validateSplitPayments(
+      payments: payments,
+      orderTotal: _grandTotal,
+    );
+    if (error != null) {
+      _showMessage(error);
+      return false;
+    }
+    return true;
+  }
+
   bool get _isScheduled => _orderMode == 'scheduled';
 
   int _scheduledMinutes(TextEditingController controller, int fallback) {
@@ -1300,9 +1421,11 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
       final customerName = contact.name;
       final phone = contact.phone;
       final requestedPayment = table.requestedPaymentMethod;
-      final checkoutPaymentMethod = table.isAwaitingCheck
+      final awaitingQr = table.isAwaitingCheck;
+      final checkoutPaymentMethod = awaitingQr
           ? (requestedPayment == 'knet' ? 'K-Net' : 'كاش')
-          : _paymentMethod;
+          : _checkoutPaymentMethod;
+      final checkoutPayments = awaitingQr ? null : _checkoutPayments;
       final shift = PosOperationsService.instance.activeShift;
       var order = OrdersDemoService.orderFromCart(
         cartItems: List.from(_cart),
@@ -1310,6 +1433,7 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
         phone: phone,
         address: 'طاولة ${table.displayName}',
         paymentMethod: checkoutPaymentMethod,
+        payments: checkoutPayments,
         invoiceNumber: invoiceNumber,
         orderSource: 'pos-dine-in',
         orderType: OrderType.dineIn,
@@ -1338,6 +1462,7 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
         tableId: table.id,
         cartItems: List.from(_cart),
         paymentMethod: checkoutPaymentMethod,
+        payments: checkoutPayments,
         customerName: customerName,
         phone: phone,
         invoiceNumber: invoiceNumber,
@@ -1437,9 +1562,11 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
     _submitting = true;
     _cartTick.value++;
     try {
+      if (!_validatePaidCheckout(PosReceiptKind.customer)) return null;
       final order = await OrdersService.instance.settleHeldPickupOrder(
         order: held,
-        paymentMethod: _paymentMethod,
+        paymentMethod: _checkoutPaymentMethod,
+        payments: _checkoutPayments,
         cartItems: List.from(_cart),
         restaurantId: _restaurantId,
         shiftId: shift.id,
@@ -1635,7 +1762,7 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
         regionId: _selectedZone?.id,
         regionName: _selectedZone?.displayName,
         orderId: order.id,
-        cashToCollect: _paymentMethod == 'كاش' ? order.totalPrice : 0,
+        cashToCollect: shiftPaymentBreakdown(order).cash,
         customerAddress: order.address,
         restaurantId: _restaurantId,
       );
@@ -1655,6 +1782,7 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
         return;
       }
       if (!_validateOrder()) return;
+      if (!_validatePaidCheckout(kind)) return;
       unawaited(_settleHeldPickupOrder());
       return;
     }
@@ -1669,10 +1797,12 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
         return;
       }
       if (!_validateOrder()) return;
+      if (!_validatePaidCheckout(kind)) return;
       _submitting = true;
       final cartSnapshot = List<CartItem>.from(_cart);
       final contact = _resolvedCustomerContact();
-      final paymentSnapshot = _paymentMethod;
+      final paymentSnapshot = _checkoutPaymentMethod;
+      final paymentsSnapshot = _checkoutPayments;
       _clearCart();
       _submitting = false;
       _showMessage(
@@ -1684,12 +1814,14 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
           customerName: contact.name,
           phone: contact.phone,
           paymentMethod: paymentSnapshot,
+          payments: paymentsSnapshot,
         ),
       );
       return;
     }
 
     if (!_validateOrder()) return;
+    if (kind == PosReceiptKind.customer && !_validatePaidCheckout(kind)) return;
     final schedule = _isScheduled ? _scheduleSnapshot() : null;
     _submitting = true;
     final cartSnapshot = List<CartItem>.from(_cart);
@@ -1698,7 +1830,8 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
       customerName:
           _customerContactOptional ? _posCustomerName() : _nameController.text.trim(),
       phone: _customerContactOptional ? _posCustomerPhone() : _phoneController.text.trim(),
-      paymentMethod: _paymentMethod,
+      paymentMethod: _checkoutPaymentMethod,
+      payments: _checkoutPayments,
       isPickup: _isPickup,
       orderMode: _orderMode,
       deliveryFee: _deliveryFee,
@@ -1741,6 +1874,7 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
       String customerName,
       String phone,
       String paymentMethod,
+      List<OrderPaymentLine>? payments,
       bool isPickup,
       String orderMode,
       double deliveryFee,
@@ -1807,6 +1941,7 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
         paymentMethod: payNow
             ? snapshot.paymentMethod
             : (kitchenOnly ? 'غير مدفوع' : snapshot.paymentMethod),
+        payments: payNow ? snapshot.payments : null,
         invoiceNumber: invoiceNumber,
         restaurantId: _restaurantId,
         deliveryFee: snapshot.deliveryFee,
@@ -1898,6 +2033,7 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
     required String customerName,
     required String phone,
     required String paymentMethod,
+    List<OrderPaymentLine>? payments,
   }) async {
     final table = widget.dineInTable;
     if (table == null) return;
@@ -1906,9 +2042,11 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
           .toString()
           .substring(5);
       final requestedPayment = table.requestedPaymentMethod;
-      final checkoutPaymentMethod = table.isAwaitingCheck
+      final awaitingQr = table.isAwaitingCheck;
+      final checkoutPaymentMethod = awaitingQr
           ? (requestedPayment == 'knet' ? 'K-Net' : 'كاش')
           : paymentMethod;
+      final checkoutPayments = awaitingQr ? null : payments;
       final shift = PosOperationsService.instance.activeShift;
       final subtotal = cartSnapshot.fold<double>(
         0,
@@ -1922,6 +2060,7 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
         phone: phone.trim().isEmpty ? '00000000' : phone.trim(),
         address: 'طاولة ${table.displayName}',
         paymentMethod: checkoutPaymentMethod,
+        payments: checkoutPayments,
         invoiceNumber: invoiceNumber,
         orderSource: 'pos-dine-in',
         orderType: OrderType.dineIn,
@@ -1945,6 +2084,7 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
         tableId: table.id,
         cartItems: cartSnapshot,
         paymentMethod: checkoutPaymentMethod,
+        payments: checkoutPayments,
         customerName: customerName.trim().isEmpty
             ? table.displayName
             : customerName.trim(),
@@ -2988,27 +3128,62 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
 
   Widget _buildPaymentSelector() {
     final s = AppStrings.of(context);
-    return Row(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Expanded(
-          child: _PaymentModeButton(
-            label: s.cash,
-            icon: Icons.payments_outlined,
-            color: const Color(0xFF059669),
-            selected: _paymentMethod == 'كاش',
-            onTap: () => setState(() => _paymentMethod = 'كاش'),
-          ),
+        Row(
+          children: [
+            Expanded(
+              child: _PaymentModeButton(
+                label: s.cash,
+                icon: Icons.payments_outlined,
+                color: const Color(0xFF059669),
+                selected: _payMode == PosPayMode.cash,
+                onTap: () => setState(() {
+                  _payMode = PosPayMode.cash;
+                  _syncPaymentMethodFromMode();
+                }),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: _PaymentModeButton(
+                label: 'K-Net',
+                icon: Icons.credit_card,
+                color: const Color(0xFF2563EB),
+                selected: _payMode == PosPayMode.knet,
+                onTap: () => setState(() {
+                  _payMode = PosPayMode.knet;
+                  _syncPaymentMethodFromMode();
+                }),
+              ),
+            ),
+          ],
         ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: _PaymentModeButton(
-            label: 'K-Net',
-            icon: Icons.credit_card,
-            color: const Color(0xFF2563EB),
-            selected: _paymentMethod == 'K-Net',
-            onTap: () => setState(() => _paymentMethod = 'K-Net'),
-          ),
+        const SizedBox(height: 8),
+        _PaymentModeButton(
+          label: s.tr('تقسيم دفع (كاش + كي نت)', 'Split (Cash + K-Net)'),
+          icon: Icons.call_split,
+          color: const Color(0xFF7C3AED),
+          selected: _payMode == PosPayMode.split,
+          onTap: () => setState(() {
+            _payMode = PosPayMode.split;
+            _syncPaymentMethodFromMode();
+            if (_splitCashController.text.trim().isEmpty) {
+              _splitCashController.text = '0.000';
+              _splitKnetController.text = _grandTotal.toStringAsFixed(3);
+            }
+          }),
         ),
+        if (_payMode == PosPayMode.split) ...[
+          const SizedBox(height: 10),
+          PosSplitCashKnetFields(
+            total: _grandTotal,
+            cashController: _splitCashController,
+            knetController: _splitKnetController,
+            onChanged: () => setState(_syncPaymentMethodFromMode),
+          ),
+        ],
       ],
     );
   }
@@ -3216,7 +3391,7 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
                       borderRadius: BorderRadius.circular(14),
                     ),
                   ),
-                  onPressed: _submitting
+                  onPressed: _submitting || !_splitPaymentReady
                       ? null
                       : () => _completeAndPrint(PosReceiptKind.customer),
                   icon: const Icon(Icons.receipt_long_rounded, size: 22),

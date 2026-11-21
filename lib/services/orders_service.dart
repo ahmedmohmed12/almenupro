@@ -7,6 +7,7 @@ import '../models/delivery_address_details.dart';
 import '../models/order.dart';
 import '../models/order_platform.dart';
 import '../utils/firebase_config.dart';
+import '../models/order_payment_line.dart';
 import '../utils/order_payment_utils.dart';
 import 'firebase_service.dart';
 import 'orders_demo_service.dart';
@@ -78,6 +79,7 @@ class OrdersService {
     required String phone,
     required String address,
     required String paymentMethod,
+    List<OrderPaymentLine>? payments,
     required String invoiceNumber,
     String? restaurantId,
     double? deliveryFee,
@@ -118,6 +120,7 @@ class OrdersService {
       phone: phone,
       address: address,
       paymentMethod: paymentMethod,
+      payments: payments,
       invoiceNumber: invoiceNumber,
       deliveryFee: deliveryFee,
       governorate: governorate,
@@ -207,6 +210,7 @@ class OrdersService {
   Future<Order> settleHeldPickupOrder({
     required Order order,
     required String paymentMethod,
+    List<OrderPaymentLine>? payments,
     required List<CartItem> cartItems,
     required String restaurantId,
     String? shiftId,
@@ -226,6 +230,7 @@ class OrdersService {
       subtotal: subtotal,
       totalPrice: subtotal,
       paymentMethod: paymentMethod,
+      payments: payments,
       paymentStatus: OrderPaymentStatus.paid.storageValue,
       paidAt: DateTime.now().toUtc(),
       status: OrderStatus.delivered,

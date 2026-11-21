@@ -884,6 +884,56 @@ class ApiService {
     return null;
   }
 
+  Future<Order?> patchPickupHoldOrder(
+    Order order, {
+    required List<OrderLineItem> items,
+    required double subtotal,
+    required double totalPrice,
+    String? shiftId,
+    String? cashierId,
+    String? cashierName,
+    String? managerPin,
+    String? kitchenVoidReason,
+    String? approvalRequestId,
+    String? cartItemId,
+    String? performedById,
+    String? performedByName,
+  }) async {
+    final response = await http
+        .patch(
+          _uri('/orders/${order.id}/pickup-hold'),
+          headers: _jsonHeaders,
+          body: jsonEncode({
+            'items': items.map((item) => item.toMap()).toList(),
+            'subtotal': subtotal,
+            'totalPrice': totalPrice,
+            if (shiftId != null && shiftId.isNotEmpty) 'shiftId': shiftId,
+            if (cashierId != null && cashierId.isNotEmpty) 'cashierId': cashierId,
+            if (cashierName != null && cashierName.isNotEmpty)
+              'cashierName': cashierName,
+            if (managerPin != null && managerPin.isNotEmpty) 'managerPin': managerPin,
+            if (kitchenVoidReason != null && kitchenVoidReason.isNotEmpty)
+              'kitchenVoidReason': kitchenVoidReason,
+            if (approvalRequestId != null && approvalRequestId.isNotEmpty)
+              'approvalRequestId': approvalRequestId,
+            if (cartItemId != null && cartItemId.isNotEmpty) 'cartItemId': cartItemId,
+            if (performedById != null) 'performedById': performedById,
+            if (performedByName != null) 'performedByName': performedByName,
+          }),
+        )
+        .timeout(_statusTimeout);
+    if (response.statusCode != 200) {
+      throw _exceptionFromResponse(response, 'فشل تحديث فاتورة الاستلام المعلّقة');
+    }
+    final decoded = jsonDecode(response.body);
+    if (decoded is Map) {
+      final map = Map<String, dynamic>.from(decoded);
+      final id = map['id']?.toString().trim();
+      return Order.fromMap((id != null && id.isNotEmpty) ? id : order.id, map);
+    }
+    return null;
+  }
+
   Future<Order?> settlePickupOrder(
     Order order, {
     String? restaurantId,
@@ -901,6 +951,8 @@ class ApiService {
           headers: _jsonHeaders,
           body: jsonEncode({
             'paymentMethod': order.paymentMethod,
+            if (order.payments != null && order.payments!.isNotEmpty)
+              'payments': order.payments!.map((line) => line.toMap()).toList(),
             'totalPrice': order.totalPrice,
             'subtotal': order.subtotal ?? order.totalPrice,
             'items': order.items.map((item) => item.toMap()).toList(),

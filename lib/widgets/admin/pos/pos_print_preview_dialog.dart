@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../../../models/order.dart';
+import '../../../utils/order_payments.dart';
 import '../../../models/sales_platform_config.dart';
 import '../../../services/pos_print_helper.dart';
 import '../../../services/pos_print_settings_service.dart';
@@ -340,8 +341,19 @@ class PosThermalReceiptPreview extends StatelessWidget {
               label: 'العنوان',
               value: order.address.trim().isEmpty ? '—' : order.address,
             ),
-            if (!isKitchen)
-              _MetaRow(label: 'الدفع', value: order.paymentMethod ?? 'كاش'),
+            if (!isKitchen) ...[
+              _MetaRow(
+                label: 'الدفع',
+                value: formatOrderPaymentSummary(order),
+              ),
+              if (isSplitCashKnetOrder(order))
+                ...orderPaymentLines(order).map(
+                  (line) => _MetaRow(
+                    label: line.isCash ? 'كاش' : 'كي نت',
+                    value: '${line.amount.toStringAsFixed(3)} د.ك',
+                  ),
+                ),
+            ],
             _MetaRow(
               label: 'النوع',
               value: switch (order.orderType) {

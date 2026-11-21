@@ -12,7 +12,9 @@ List<CartItem> cartItemsFromOrderLines(
   return [
     for (final line in lines)
       CartItem(
-        id: '${line.menuItemId}_${line.name}_${line.quantity}',
+        id: line.id.trim().isNotEmpty
+            ? line.id
+            : '${line.menuItemId}_${line.name}_${line.quantity}',
         menuItem: byId[line.menuItemId] ??
             MenuItem(
               id: int.tryParse(line.menuItemId) ?? line.name.hashCode,

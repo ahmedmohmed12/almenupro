@@ -125,6 +125,7 @@ const { computeUpsellAnalytics, normalizeIncomingEvent, trimEvents } = require('
 const { previewEarnedCashback, applyLoyaltyCashbackToOrder, redeemCustomerWallet, normalizeLoyaltySettings, isDeliveredStatus } = require('./lib/loyaltyCashback');
 const { normalizeOffer, isOfferLive, collectOfferIdsFromOrder, evaluateOfferUsage, findExhaustedOfferIds, repriceOrderIfOffersExhausted, assertOffersUsageAllowed, OFFER_USAGE_LIMIT_MESSAGE } = require('./lib/offers');
 const { normalizePosOrderCustomerContact } = require('./lib/posCustomerContact');
+const { applyOrderPaymentsFromBody } = require('./lib/orderPayments');
 const {
   enrichCustomersForRestaurant,
   upsertCustomerFromSource,
@@ -2474,6 +2475,15 @@ async function routeRequest(req, res, url, pathname) {
       }
       await extraStore.customers.write(customers);
     }
+    const paymentApplied = applyOrderPaymentsFromBody(created, body);
+    if (!paymentApplied.ok) {
+      sendJson(res, 400, {
+        error: paymentApplied.error,
+        code: paymentApplied.code,
+      });
+      return true;
+    }
+    Object.assign(created, paymentApplied.order);
     await dataStore.prependOrder(created, existingOrders);
     const dineInTableId = String(created.tableId || created.table_id || '').trim();
     if (dineInTableId && restaurantId) {

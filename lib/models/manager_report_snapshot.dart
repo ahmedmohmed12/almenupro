@@ -2,6 +2,7 @@ import 'order.dart';
 import 'shift_session.dart';
 import 'manager_report_period.dart';
 import '../utils/order_channel_utils.dart';
+import '../utils/order_payments.dart';
 
 class ManagerTopItem {
   const ManagerTopItem({
@@ -182,7 +183,11 @@ ManagerReportSnapshot buildManagerReport({
   for (final order in counted) {
     final bucket = managerBucketIndex(order.createdAt, window);
     hourly[bucket] += order.totalPrice;
-    if (_isCash(order.paymentMethod)) {
+    final split = shiftPaymentBreakdown(order);
+    if (split.cash > 0 || split.knet > 0) {
+      cash += split.cash;
+      knet += split.knet;
+    } else if (_isCash(order.paymentMethod)) {
       cash += order.totalPrice;
     } else {
       knet += order.totalPrice;

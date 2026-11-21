@@ -2,7 +2,10 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { enforceKitchenItemMutation } = require('../lib/kitchenDispatchLock');
+const {
+  enforceKitchenItemMutation,
+  detectKitchenLockViolations,
+} = require('../lib/kitchenDispatchLock');
 const {
   buildLiabilitiesFromLock,
   summarizeKitchenVoidLiabilities,
@@ -30,6 +33,33 @@ const nextItems = [
     sentToKitchenAt: previousItems[0].sentToKitchenAt,
   },
 ];
+
+test('detectKitchenLockViolations matches lines without stable ids', () => {
+  const violations = detectKitchenLockViolations(
+    [
+      {
+        name: 'Kebab',
+        menuItemId: '10',
+        quantity: 2,
+        unitPrice: 2.5,
+        isSentToKitchen: true,
+      },
+    ],
+    [
+      {
+        name: 'Kebab',
+        menuItemId: '10',
+        quantity: 1,
+        unitPrice: 2.5,
+        isSentToKitchen: true,
+      },
+    ],
+  );
+  assert.equal(violations.length, 1);
+  assert.equal(violations[0].type, 'reduce');
+  assert.equal(violations[0].quantityBefore, 2);
+  assert.equal(violations[0].quantityAfter, 1);
+});
 
 test('cashier conditional void allows mutation with reason only', async () => {
   const lock = await enforceKitchenItemMutation({

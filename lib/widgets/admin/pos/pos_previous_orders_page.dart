@@ -4,6 +4,7 @@ import '../../../l10n/app_strings.dart';
 import '../../../models/order.dart';
 import '../../../services/orders_demo_service.dart';
 import '../../../services/orders_service.dart';
+import '../../../utils/order_payments.dart';
 import '../../../utils/pos_pending_orders.dart';
 import 'pos_theme.dart';
 
@@ -151,7 +152,7 @@ class _ClosedList extends StatelessWidget {
                 style: const TextStyle(fontWeight: FontWeight.w800),
               ),
               subtitle: Text(
-                '${order.paymentMethod} • $time • ${order.items.length} ${s.tr('صنف', 'items')}',
+                '${formatOrderPaymentSummary(order)} • $time • ${order.items.length} ${s.tr('صنف', 'items')}',
               ),
               trailing: Text(
                 '${order.totalPrice.toStringAsFixed(3)} ${s.tr('د.ك', 'KWD')}',
