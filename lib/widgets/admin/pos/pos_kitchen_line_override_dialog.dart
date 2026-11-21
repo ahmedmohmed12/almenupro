@@ -85,7 +85,6 @@ class _KitchenLineOverrideDialogState extends State<_KitchenLineOverrideDialog> 
         entityId: widget.entityId,
         performedById: cashier?.staff.id,
         performedByName: cashier?.staff.name,
-        reason: _resolvedReason,
       );
       if (!mounted) return;
       if (!result.authorized) {
