@@ -61,6 +61,37 @@ test('detectKitchenLockViolations matches lines without stable ids', () => {
   assert.equal(violations[0].quantityAfter, 1);
 });
 
+test('checkout without kitchen line changes needs no authorization', async () => {
+  const items = [
+    {
+      id: 'line_keep',
+      name: 'Juice',
+      menuItemId: 'm_juice',
+      quantity: 2,
+      unitPrice: 1.25,
+      isSentToKitchen: true,
+      sentToKitchenAt: new Date().toISOString(),
+    },
+  ];
+  const lock = await enforceKitchenItemMutation({
+    previousItems: items,
+    nextItems: items.map((line) => ({ ...line })),
+    body: { cashierId: 'cashier_1' },
+    auth: { role: 'cashier' },
+    restaurantId: 'rest_1',
+    deps: {
+      readSettings: async () => ({}),
+      readStaffUsers: async () => [],
+      filterByRestaurant: (rows) => rows,
+      readRestaurants: async () => [],
+    },
+    context: { entityType: 'order', entityId: 'order_settle' },
+  });
+  assert.equal(lock.ok, true);
+  assert.equal(lock.violations.length, 0);
+  assert.equal(lock.conditionalVoid, undefined);
+});
+
 test('cashier conditional void allows mutation with reason only', async () => {
   const lock = await enforceKitchenItemMutation({
     previousItems,

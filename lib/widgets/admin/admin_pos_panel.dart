@@ -1045,6 +1045,13 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
     _bumpCart();
   }
 
+  /// After checkout/settlement the cart snapshot was already submitted — do not
+  /// re-run kitchen void guards when resetting the UI cart.
+  Future<void> _clearCartAfterSuccessfulCheckout() async {
+    _pendingKitchenOverride = null;
+    await _clearCart(skipKitchenGuard: true);
+  }
+
   Future<void> _clearCart({bool skipKitchenGuard = false}) async {
     if (!skipKitchenGuard && !posStaffBypassesKitchenLock()) {
       final locked = _cart.where((item) => item.isSentToKitchen).toList();
@@ -1484,7 +1491,7 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
         );
       }
       if (!mounted) return order;
-      _clearCart();
+      await _clearCartAfterSuccessfulCheckout();
       widget.onDineInReleased?.call();
       // PosDineInPage refreshes orders from onDineInReleased. Keep the fallback
       // for other hosts without triggering the same refresh twice.
@@ -1563,6 +1570,7 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
     _cartTick.value++;
     try {
       if (!_validatePaidCheckout(PosReceiptKind.customer)) return null;
+      final override = _pendingKitchenOverride;
       final order = await OrdersService.instance.settleHeldPickupOrder(
         order: held,
         paymentMethod: _checkoutPaymentMethod,
@@ -1572,12 +1580,11 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
         shiftId: shift.id,
         cashierId: shift.cashierId,
         cashierName: shift.cashierName,
-        managerPin: _pendingKitchenOverride?.managerPin,
-        kitchenVoidReason: _pendingKitchenOverride?.reason,
-        approvalRequestId: _pendingKitchenOverride?.approvalRequestId,
-        cartItemId: _pendingKitchenOverride?.cartItemId,
+        managerPin: override?.managerPin,
+        kitchenVoidReason: override?.reason,
+        approvalRequestId: override?.approvalRequestId,
+        cartItemId: override?.cartItemId,
       );
-      _pendingKitchenOverride = null;
       if (autoPrint) {
         unawaited(
           PosPrintHelper.printIfAuto(
@@ -1586,7 +1593,7 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
           ),
         );
       }
-      _clearCart();
+      await _clearCartAfterSuccessfulCheckout();
       _settlingHeldOrder = null;
       widget.onHeldPickupCleared?.call();
       (widget.onOrderSubmitted ?? widget.onOrdersSubmitted)?.call();
@@ -1688,7 +1695,7 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
         );
       }
 
-      _clearCart();
+      await _clearCartAfterSuccessfulCheckout();
       if (schedule != null) _resetScheduledMode();
       (widget.onOrderSubmitted ?? widget.onOrdersSubmitted)?.call();
       if (schedule == null) {
@@ -1803,7 +1810,7 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
       final contact = _resolvedCustomerContact();
       final paymentSnapshot = _checkoutPaymentMethod;
       final paymentsSnapshot = _checkoutPayments;
-      _clearCart();
+      unawaited(_clearCartAfterSuccessfulCheckout());
       _submitting = false;
       _showMessage(
         AppStrings.read(context).tr('تم الدفع بنجاح', 'Payment successful'),
@@ -1849,7 +1856,7 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
       bufferMinutes: schedule?.buffer ?? 0,
       autoRelease: schedule?.release,
     );
-    _clearCart();
+    unawaited(_clearCartAfterSuccessfulCheckout());
     if (schedule != null) _resetScheduledMode();
     _submitting = false;
     _showMessage(
