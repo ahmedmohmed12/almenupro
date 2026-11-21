@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
+import '../models/kitchen_void_liability.dart';
+import '../models/pos_approval_request.dart';
 import '../models/pos_permission_catalog.dart';
 import '../models/pos_role.dart';
 import '../models/shift_session.dart';
@@ -347,6 +349,7 @@ class PosOperationsService extends ChangeNotifier {
     String? roleId,
     String? managerPin,
     String? pendingCloseReason,
+    String? approvalRequestId,
     String? authorizedById,
     String? authorizedByName,
   }) async {
@@ -367,6 +370,8 @@ class PosOperationsService extends ChangeNotifier {
               'managerPin': managerPin.trim(),
             if (pendingCloseReason != null && pendingCloseReason.trim().isNotEmpty)
               'pendingCloseReason': pendingCloseReason.trim(),
+            if (approvalRequestId != null && approvalRequestId.trim().isNotEmpty)
+              'approvalRequestId': approvalRequestId.trim(),
             if (authorizedById != null) 'authorizedById': authorizedById,
             if (authorizedByName != null) 'authorizedByName': authorizedByName,
           }),
@@ -528,6 +533,281 @@ class PosOperationsService extends ChangeNotifier {
       throw Exception('استجابة غير متوقعة من السيرفر');
     }
     return StaffUser.fromJson(Map<String, dynamic>.from(decoded));
+  }
+
+  Future<PosApprovalRequest> createApprovalRequest({
+    required String type,
+    required String reason,
+    required String shiftId,
+    Map<String, dynamic>? payload,
+    String? requestedById,
+    String? requestedByName,
+  }) async {
+    final response = await http
+        .post(
+          _posUri('/pos/approvals'),
+          headers: _headers,
+          body: jsonEncode({
+            'type': type,
+            'reason': reason,
+            'shiftId': shiftId,
+            if (payload != null) 'payload': payload,
+            if (requestedById != null) 'requestedById': requestedById,
+            if (requestedByName != null) 'requestedByName': requestedByName,
+          }),
+        )
+        .timeout(const Duration(seconds: 30));
+
+    if (response.statusCode != 200 && response.statusCode != 201) {
+      throw Exception(_readError(response, 'فشل إرسال طلب الموافقة'));
+    }
+    final decoded = jsonDecode(response.body);
+    if (decoded is! Map) {
+      throw Exception('استجابة غير متوقعة من السيرفر');
+    }
+    final raw = decoded['request'];
+  if (raw is! Map) {
+      throw Exception('استجابة غير متوقعة من السيرفر');
+    }
+    return PosApprovalRequest.fromJson(Map<String, dynamic>.from(raw));
+  }
+
+  Future<PosApprovalRequest> fetchApprovalRequest(String id) async {
+    final response = await http
+        .get(
+          _posUri('/pos/approvals/${Uri.encodeComponent(id)}'),
+          headers: _headers,
+        )
+        .timeout(const Duration(seconds: 30));
+
+    if (response.statusCode != 200) {
+      throw Exception(_readError(response, 'فشل تحميل طلب الموافقة'));
+    }
+    final decoded = jsonDecode(response.body);
+    if (decoded is! Map) {
+      throw Exception('استجابة غير متوقعة من السيرفر');
+    }
+    final raw = decoded['request'];
+    if (raw is! Map) {
+      throw Exception('استجابة غير متوقعة من السيرفر');
+    }
+    return PosApprovalRequest.fromJson(Map<String, dynamic>.from(raw));
+  }
+
+  Future<List<PosApprovalRequest>> fetchApprovalRequests({
+    String status = 'PENDING',
+    int limit = 50,
+    String? roleId,
+  }) async {
+    final response = await http
+        .get(
+          _posUri(
+            '/pos/approvals',
+            query: {
+              'status': status,
+              'limit': '$limit',
+              if (roleId != null && roleId.isNotEmpty) 'roleId': roleId,
+            },
+          ),
+          headers: _headers,
+        )
+        .timeout(const Duration(seconds: 30));
+
+    if (response.statusCode != 200) {
+      throw Exception(_readError(response, 'فشل تحميل طلبات الموافقة'));
+    }
+    final decoded = jsonDecode(response.body);
+    if (decoded is! Map) return const [];
+    final rows = decoded['requests'];
+    if (rows is! List) return const [];
+    return [
+      for (final row in rows)
+        if (row is Map)
+          PosApprovalRequest.fromJson(Map<String, dynamic>.from(row)),
+    ];
+  }
+
+  Future<PosApprovalRequest> approveApprovalRequest(
+    String id, {
+    String? reviewNote,
+    String? reviewedById,
+    String? reviewedByName,
+    String? roleId,
+  }) async {
+    return _reviewApprovalRequest(
+      id,
+      action: 'approve',
+      reviewNote: reviewNote,
+      reviewedById: reviewedById,
+      reviewedByName: reviewedByName,
+      roleId: roleId,
+    );
+  }
+
+  Future<PosApprovalRequest> rejectApprovalRequest(
+    String id, {
+    String? reviewNote,
+    String? reviewedById,
+    String? reviewedByName,
+    String? roleId,
+  }) async {
+    return _reviewApprovalRequest(
+      id,
+      action: 'reject',
+      reviewNote: reviewNote,
+      reviewedById: reviewedById,
+      reviewedByName: reviewedByName,
+      roleId: roleId,
+    );
+  }
+
+  Future<PosApprovalRequest> cancelApprovalRequest(String id) async {
+    final response = await http
+        .post(
+          _posUri('/pos/approvals/${Uri.encodeComponent(id)}/cancel'),
+          headers: _headers,
+          body: jsonEncode({}),
+        )
+        .timeout(const Duration(seconds: 30));
+
+    if (response.statusCode != 200) {
+      throw Exception(_readError(response, 'فشل إلغاء طلب الموافقة'));
+    }
+    final decoded = jsonDecode(response.body);
+    if (decoded is! Map) {
+      throw Exception('استجابة غير متوقعة من السيرفر');
+    }
+    final raw = decoded['request'];
+    if (raw is! Map) {
+      throw Exception('استجابة غير متوقعة من السيرفر');
+    }
+    return PosApprovalRequest.fromJson(Map<String, dynamic>.from(raw));
+  }
+
+  Future<PosApprovalRequest> _reviewApprovalRequest(
+    String id, {
+    required String action,
+    String? reviewNote,
+    String? reviewedById,
+    String? reviewedByName,
+    String? roleId,
+  }) async {
+    final response = await http
+        .post(
+          _posUri('/pos/approvals/${Uri.encodeComponent(id)}/$action'),
+          headers: _headers,
+          body: jsonEncode({
+            if (reviewNote != null) 'reviewNote': reviewNote,
+            if (reviewedById != null) 'reviewedById': reviewedById,
+            if (reviewedByName != null) 'reviewedByName': reviewedByName,
+            if (roleId != null) 'roleId': roleId,
+          }),
+        )
+        .timeout(const Duration(seconds: 30));
+
+    if (response.statusCode != 200) {
+      throw Exception(_readError(response, 'فشل مراجعة طلب الموافقة'));
+    }
+    final decoded = jsonDecode(response.body);
+    if (decoded is! Map) {
+      throw Exception('استجابة غير متوقعة من السيرفر');
+    }
+    final raw = decoded['request'];
+    if (raw is! Map) {
+      throw Exception('استجابة غير متوقعة من السيرفر');
+    }
+    return PosApprovalRequest.fromJson(Map<String, dynamic>.from(raw));
+  }
+
+  Future<({List<KitchenVoidLiability> liabilities, KitchenVoidLiabilitySummary summary})>
+      fetchKitchenVoidLiabilities({
+    String? shiftId,
+    String? cashierId,
+    String status = 'ALL',
+  }) async {
+    final response = await http
+        .get(
+          _posUri(
+            '/pos/kitchen-void-liabilities',
+            query: {
+              if (shiftId != null && shiftId.isNotEmpty) 'shiftId': shiftId,
+              if (cashierId != null && cashierId.isNotEmpty) 'cashierId': cashierId,
+              'status': status,
+            },
+          ),
+          headers: _headers,
+        )
+        .timeout(const Duration(seconds: 30));
+
+    if (response.statusCode != 200) {
+      throw Exception(_readError(response, 'فشل تحميل مسؤوليات إلغاء المطبخ'));
+    }
+    final decoded = jsonDecode(response.body);
+    if (decoded is! Map) {
+      return (
+        liabilities: const <KitchenVoidLiability>[],
+        summary: const KitchenVoidLiabilitySummary(),
+      );
+    }
+    final rows = decoded['liabilities'];
+    final summaryRaw = decoded['summary'];
+    final liabilities = rows is List
+        ? [
+            for (final row in rows)
+              if (row is Map)
+                KitchenVoidLiability.fromJson(Map<String, dynamic>.from(row)),
+          ]
+        : <KitchenVoidLiability>[];
+    final summary = summaryRaw is Map
+        ? KitchenVoidLiabilitySummary.fromJson(Map<String, dynamic>.from(summaryRaw))
+        : const KitchenVoidLiabilitySummary();
+    return (liabilities: liabilities, summary: summary);
+  }
+
+  Future<KitchenVoidLiability> reviewKitchenVoidLiability(
+    String id, {
+    required bool approve,
+    String? reviewNote,
+    String? reviewedById,
+    String? reviewedByName,
+    String? roleId,
+  }) async {
+    final action = approve ? 'approve' : 'reject';
+    final response = await http
+        .post(
+          _posUri('/pos/kitchen-void-liabilities/${Uri.encodeComponent(id)}/$action'),
+          headers: _headers,
+          body: jsonEncode({
+            if (reviewNote != null) 'reviewNote': reviewNote,
+            if (reviewedById != null) 'reviewedById': reviewedById,
+            if (reviewedByName != null) 'reviewedByName': reviewedByName,
+            if (roleId != null) 'roleId': roleId,
+          }),
+        )
+        .timeout(const Duration(seconds: 30));
+
+    if (response.statusCode != 200) {
+      throw Exception(_readError(response, 'فشل مراجعة مسؤولية الإلغاء'));
+    }
+    final decoded = jsonDecode(response.body);
+    if (decoded is! Map) {
+      throw Exception('استجابة غير متوقعة من السيرفر');
+    }
+    final raw = decoded['liability'];
+    if (raw is! Map) {
+      throw Exception('استجابة غير متوقعة من السيرفر');
+    }
+    return KitchenVoidLiability.fromJson(Map<String, dynamic>.from(raw));
+  }
+
+  bool canReviewRemoteApprovals() {
+    final roleId =
+        (cashierSession?.roleId ?? activeShift?.roleId ?? '').toLowerCase();
+    return roleId == 'manager' ||
+        roleId == 'shift_supervisor' ||
+        roleId == 'pos_admin' ||
+        AdminAuthService.instance.isRestaurantAdmin ||
+        AdminAuthService.instance.isSuperAdmin;
   }
 
   Future<void> voidOrder({

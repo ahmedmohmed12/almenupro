@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../../models/delivery_dispatch.dart';
@@ -7,7 +9,10 @@ import '../../../services/api_service.dart';
 import '../../../services/pos_operations_service.dart';
 import '../../../utils/order_channel_utils.dart';
 import '../../../utils/order_payment_utils.dart';
+import '../../../models/kitchen_void_liability.dart';
+import '../../../models/pos_approval_request.dart';
 import '../../../utils/pos_pending_orders.dart';
+import 'pos_remote_approval_panel.dart';
 
 Future<ShiftSession?> showPosCloseShiftDialog(
   BuildContext context, {
@@ -162,6 +167,9 @@ class _PosCloseShiftDialogState extends State<_PosCloseShiftDialog> {
     online: 0,
     orders: [],
   );
+  String? _approvedRequestId;
+  var _remoteRejected = false;
+  KitchenVoidLiabilitySummary _voidLiabilities = const KitchenVoidLiabilitySummary();
 
   @override
   void initState() {
@@ -189,17 +197,40 @@ class _PosCloseShiftDialogState extends State<_PosCloseShiftDialog> {
       final requestsFuture = ApiService.instance.fetchDeliveryRequests().catchError(
         (_) => <DeliveryDispatchRequest>[],
       );
-      final results = await Future.wait([liveFuture, ordersFuture, requestsFuture]);
+      Future<({List<KitchenVoidLiability> liabilities, KitchenVoidLiabilitySummary summary})>
+          loadLiabilities() async {
+        try {
+          return await PosOperationsService.instance.fetchKitchenVoidLiabilities(
+            shiftId: widget.shift.id,
+            cashierId: widget.shift.cashierId,
+          );
+        } catch (_) {
+          return (
+            liabilities: const <KitchenVoidLiability>[],
+            summary: const KitchenVoidLiabilitySummary(),
+          );
+        }
+      }
+
+      final liabilityFuture = loadLiabilities();
+      final results = await Future.wait([
+        liveFuture,
+        ordersFuture,
+        requestsFuture,
+        liabilityFuture,
+      ]);
       if (!mounted) return;
       final live = results[0] as ShiftSession?;
       final orders = results[1] as List<Order>;
       final requests = results[2] as List<DeliveryDispatchRequest>;
+      final liabilityResult = results[3] as ({List<KitchenVoidLiability> liabilities, KitchenVoidLiabilitySummary summary});
       final shift = live ?? widget.shift;
       setState(() {
         _shift = shift;
         // Prefer server live summary (includes channel breakdown).
         _summary = live?.summary ?? _summarizeOrders(orders, shift, requests);
         _pending = pendingOrdersForShift(orders, shift.id);
+        _voidLiabilities = liabilityResult.summary;
         _loadingSummary = false;
       });
     } catch (_) {
@@ -231,11 +262,12 @@ class _PosCloseShiftDialogState extends State<_PosCloseShiftDialog> {
         );
         return;
       }
-      if (shiftCloseGuardCashierOnly(roleId)) {
+      if (shiftCloseGuardCashierOnly(roleId) &&
+          (_approvedRequestId ?? '').isEmpty) {
         final pin = _supervisorPinController.text.trim();
         if (pin.length < 4) {
           setState(
-            () => _error = 'أدخل PIN مشرف وردية أو مدير POS',
+            () => _error = 'أدخل PIN مشرف وردية أو مدير POS أو انتظر الموافقة عن بُعد',
           );
           return;
         }
@@ -263,10 +295,13 @@ class _PosCloseShiftDialogState extends State<_PosCloseShiftDialog> {
         cashierName: _shift.cashierName,
         openingFloat: _shift.openingFloat,
         roleId: roleId,
-        managerPin: _pending.hasPending && shiftCloseGuardCashierOnly(roleId)
+        managerPin: _pending.hasPending &&
+                shiftCloseGuardCashierOnly(roleId) &&
+                (_approvedRequestId ?? '').isEmpty
             ? _supervisorPinController.text.trim()
             : null,
         pendingCloseReason: pendingReason,
+        approvalRequestId: _approvedRequestId,
       );
       if (!mounted) return;
       Navigator.of(context).pop(closed);
@@ -364,6 +399,44 @@ class _PosCloseShiftDialogState extends State<_PosCloseShiftDialog> {
                   '${expectedCash.toStringAsFixed(3)} د.ك',
                 ),
               ],
+              if (!_loadingSummary &&
+                  (_voidLiabilities.hasPending ||
+                      _voidLiabilities.hasDebt ||
+                      _voidLiabilities.approvedAmount > 0)) ...[
+                const SizedBox(height: 12),
+                Material(
+                  color: const Color(0xFFECEFF1),
+                  borderRadius: BorderRadius.circular(10),
+                  child: Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'مسؤوليات إلغاء المطبخ (الوردية)',
+                          style: TextStyle(fontWeight: FontWeight.w800),
+                        ),
+                        Text(
+                          'معلّقة: ${_voidLiabilities.pendingCount} '
+                          '(${_voidLiabilities.pendingAmount.toStringAsFixed(3)} د.ك)',
+                        ),
+                        Text(
+                          'معتمدة (إعفاء): ${_voidLiabilities.approvedAmount.toStringAsFixed(3)} د.ك',
+                        ),
+                        Text(
+                          'مديونية مرفوضة: ${_voidLiabilities.rejectedAmount.toStringAsFixed(3)} د.ك',
+                          style: const TextStyle(fontWeight: FontWeight.w700),
+                        ),
+                        if (_voidLiabilities.hasPending)
+                          const Text(
+                            'تبقى مسؤوليات معلّقة — راجعها من قائمة «مسؤوليات إلغاء المطبخ».',
+                            style: TextStyle(fontSize: 12),
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
               if (!_loadingSummary && _pending.hasPending) ...[
                 const SizedBox(height: 12),
                 Material(
@@ -397,25 +470,13 @@ class _PosCloseShiftDialogState extends State<_PosCloseShiftDialog> {
                           const Padding(
                             padding: EdgeInsets.only(top: 8),
                             child: Text(
-                              'الكاشير: PIN مشرف/مدير + سبب الإغلاق مطلوبان.',
+                              'الكاشير: PIN أو طلب موافقة عن بُعد + سبب الإغلاق مطلوبان.',
                             ),
                           ),
                       ],
                     ),
                   ),
                 ),
-                if (cashierOnly) ...[
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: _supervisorPinController,
-                    keyboardType: TextInputType.number,
-                    obscureText: true,
-                    decoration: const InputDecoration(
-                      labelText: 'PIN مشرف وردية / مدير POS',
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-                ],
                 const SizedBox(height: 12),
                 TextField(
                   controller: _pendingReasonController,
@@ -428,6 +489,63 @@ class _PosCloseShiftDialogState extends State<_PosCloseShiftDialog> {
                     border: const OutlineInputBorder(),
                   ),
                 ),
+                if (cashierOnly) ...[
+                  const SizedBox(height: 12),
+                  if ((_approvedRequestId ?? '').isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: Text(
+                        'تمت الموافقة عن بُعد ($_approvedRequestId)',
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF1B5E20),
+                        ),
+                      ),
+                    ),
+                  if (_remoteRejected)
+                    const Padding(
+                      padding: EdgeInsets.only(bottom: 8),
+                      child: Text(
+                        'تم رفض طلب الموافقة عن بُعد',
+                        style: TextStyle(color: Colors.red),
+                      ),
+                    ),
+                  PosRemoteApprovalPanel(
+                    approvalType: PosApprovalTypes.closeShiftPendingOrders,
+                    reason: _pendingReasonController.text.trim().isNotEmpty
+                        ? _pendingReasonController.text.trim()
+                        : 'إغلاق وردية مع طلبات معلّقة',
+                    shiftId: _shift.id,
+                    payload: {
+                      'shiftId': _shift.id,
+                      'pendingTotal': _pending.total,
+                    },
+                    onApproved: (request) {
+                      setState(() {
+                        _approvedRequestId = request.id;
+                        _remoteRejected = false;
+                        if (_pendingReasonController.text.trim().isEmpty) {
+                          _pendingReasonController.text = request.reason;
+                        }
+                      });
+                      unawaited(_submit());
+                    },
+                    onRejected: () => setState(() => _remoteRejected = true),
+                    onExpired: () => setState(
+                      () => _error = 'انتهت صلاحية طلب الموافقة عن بُعد',
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: _supervisorPinController,
+                    keyboardType: TextInputType.number,
+                    obscureText: true,
+                    decoration: const InputDecoration(
+                      labelText: 'PIN مشرف وردية / مدير POS (حضورياً)',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                ],
               ],
               const SizedBox(height: 12),
               TextField(
@@ -527,6 +645,16 @@ Future<void> showShiftSummaryDialog(BuildContext context, ShiftSession shift) {
                   'الفرق (${summary.discrepancyLabelAr})',
                   '${summary.discrepancy.toStringAsFixed(3)} د.ك',
                 ),
+                if (summary.approvedKitchenVoidAmount > 0)
+                  _summaryRow(
+                    'إلغاءات مطبخ معتمدة (إعفاء)',
+                    '${summary.approvedKitchenVoidAmount.toStringAsFixed(3)} د.ك',
+                  ),
+                if (summary.cashierVoidDebt > 0)
+                  _summaryRow(
+                    'مديونية إلغاء مطبخ مرفوضة',
+                    '${summary.cashierVoidDebt.toStringAsFixed(3)} د.ك',
+                  ),
               ],
             ],
           ),

@@ -597,6 +597,9 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
         phone: contact.phone,
         managerPin: _pendingKitchenOverride?.managerPin,
         kitchenVoidReason: _pendingKitchenOverride?.reason,
+        approvalRequestId: _pendingKitchenOverride?.approvalRequestId,
+        cartItemId: _pendingKitchenOverride?.cartItemId,
+        shiftId: PosOperationsService.instance.activeShift?.id,
         performedById: cashier?.staff.id,
         performedByName: cashier?.staff.name,
       );
@@ -925,6 +928,15 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
             ? 'إزالة صنف أُرسل للمطبخ'
             : 'تقليل كمية صنف أُرسل للمطبخ',
         entityId: widget.dineInTable?.id ?? _settlingHeldOrder?.id,
+        orderId: _settlingHeldOrder?.id ??
+            (widget.dineInTable?.activeSession?.kitchenOrderIds.isNotEmpty ==
+                    true
+                ? widget.dineInTable!.activeSession!.kitchenOrderIds.first
+                : widget.dineInTable?.id),
+        cartItemId: item.id,
+        previousQuantity: item.quantity,
+        nextQuantity: quantity,
+        shiftId: PosOperationsService.instance.activeShift?.id,
       );
       if (auth == null) return;
       _pendingKitchenOverride = auth;
@@ -946,6 +958,12 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
           itemName: locked.map((e) => e.menuItem.name).join('، '),
           actionLabel: 'تفريغ سلة تحتوي أصنافاً أُرسلت للمطبخ',
           entityId: widget.dineInTable?.id ?? _settlingHeldOrder?.id,
+          orderId: _settlingHeldOrder?.id ??
+            (widget.dineInTable?.activeSession?.kitchenOrderIds.isNotEmpty ==
+                    true
+                ? widget.dineInTable!.activeSession!.kitchenOrderIds.first
+                : widget.dineInTable?.id),
+          shiftId: PosOperationsService.instance.activeShift?.id,
         );
         if (auth == null) return;
         _pendingKitchenOverride = auth;
@@ -1429,6 +1447,8 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
         cashierName: shift.cashierName,
         managerPin: _pendingKitchenOverride?.managerPin,
         kitchenVoidReason: _pendingKitchenOverride?.reason,
+        approvalRequestId: _pendingKitchenOverride?.approvalRequestId,
+        cartItemId: _pendingKitchenOverride?.cartItemId,
       );
       _pendingKitchenOverride = null;
       if (autoPrint) {

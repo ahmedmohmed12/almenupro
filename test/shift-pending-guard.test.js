@@ -9,7 +9,7 @@ const {
 
 const shift = { id: 'shift_a', restaurantId: 'r1' };
 
-test('shift close allowed when no pending orders', () => {
+test('shift close allowed when no pending orders', async () => {
   const orders = [
     {
       id: 'o1',
@@ -23,7 +23,7 @@ test('shift close allowed when no pending orders', () => {
   ];
   const summary = summarizeShiftPendingOrders(orders, shift.id);
   assert.equal(summary.total, 0);
-  const guard = enforceShiftClosePendingGuard({
+  const guard = await enforceShiftClosePendingGuard({
     shift,
     orders,
     body: {},
@@ -38,7 +38,7 @@ test('shift close allowed when no pending orders', () => {
   assert.equal(guard.cleared, true);
 });
 
-test('cashier blocked without manager pin when pickup pending', () => {
+test('cashier blocked without manager pin when pickup pending', async () => {
   const orders = [
     {
       id: 'held',
@@ -53,7 +53,7 @@ test('cashier blocked without manager pin when pickup pending', () => {
   const summary = summarizeShiftPendingOrders(orders, shift.id);
   assert.equal(summary.total, 1);
   assert.equal(summary.pickup, 1);
-  const guard = enforceShiftClosePendingGuard({
+  const guard = await enforceShiftClosePendingGuard({
     shift,
     orders,
     body: { roleId: 'cashier' },
@@ -68,7 +68,7 @@ test('cashier blocked without manager pin when pickup pending', () => {
   assert.equal(guard.code, 'PENDING_ORDERS_APPROVAL_REQUIRED');
 });
 
-test('supervisor can close pending with reason only', () => {
+test('supervisor can close pending with reason only', async () => {
   const orders = [
     {
       id: 'table',
@@ -80,7 +80,7 @@ test('supervisor can close pending with reason only', () => {
       orderSource: 'pos-dine-in',
     },
   ];
-  const guard = enforceShiftClosePendingGuard({
+  const guard = await enforceShiftClosePendingGuard({
     shift,
     orders,
     body: {

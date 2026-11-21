@@ -15,7 +15,9 @@ enum PosRoute {
   reports('/admin/pos/reports'),
   voidOrders('/admin/pos/void-orders'),
   staff('/admin/pos/staff'),
-  menu('/admin/pos/menu');
+  menu('/admin/pos/menu'),
+  approvals('/admin/pos/approvals'),
+  kitchenVoidLiabilities('/admin/pos/kitchen-void-liabilities');
 
   const PosRoute(this.path);
 
@@ -145,6 +147,20 @@ abstract final class PosMenuCatalog {
       route: PosRoute.voidOrders,
     ),
     PosSidebarMenuItem(
+      id: 'remote_approvals',
+      icon: Icons.verified_user_outlined,
+      label: 'طلبات الموافقة عن بُعد',
+      requiredPermission: PosPermissionKeys.managerOverride,
+      route: PosRoute.approvals,
+    ),
+    PosSidebarMenuItem(
+      id: 'kitchen_void_liabilities',
+      icon: Icons.rule_folder_outlined,
+      label: 'مسؤوليات إلغاء المطبخ',
+      requiredPermission: PosPermissionKeys.processOrders,
+      route: PosRoute.kitchenVoidLiabilities,
+    ),
+    PosSidebarMenuItem(
       id: 'manage_staff',
       icon: Icons.groups_outlined,
       label: 'إدارة الموظفين / إضافة كاشير',
@@ -186,6 +202,9 @@ abstract final class PosMenuCatalog {
       }
       if (item.requiredPermission == PosPermissionKeys.receiveOnlineOrders) {
         return pos.allows(PosPermissionKeys.receiveOnlineOrders);
+      }
+      if (item.route == PosRoute.approvals) {
+        return pos.canReviewRemoteApprovals();
       }
       return pos.allows(item.requiredPermission);
     }).toList(growable: false);

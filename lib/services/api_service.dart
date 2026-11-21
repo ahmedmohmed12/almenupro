@@ -892,6 +892,8 @@ class ApiService {
     String? cashierName,
     String? managerPin,
     String? kitchenVoidReason,
+    String? approvalRequestId,
+    String? cartItemId,
   }) async {
     final response = await http
         .patch(
@@ -909,6 +911,9 @@ class ApiService {
             if (managerPin != null && managerPin.isNotEmpty) 'managerPin': managerPin,
             if (kitchenVoidReason != null && kitchenVoidReason.isNotEmpty)
               'kitchenVoidReason': kitchenVoidReason,
+            if (approvalRequestId != null && approvalRequestId.isNotEmpty)
+              'approvalRequestId': approvalRequestId,
+            if (cartItemId != null && cartItemId.isNotEmpty) 'cartItemId': cartItemId,
           }),
         )
         .timeout(_statusTimeout);

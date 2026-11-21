@@ -214,6 +214,8 @@ class OrdersService {
     String? cashierName,
     String? managerPin,
     String? kitchenVoidReason,
+    String? approvalRequestId,
+    String? cartItemId,
   }) async {
     final subtotal = cartItems.fold<double>(
       0,
@@ -242,6 +244,8 @@ class OrdersService {
         cashierName: cashierName,
         managerPin: managerPin,
         kitchenVoidReason: kitchenVoidReason,
+        approvalRequestId: approvalRequestId,
+        cartItemId: cartItemId,
       );
       final resolved = saved ?? settled;
       OrdersDemoService.replaceVisibleOrder(resolved);

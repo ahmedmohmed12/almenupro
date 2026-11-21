@@ -545,6 +545,18 @@ function posDeps() {
       current.unshift(...events);
       await extraStore.auditEvents.write(current.slice(0, 5000));
     },
+    readPosApprovalRequests: () => extraStore.posApprovalRequests.read(),
+    writePosApprovalRequests: (value) => extraStore.posApprovalRequests.write(value),
+    resolveRemoteApproval: (opts) => {
+      const { resolveRemoteApproval } = require('./lib/posApprovalRequests');
+      return resolveRemoteApproval({
+        ...opts,
+        readApprovalRequests: () => extraStore.posApprovalRequests.read(),
+        writeApprovalRequests: (value) => extraStore.posApprovalRequests.write(value),
+      });
+    },
+    readKitchenVoidLiabilities: () => extraStore.kitchenVoidLiabilities.read(),
+    writeKitchenVoidLiabilities: (value) => extraStore.kitchenVoidLiabilities.write(value),
     rememberMenuProCustomer,
   };
 }
@@ -2226,6 +2238,25 @@ async function routeRequest(req, res, url, pathname) {
           if (lock.auditEvents?.length) {
             await posDeps().appendAuditEvents(lock.auditEvents);
           }
+          const { recordKitchenVoidLiabilities } = require('./lib/posKitchenVoidRecord');
+          await recordKitchenVoidLiabilities(posDeps(), {
+            lock,
+            previousItems: duplicate.items || [],
+            restaurantId: restaurantIdForLock,
+            body,
+            auth,
+            context: {
+              entityType: 'order',
+              entityId: duplicate.id,
+              orderId: duplicate.id,
+              orderType: duplicate.orderType || duplicate.order_type || 'pickup',
+              shiftId:
+                body.shiftId ||
+                body.shift_id ||
+                duplicate.shiftId ||
+                duplicate.shift_id,
+            },
+          });
         }
         const merged = preferNewerOrder(duplicate, stampOfflineTx({ ...duplicate, ...body }, body));
         if (Array.isArray(merged.items)) {

@@ -81,6 +81,9 @@ class DiningTablesService {
     String? waiterNote,
     String? managerPin,
     String? kitchenVoidReason,
+    String? approvalRequestId,
+    String? cartItemId,
+    String? shiftId,
     String? performedById,
     String? performedByName,
   }) async {
@@ -91,6 +94,10 @@ class DiningTablesService {
           if (managerPin != null && managerPin.isNotEmpty) 'managerPin': managerPin,
           if (kitchenVoidReason != null && kitchenVoidReason.isNotEmpty)
             'kitchenVoidReason': kitchenVoidReason,
+          if (approvalRequestId != null && approvalRequestId.isNotEmpty)
+            'approvalRequestId': approvalRequestId,
+          if (cartItemId != null && cartItemId.isNotEmpty) 'cartItemId': cartItemId,
+          if (shiftId != null && shiftId.isNotEmpty) 'shiftId': shiftId,
           if (performedById != null) 'performedById': performedById,
           if (performedByName != null) 'performedByName': performedByName,
           if (customerName != null) 'customerName': customerName,

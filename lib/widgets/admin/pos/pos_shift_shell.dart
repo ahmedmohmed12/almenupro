@@ -22,6 +22,8 @@ import '../admin_pos_panel.dart';
 import 'pos_add_staff_dialog.dart';
 import 'pos_close_shift_dialog.dart';
 import 'pos_layout.dart';
+import 'pos_approvals_page.dart';
+import 'pos_kitchen_void_liabilities_page.dart';
 import 'pos_menu_catalog.dart';
 import 'pos_menu_page.dart';
 import 'pos_driver_handoff_page.dart';
@@ -417,6 +419,8 @@ class _PosShiftShellState extends State<PosShiftShell> {
       PosRoute.voidOrders => const PosVoidOrdersPage(),
       PosRoute.staff => const PosStaffPage(),
       PosRoute.menu => const PosMenuPage(),
+      PosRoute.approvals => const PosApprovalsPage(),
+      PosRoute.kitchenVoidLiabilities => const PosKitchenVoidLiabilitiesPage(),
       PosRoute.dineIn => ColoredBox(
         color: const Color(0xFFF4F6F8),
         child: PosDineInPage(

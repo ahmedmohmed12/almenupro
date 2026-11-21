@@ -1,14 +1,21 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../../models/pos_approval_request.dart';
 import '../../../services/pos_operations_service.dart';
 import '../../../utils/kitchen_dispatch.dart';
+import 'pos_remote_approval_panel.dart';
 
 Future<KitchenOverrideAuthorization?> showPosKitchenLineOverrideDialog(
   BuildContext context, {
   required String itemName,
   required String actionLabel,
   String? entityId,
+  String? orderId,
+  String? cartItemId,
+  int? previousQuantity,
+  int? nextQuantity,
+  String? shiftId,
 }) {
   return showDialog<KitchenOverrideAuthorization>(
     context: context,
@@ -17,6 +24,11 @@ Future<KitchenOverrideAuthorization?> showPosKitchenLineOverrideDialog(
       itemName: itemName,
       actionLabel: actionLabel,
       entityId: entityId,
+      orderId: orderId,
+      cartItemId: cartItemId,
+      previousQuantity: previousQuantity,
+      nextQuantity: nextQuantity,
+      shiftId: shiftId,
     ),
   );
 }
@@ -26,11 +38,21 @@ class _KitchenLineOverrideDialog extends StatefulWidget {
     required this.itemName,
     required this.actionLabel,
     this.entityId,
+    this.orderId,
+    this.cartItemId,
+    this.previousQuantity,
+    this.nextQuantity,
+    this.shiftId,
   });
 
   final String itemName;
   final String actionLabel;
   final String? entityId;
+  final String? orderId;
+  final String? cartItemId;
+  final int? previousQuantity;
+  final int? nextQuantity;
+  final String? shiftId;
 
   @override
   State<_KitchenLineOverrideDialog> createState() =>
@@ -61,10 +83,45 @@ class _KitchenLineOverrideDialogState extends State<_KitchenLineOverrideDialog> 
     return _reason;
   }
 
+  Map<String, dynamic> get _approvalPayload => {
+        'orderId': widget.orderId ?? widget.entityId,
+        'cartItemId': widget.cartItemId,
+        'itemName': widget.itemName,
+        if (widget.previousQuantity != null)
+          'previousQuantity': widget.previousQuantity,
+        if (widget.nextQuantity != null) 'nextQuantity': widget.nextQuantity,
+        'actionLabel': widget.actionLabel,
+      };
+
+  void _completeRemote(PosApprovalRequest request) {
+    Navigator.of(context).pop(
+      KitchenOverrideAuthorization(
+        reason: _resolvedReason,
+        approvalRequestId: request.id,
+        cartItemId: widget.cartItemId,
+        authorizedById: request.reviewedById,
+        authorizedByName: request.reviewedByName,
+      ),
+    );
+  }
+
+  Future<void> _submitConditional() async {
+    if (_otherSelected && _otherReasonController.text.trim().isEmpty) {
+      setState(() => _error = 'أدخل السبب');
+      return;
+    }
+    Navigator.of(context).pop(
+      KitchenOverrideAuthorization(
+        reason: _resolvedReason,
+        cartItemId: widget.cartItemId,
+      ),
+    );
+  }
+
   Future<void> _submit() async {
     final pin = _pinController.text.trim();
     if (pin.length < 4) {
-      setState(() => _error = 'أدخل رمز PIN للمشرف');
+      setState(() => _error = 'أدخل رمز PIN للمشرف أو استخدم التأكيد مع مسؤولية معلّقة');
       return;
     }
     if (_otherSelected && _otherReasonController.text.trim().isEmpty) {
@@ -97,6 +154,7 @@ class _KitchenLineOverrideDialogState extends State<_KitchenLineOverrideDialog> 
           reason: _resolvedReason,
           authorizedById: result.authorizedById,
           authorizedByName: result.authorizedByName,
+          cartItemId: widget.cartItemId,
         ),
       );
     } catch (error) {
@@ -109,6 +167,9 @@ class _KitchenLineOverrideDialogState extends State<_KitchenLineOverrideDialog> 
 
   @override
   Widget build(BuildContext context) {
+    final shiftId =
+        widget.shiftId ?? PosOperationsService.instance.activeShift?.id ?? '';
+
     return AlertDialog(
       title: const Text('تفويض مشرف — صنف بالمطبخ'),
       content: SingleChildScrollView(
@@ -159,13 +220,30 @@ class _KitchenLineOverrideDialogState extends State<_KitchenLineOverrideDialog> 
               ),
               const SizedBox(height: 8),
             ],
+            const Divider(),
+            PosRemoteApprovalPanel(
+              approvalType: PosApprovalTypes.voidSentItem,
+              reason: _otherSelected
+                  ? _otherReasonController.text.trim()
+                  : (KitchenVoidReason.options[_reason] ?? _reason),
+              shiftId: shiftId,
+              payload: _approvalPayload,
+              onApproved: _completeRemote,
+              onRejected: () => setState(
+                () => _error = 'رفض المشرف طلب الموافقة عن بُعد',
+              ),
+              onExpired: () => setState(
+                () => _error = 'انتهت صلاحية طلب الموافقة',
+              ),
+            ),
+            const Divider(),
             TextField(
               controller: _pinController,
               obscureText: true,
               keyboardType: TextInputType.number,
               inputFormatters: [FilteringTextInputFormatter.digitsOnly],
               decoration: InputDecoration(
-                labelText: 'PIN المشرف / مدير الفرع',
+                labelText: 'PIN المشرف / مدير الفرع (حضورياً)',
                 border: const OutlineInputBorder(),
                 errorText: _error,
               ),
@@ -179,6 +257,10 @@ class _KitchenLineOverrideDialogState extends State<_KitchenLineOverrideDialog> 
           onPressed: _submitting ? null : () => Navigator.of(context).pop(),
           child: const Text('إلغاء'),
         ),
+        FilledButton.tonal(
+          onPressed: _submitting ? null : _submitConditional,
+          child: const Text('تأكيد (مسؤولية معلّقة)'),
+        ),
         FilledButton(
           onPressed: _submitting ? null : _submit,
           child: _submitting
@@ -187,7 +269,7 @@ class _KitchenLineOverrideDialogState extends State<_KitchenLineOverrideDialog> 
                   height: 18,
                   child: CircularProgressIndicator(strokeWidth: 2),
                 )
-              : const Text('تأكيد'),
+              : const Text('تأكيد PIN'),
         ),
       ],
     );

@@ -24,6 +24,8 @@ class ShiftSummary {
     this.websiteCount = 0,
     this.posSales = 0,
     this.posCount = 0,
+    this.cashierVoidDebt = 0,
+    this.approvedKitchenVoidAmount = 0,
   });
 
   final int orderCount;
@@ -50,6 +52,8 @@ class ShiftSummary {
   final int websiteCount;
   final double posSales;
   final int posCount;
+  final double cashierVoidDebt;
+  final double approvedKitchenVoidAmount;
 
   String get discrepancyLabelAr => switch (discrepancyType) {
         'shortage' => 'عجز',
@@ -103,6 +107,10 @@ class ShiftSummary {
       websiteCount: asInt(const ['websiteCount', 'website_count']),
       posSales: asDouble(const ['posSales', 'pos_sales']),
       posCount: asInt(const ['posCount', 'pos_count']),
+      cashierVoidDebt: asDouble(const ['cashierVoidDebt', 'cashier_void_debt']),
+      approvedKitchenVoidAmount: asDouble(
+        const ['approvedKitchenVoidAmount', 'approved_kitchen_void_amount'],
+      ),
     );
   }
 
@@ -131,6 +139,8 @@ class ShiftSummary {
         'websiteCount': websiteCount,
         'posSales': posSales,
         'posCount': posCount,
+        'cashierVoidDebt': cashierVoidDebt,
+        'approvedKitchenVoidAmount': approvedKitchenVoidAmount,
       };
 }
 
