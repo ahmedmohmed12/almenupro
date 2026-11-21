@@ -2478,11 +2478,11 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
   }
 
   Widget _buildStickyCart({bool compact = false}) {
-    final s = AppStrings.of(context);
     final pad = compact ? 10.0 : 12.0;
     final commission = _platformSelection.isExternal
         ? _platformSelection.estimatedCommission(_grandTotal)
         : null;
+    final s = AppStrings.of(context);
     return ColoredBox(
       color: PosTheme.surface,
       child: Form(
@@ -2490,136 +2490,152 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            if (!_isDineIn)
-              Padding(
-                padding: EdgeInsets.fromLTRB(pad, 8, pad, 0),
-                child: PosPlatformSelector(
-                  platforms: _salesPlatforms,
-                  selection: _platformSelection,
-                  orderTotal: _grandTotal,
-                  externalOrderIdController: _externalOrderIdController,
-                  deliveryFeeController: _platformDeliveryFeeController,
-                  showSourceToggle: false,
-                  compactHeader: true,
-                  onChanged: (next) {
-                    setState(() {
-                      _platformSelection = next;
-                      if (next.isExternal) {
-                        _orderMode = 'platforms';
-                      } else if (_isPickup &&
-                          (_orderMode == 'platforms' || _orderMode == 'local')) {
-                        _orderMode = 'takeaway';
-                      }
-                    });
-                    WidgetsBinding.instance.addPostFrameCallback((_) {
-                      if (!mounted) return;
-                      _formKey.currentState?.reset();
-                    });
-                  },
-                ),
-              ),
-            Padding(
-              padding: EdgeInsets.fromLTRB(pad, 8, pad, 0),
-              child: _buildCustomerFields(),
-            ),
-            if (!_isDineIn &&
-                !_isPickup &&
-                (_orderMode == 'delivery' || _orderMode == 'scheduled'))
-              Padding(
-                padding: EdgeInsets.fromLTRB(pad, 8, pad, 0),
-                child: _buildDeliverySummary(),
-              ),
-            if (_isDineIn)
-              Padding(
-                padding: EdgeInsets.fromLTRB(pad, 8, pad, 0),
-                child: Text(
-                  '${s.tr('طلب صالة', 'Dine-in order')} — ${widget.dineInTable!.displayName}',
-                  style: const TextStyle(fontWeight: FontWeight.w700),
-                ),
-              ),
             Expanded(
-              child: Padding(
-                padding: EdgeInsets.fromLTRB(pad, 10, pad, 6),
-                child: _buildCartBody(compact: compact),
-              ),
-            ),
-            if (commission != null && commission > 0)
-              Padding(
-                padding: EdgeInsets.fromLTRB(pad, 0, pad, 6),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 8,
-                  ),
-                  decoration: BoxDecoration(
-                    color: PosTheme.orangeSoft,
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Text(
-                    'عمولة المنصة: ${commission.toStringAsFixed(3)} د.ك',
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w700,
-                      color: PosTheme.orange,
-                      fontSize: 12.5,
+              child: ListView(
+                padding: EdgeInsets.fromLTRB(pad, 8, pad, 8),
+                children: [
+                  if (!_isDineIn) ...[
+                    PosPlatformSelector(
+                      platforms: _salesPlatforms,
+                      selection: _platformSelection,
+                      orderTotal: _grandTotal,
+                      externalOrderIdController: _externalOrderIdController,
+                      deliveryFeeController: _platformDeliveryFeeController,
+                      showSourceToggle: false,
+                      compactHeader: true,
+                      onChanged: (next) {
+                        setState(() {
+                          _platformSelection = next;
+                          if (next.isExternal) {
+                            _orderMode = 'platforms';
+                          } else if (_isPickup &&
+                              (_orderMode == 'platforms' ||
+                                  _orderMode == 'local')) {
+                            _orderMode = 'takeaway';
+                          }
+                        });
+                        WidgetsBinding.instance.addPostFrameCallback((_) {
+                          if (!mounted) return;
+                          _formKey.currentState?.reset();
+                        });
+                      },
+                    ),
+                    const SizedBox(height: 8),
+                  ],
+                  _buildCustomerFields(),
+                  if (!_isDineIn &&
+                      !_isPickup &&
+                      (_orderMode == 'delivery' || _orderMode == 'scheduled')) ...[
+                    const SizedBox(height: 8),
+                    _buildDeliverySummary(),
+                  ],
+                  if (_isDineIn) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      '${s.tr('طلب صالة', 'Dine-in order')} — ${widget.dineInTable!.displayName}',
+                      style: const TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                  ],
+                  const SizedBox(height: 10),
+                  ..._buildCartListChildren(compact: compact),
+                  if (commission != null && commission > 0) ...[
+                    const SizedBox(height: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 8,
+                      ),
+                      decoration: BoxDecoration(
+                        color: PosTheme.orangeSoft,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Text(
+                        'عمولة المنصة: ${commission.toStringAsFixed(3)} د.ك',
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w700,
+                          color: PosTheme.orange,
+                          fontSize: 12.5,
+                        ),
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 8),
+                  DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: PosTheme.surfaceAlt,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: PosTheme.border),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.all(10),
+                      child: _buildCheckoutSummarySection(compact: compact),
                     ),
                   ),
-                ),
+                ],
               ),
-            _buildCheckoutFooter(compact: compact),
+            ),
+            _buildCheckoutPinnedActions(compact: compact),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildCartBody({bool compact = false}) {
+  List<Widget> _buildCartListChildren({bool compact = false}) {
     final s = AppStrings.of(context);
     if (_cart.isEmpty) {
-      return Container(
-        decoration: PosTheme.card(color: PosTheme.surfaceAlt),
-        child: Center(
-          child: Padding(
-            padding: EdgeInsets.all(compact ? 14 : 24),
-            child: Text(
-              s.tr(
-                'السلة فارغة — اختر أصنافاً من المنيو',
-                'The cart is empty — select items from the menu',
-              ),
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: PosTheme.textMuted,
-                fontSize: compact ? 12.5 : 14,
+      return [
+        Container(
+          constraints: BoxConstraints(minHeight: compact ? 100 : 140),
+          decoration: PosTheme.card(color: PosTheme.surfaceAlt),
+          child: Center(
+            child: Padding(
+              padding: EdgeInsets.all(compact ? 14 : 24),
+              child: Text(
+                s.tr(
+                  'السلة فارغة — اختر أصنافاً من المنيو',
+                  'The cart is empty — select items from the menu',
+                ),
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: PosTheme.textMuted,
+                  fontSize: compact ? 12.5 : 14,
+                ),
               ),
             ),
           ),
         ),
-      );
+      ];
     }
 
-    return ListView(
-      children: [
-        Align(
-          alignment: AlignmentDirectional.centerEnd,
-          child: TextButton.icon(
-            onPressed: () => unawaited(_clearCart()),
-            icon: const Icon(Icons.delete_outline_rounded, size: 16),
-            label: Text(s.tr('تفريغ F8', 'Clear F8')),
-            style: TextButton.styleFrom(
-              visualDensity: VisualDensity.compact,
-              foregroundColor: PosTheme.textMuted,
-              padding: EdgeInsets.zero,
-            ),
+    return [
+      Align(
+        alignment: AlignmentDirectional.centerEnd,
+        child: TextButton.icon(
+          onPressed: () => unawaited(_clearCart()),
+          icon: const Icon(Icons.delete_outline_rounded, size: 16),
+          label: Text(s.tr('تفريغ F8', 'Clear F8')),
+          style: TextButton.styleFrom(
+            visualDensity: VisualDensity.compact,
+            foregroundColor: PosTheme.textMuted,
+            padding: EdgeInsets.zero,
           ),
         ),
-        ..._cart.map(
-          (item) => PosCartLine(
-            item: item,
-            onIncrease: () => unawaited(_updateCartQuantity(item.id, item.quantity + 1)),
-            onDecrease: () => unawaited(_updateCartQuantity(item.id, item.quantity - 1)),
-          ),
+      ),
+      ..._cart.map(
+        (item) => PosCartLine(
+          item: item,
+          onIncrease: () =>
+              unawaited(_updateCartQuantity(item.id, item.quantity + 1)),
+          onDecrease: () =>
+              unawaited(_updateCartQuantity(item.id, item.quantity - 1)),
         ),
-      ],
-    );
+      ),
+    ];
+  }
+
+  Widget _buildCartBody({bool compact = false}) {
+    return ListView(children: _buildCartListChildren(compact: compact));
   }
 
   Widget _buildCustomerFields() {
@@ -3173,24 +3189,13 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
     );
   }
 
-  Widget _buildCheckoutFooter({bool compact = false}) {
+  /// Totals + payment mode (scrolls with cart; keeps vertical space for actions).
+  Widget _buildCheckoutSummarySection({bool compact = false}) {
     final s = AppStrings.of(context);
-    final btnH = compact ? 56.0 : 62.0;
-    return Container(
-      padding: EdgeInsets.fromLTRB(
-        compact ? 10 : 12,
-        compact ? 8 : 10,
-        compact ? 10 : 12,
-        compact ? 10 : 12,
-      ),
-      decoration: const BoxDecoration(
-        color: PosTheme.surfaceAlt,
-        border: Border(top: BorderSide(color: PosTheme.border)),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
           Row(
             children: [
               Expanded(
@@ -3322,122 +3327,146 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
             ),
             const SizedBox(height: 10),
           ],
-          const SizedBox(height: 8),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Expanded(
-                child: _PaymentModeButton(
-                  label: s.tr(
-                    'تقسيم دفع (كاش + كي نت)',
-                    'Split (Cash + K-Net)',
-                  ),
-                  icon: Icons.call_split,
-                  color: const Color(0xFF7C3AED),
-                  compact: true,
-                  selected: _payMode == PosPayMode.split,
-                  onTap: () => setState(() {
-                    _payMode = PosPayMode.split;
-                    _syncPaymentMethodFromMode();
-                    if (_splitCashController.text.trim().isEmpty) {
-                      _splitCashController.text = '0.000';
-                      _splitKnetController.text =
-                          _grandTotal.toStringAsFixed(3);
-                    }
-                  }),
-                ),
-              ),
-              if (_canHoldLocalPickup) ...[
-                const SizedBox(width: 8),
+      ],
+    );
+  }
+
+  /// Split / hold + kitchen / invoice — pinned so flex overflow cannot clip them.
+  Widget _buildCheckoutPinnedActions({bool compact = false}) {
+    final s = AppStrings.of(context);
+    final btnH = compact ? 56.0 : 62.0;
+    return Material(
+      color: PosTheme.surfaceAlt,
+      child: Container(
+        padding: EdgeInsets.fromLTRB(
+          compact ? 10 : 12,
+          compact ? 8 : 10,
+          compact ? 10 : 12,
+          compact ? 10 : 12,
+        ),
+        decoration: const BoxDecoration(
+          border: Border(top: BorderSide(color: PosTheme.border)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
                 Expanded(
-                  child: OutlinedButton.icon(
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: PosTheme.headerMaroon,
-                      side: const BorderSide(color: PosTheme.headerMaroon),
-                      minimumSize: const Size.fromHeight(44),
-                      padding: const EdgeInsets.symmetric(horizontal: 6),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
+                  child: _PaymentModeButton(
+                    label: s.tr(
+                      'تقسيم دفع (كاش + كي نت)',
+                      'Split (Cash + K-Net)',
+                    ),
+                    icon: Icons.call_split,
+                    color: const Color(0xFF7C3AED),
+                    compact: true,
+                    selected: _payMode == PosPayMode.split,
+                    onTap: () => setState(() {
+                      _payMode = PosPayMode.split;
+                      _syncPaymentMethodFromMode();
+                      if (_splitCashController.text.trim().isEmpty) {
+                        _splitCashController.text = '0.000';
+                        _splitKnetController.text =
+                            _grandTotal.toStringAsFixed(3);
+                      }
+                    }),
+                  ),
+                ),
+                if (_canHoldLocalPickup) ...[
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: PosTheme.headerMaroon,
+                        side: const BorderSide(color: PosTheme.headerMaroon),
+                        minimumSize: const Size.fromHeight(44),
+                        padding: const EdgeInsets.symmetric(horizontal: 6),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      onPressed: _submitting
+                          ? null
+                          : () => unawaited(_holdPickupOrder()),
+                      icon: const Icon(Icons.pause_circle_outline, size: 18),
+                      label: Text(
+                        s.tr(
+                          'تعليق الفاتورة / دفع لاحقاً',
+                          'Hold invoice / pay later',
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w800,
+                          fontSize: 12.5,
+                        ),
                       ),
                     ),
-                    onPressed: _submitting
-                        ? null
-                        : () => unawaited(_holdPickupOrder()),
-                    icon: const Icon(Icons.pause_circle_outline, size: 18),
-                    label: Text(
-                      s.tr(
-                        'تعليق الفاتورة / دفع لاحقاً',
-                        'Hold invoice / pay later',
+                  ),
+                ],
+              ],
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  child: FilledButton.icon(
+                    style: FilledButton.styleFrom(
+                      backgroundColor: PosTheme.orange,
+                      foregroundColor: Colors.white,
+                      minimumSize: Size.fromHeight(btnH),
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
                       ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+                    ),
+                    onPressed: _submitting || _dineInLocked
+                        ? null
+                        : () => _completeAndPrint(PosReceiptKind.kitchen),
+                    icon: const Icon(Icons.print_rounded, size: 22),
+                    label: Text(
+                      s.tr('مطبخ', 'Kitchen'),
                       style: const TextStyle(
-                        fontWeight: FontWeight.w800,
-                        fontSize: 12.5,
+                        fontWeight: FontWeight.w900,
+                        fontSize: 15,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: FilledButton.icon(
+                    style: FilledButton.styleFrom(
+                      backgroundColor: PosTheme.green,
+                      foregroundColor: Colors.white,
+                      minimumSize: Size.fromHeight(btnH),
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                    ),
+                    onPressed: _submitting || !_splitPaymentReady
+                        ? null
+                        : () => _completeAndPrint(PosReceiptKind.customer),
+                    icon: const Icon(Icons.receipt_long_rounded, size: 22),
+                    label: Text(
+                      _isSettlingHeldPickup
+                          ? s.tr('إغلاق الفاتورة / دفع', 'Close invoice / pay')
+                          : s.tr('فاتورة', 'Checkout'),
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w900,
+                        fontSize: 15,
                       ),
                     ),
                   ),
                 ),
               ],
-            ],
-          ),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              Expanded(
-                child: FilledButton.icon(
-                  style: FilledButton.styleFrom(
-                    backgroundColor: PosTheme.orange,
-                    foregroundColor: Colors.white,
-                    minimumSize: Size.fromHeight(btnH),
-                    padding: const EdgeInsets.symmetric(horizontal: 8),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                  ),
-                  onPressed: _submitting || _dineInLocked
-                      ? null
-                      : () => _completeAndPrint(PosReceiptKind.kitchen),
-                  icon: const Icon(Icons.print_rounded, size: 22),
-                  label: Text(
-                    s.tr('مطبخ', 'Kitchen'),
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w900,
-                      fontSize: 15,
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: FilledButton.icon(
-                  style: FilledButton.styleFrom(
-                    backgroundColor: PosTheme.green,
-                    foregroundColor: Colors.white,
-                    minimumSize: Size.fromHeight(btnH),
-                    padding: const EdgeInsets.symmetric(horizontal: 8),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                  ),
-                  onPressed: _submitting || !_splitPaymentReady
-                      ? null
-                      : () => _completeAndPrint(PosReceiptKind.customer),
-                  icon: const Icon(Icons.receipt_long_rounded, size: 22),
-                  label: Text(
-                    _isSettlingHeldPickup
-                        ? s.tr('إغلاق الفاتورة / دفع', 'Close invoice / pay')
-                        : s.tr('فاتورة', 'Checkout'),
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w900,
-                      fontSize: 15,
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ],
+            ),
+          ],
+        ),
       ),
     );
   }
