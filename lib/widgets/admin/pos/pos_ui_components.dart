@@ -354,6 +354,17 @@ class PosCartLine extends StatelessWidget {
                     ),
                   ),
                 ],
+                if (item.isSentToKitchen) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    'أُرسل للمطبخ',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: PosTheme.orange.withValues(alpha: 0.9),
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
                 if (item.specialNotes?.trim().isNotEmpty ?? false) ...[
                   const SizedBox(height: 4),
                   Text(

@@ -29,6 +29,8 @@ List<CartItem> cartItemsFromOrderLines(
         specialNotes: line.specialNotes,
         offerId: line.offerId,
         originalUnitPrice: line.originalPrice,
+        isSentToKitchen: line.isSentToKitchen,
+        sentToKitchenAt: line.sentToKitchenAt,
       ),
   ];
 }

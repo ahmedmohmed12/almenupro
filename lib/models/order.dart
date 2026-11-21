@@ -325,6 +325,8 @@ class OrderLineItem {
     this.specialNotes,
     this.offerId,
     this.originalPrice,
+    this.isSentToKitchen = false,
+    this.sentToKitchenAt,
   });
 
   final String menuItemId;
@@ -335,6 +337,8 @@ class OrderLineItem {
   final String? specialNotes;
   final String? offerId;
   final double? originalPrice;
+  final bool isSentToKitchen;
+  final DateTime? sentToKitchenAt;
 
   double get lineTotal => unitPrice * quantity;
 
@@ -364,7 +368,17 @@ class OrderLineItem {
       originalPrice:
           (map['originalPrice'] as num?)?.toDouble() ??
           (map['original_price'] as num?)?.toDouble(),
+      isSentToKitchen:
+          map['isSentToKitchen'] == true || map['is_sent_to_kitchen'] == true,
+      sentToKitchenAt: _parseKitchenAt(
+        map['sentToKitchenAt'] ?? map['sent_to_kitchen_at'],
+      ),
     );
+  }
+
+  static DateTime? _parseKitchenAt(Object? raw) {
+    if (raw == null) return null;
+    return DateTime.tryParse(raw.toString())?.toUtc();
   }
 
   Map<String, dynamic> toMap() {
@@ -381,6 +395,12 @@ class OrderLineItem {
       if (offerId != null && offerId!.isNotEmpty) 'offerId': offerId,
       if (originalPrice != null) 'originalPrice': originalPrice,
       'lineTotal': lineTotal,
+      'isSentToKitchen': isSentToKitchen,
+      'is_sent_to_kitchen': isSentToKitchen,
+      if (sentToKitchenAt != null)
+        'sentToKitchenAt': sentToKitchenAt!.toIso8601String(),
+      if (sentToKitchenAt != null)
+        'sent_to_kitchen_at': sentToKitchenAt!.toIso8601String(),
     };
   }
 
@@ -394,6 +414,8 @@ class OrderLineItem {
       specialNotes: cartItem.specialNotes,
       offerId: cartItem.offerId,
       originalPrice: cartItem.originalUnitPrice,
+      isSentToKitchen: cartItem.isSentToKitchen,
+      sentToKitchenAt: cartItem.sentToKitchenAt,
     );
   }
 }

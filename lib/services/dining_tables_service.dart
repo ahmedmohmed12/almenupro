@@ -79,11 +79,20 @@ class DiningTablesService {
     bool? checkRequested,
     bool? waiterRequested,
     String? waiterNote,
+    String? managerPin,
+    String? kitchenVoidReason,
+    String? performedById,
+    String? performedByName,
   }) async {
     final decoded = await ApiService.instance
         .putJson('/tables/$tableId/session', {
           'cartItems': cartItems.map(cartItemToSessionMap).toList(),
           if (notes != null) 'notes': notes,
+          if (managerPin != null && managerPin.isNotEmpty) 'managerPin': managerPin,
+          if (kitchenVoidReason != null && kitchenVoidReason.isNotEmpty)
+            'kitchenVoidReason': kitchenVoidReason,
+          if (performedById != null) 'performedById': performedById,
+          if (performedByName != null) 'performedByName': performedByName,
           if (customerName != null) 'customerName': customerName,
           if (phone != null) 'phone': phone,
           if (checkRequested != null) 'checkRequested': checkRequested,
@@ -220,6 +229,12 @@ class DiningTablesService {
         'offerId': item.offerId,
       'lineTotal': item.totalPrice,
       'menuItem': item.menuItem.toMap(),
+      'isSentToKitchen': item.isSentToKitchen,
+      'is_sent_to_kitchen': item.isSentToKitchen,
+      if (item.sentToKitchenAt != null)
+        'sentToKitchenAt': item.sentToKitchenAt!.toIso8601String(),
+      if (item.sentToKitchenAt != null)
+        'sent_to_kitchen_at': item.sentToKitchenAt!.toIso8601String(),
     };
   }
 
@@ -266,6 +281,12 @@ class DiningTablesService {
         quantity: (entry['quantity'] as num?)?.toInt() ?? 1,
         specialNotes: entry['specialNotes']?.toString(),
         offerId: entry['offerId']?.toString(),
+        isSentToKitchen:
+            entry['isSentToKitchen'] == true ||
+            entry['is_sent_to_kitchen'] == true,
+        sentToKitchenAt: DateTime.tryParse(
+          '${entry['sentToKitchenAt'] ?? entry['sent_to_kitchen_at'] ?? ''}',
+        ),
       );
     }).toList();
   }

@@ -34,7 +34,9 @@ import '../../services/pos/pos_hardware_bridge.dart';
 import '../../services/pos/pos_platform_profile.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/order_payment_utils.dart';
+import '../../utils/kitchen_dispatch.dart';
 import '../../utils/pos_cart_from_order.dart';
+import 'pos/pos_kitchen_line_override_dialog.dart';
 import '../../utils/pos_receipt_html.dart';
 import '../../utils/whatsapp_phone.dart';
 import '../menu/offer_usage_limit_alert.dart';
@@ -119,6 +121,7 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
   DateTime? _scheduledTarget;
 
   final List<CartItem> _cart = [];
+  KitchenOverrideAuthorization? _pendingKitchenOverride;
   List<MenuItem> _allItems = const [];
   List<SalesPlatformConfig> _salesPlatforms = SalesPlatformConfig.defaults();
   PosPlatformSelection _platformSelection = PosPlatformSelection(
@@ -554,14 +557,27 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
     final table = widget.dineInTable;
     if (table == null) return;
     try {
+      final cashier = PosOperationsService.instance.cashierSession;
       final updated = await DiningTablesService.instance.updateSession(
         table.id,
         cartItems: List.from(_cart),
         customerName: _nameController.text.trim(),
         phone: _phoneController.text.trim(),
+        managerPin: _pendingKitchenOverride?.managerPin,
+        kitchenVoidReason: _pendingKitchenOverride?.reason,
+        performedById: cashier?.staff.id,
+        performedByName: cashier?.staff.name,
       );
+      _pendingKitchenOverride = null;
       widget.onDineInSessionUpdated?.call(updated);
-    } catch (_) {}
+    } catch (error) {
+      final message = error.toString().replaceFirst('Exception: ', '');
+      if (message.contains('KITCHEN_DISPATCH') ||
+          message.contains('المشرف') ||
+          message.contains('سبب')) {
+        _showMessage(message);
+      }
+    }
   }
 
   bool _isStaticPicksCategory(String category) {
@@ -854,7 +870,7 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
     _bumpCart();
   }
 
-  void _updateCartQuantity(String cartItemId, int quantity) {
+  Future<void> _updateCartQuantity(String cartItemId, int quantity) async {
     if (_dineInLocked) {
       _showMessage(
         AppStrings.read(context).tr(
@@ -864,17 +880,43 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
       );
       return;
     }
+    final index = _cart.indexWhere((item) => item.id == cartItemId);
+    if (index == -1) return;
+    final item = _cart[index];
+    if (cartMutationNeedsKitchenOverride(item: item, nextQuantity: quantity)) {
+      final auth = await showPosKitchenLineOverrideDialog(
+        context,
+        itemName: item.menuItem.name,
+        actionLabel: quantity <= 0
+            ? 'إزالة صنف أُرسل للمطبخ'
+            : 'تقليل كمية صنف أُرسل للمطبخ',
+        entityId: widget.dineInTable?.id ?? _settlingHeldOrder?.id,
+      );
+      if (auth == null) return;
+      _pendingKitchenOverride = auth;
+    }
     if (quantity <= 0) {
-      _cart.removeWhere((item) => item.id == cartItemId);
+      _cart.removeWhere((entry) => entry.id == cartItemId);
     } else {
-      final index = _cart.indexWhere((item) => item.id == cartItemId);
-      if (index == -1) return;
       _cart[index] = _cart[index].copyWith(quantity: quantity);
     }
     _bumpCart();
   }
 
-  void _clearCart() {
+  Future<void> _clearCart({bool skipKitchenGuard = false}) async {
+    if (!skipKitchenGuard && !posStaffBypassesKitchenLock()) {
+      final locked = _cart.where((item) => item.isSentToKitchen).toList();
+      if (locked.isNotEmpty) {
+        final auth = await showPosKitchenLineOverrideDialog(
+          context,
+          itemName: locked.map((e) => e.menuItem.name).join('، '),
+          actionLabel: 'تفريغ سلة تحتوي أصنافاً أُرسلت للمطبخ',
+          entityId: widget.dineInTable?.id ?? _settlingHeldOrder?.id,
+        );
+        if (auth == null) return;
+        _pendingKitchenOverride = auth;
+      }
+    }
     _cart.clear();
     _sessionSaveTimer?.cancel();
     _localCartTimer?.cancel();
@@ -1144,6 +1186,17 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
         paymentMethod: _paymentMethod,
       );
       widget.onDineInSessionUpdated?.call(result.table);
+      final sessionItems = result.table.activeSession?.cartItems ?? [];
+      if (sessionItems.isNotEmpty) {
+        _cart
+          ..clear()
+          ..addAll(
+            DiningTablesService.cartItemsFromSession(
+              sessionItems,
+              catalog: _allItems,
+            ),
+          );
+      }
       (widget.onOrderSubmitted ?? widget.onOrdersSubmitted)?.call();
       final autoPrint = PosPrintHelper.settings.autoPrintKitchen;
       if (autoPrint) {
@@ -1282,8 +1335,9 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
           .toString()
           .substring(5);
       final shift = PosOperationsService.instance.activeShift;
+      final dispatchedCart = stampKitchenDispatched(_cart);
       final order = await OrdersService.instance.submitHeldPickupFromCart(
-        cartItems: List.from(_cart),
+        cartItems: dispatchedCart,
         customerName: _nameController.text.trim(),
         phone: _phoneController.text.trim(),
         invoiceNumber: invoiceNumber,
@@ -1292,7 +1346,7 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
         cashierId: shift?.cashierId,
         cashierName: shift?.cashierName,
       );
-      _clearCart();
+      await _clearCart(skipKitchenGuard: true);
       (widget.onOrderSubmitted ?? widget.onOrdersSubmitted)?.call();
       unawaited(
         PosPrintHelper.printIfAuto(
@@ -1339,7 +1393,10 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
         shiftId: shift.id,
         cashierId: shift.cashierId,
         cashierName: shift.cashierName,
+        managerPin: _pendingKitchenOverride?.managerPin,
+        kitchenVoidReason: _pendingKitchenOverride?.reason,
       );
+      _pendingKitchenOverride = null;
       if (autoPrint) {
         unawaited(
           PosPrintHelper.printIfAuto(
@@ -1649,8 +1706,11 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
             snapshot.deliveryFee,
       );
       final shift = PosOperationsService.instance.activeShift;
+      final cartForSubmit = snapshot.kind == PosReceiptKind.kitchen && !snapshot.scheduled
+          ? stampKitchenDispatched(snapshot.cart)
+          : snapshot.cart;
       final order = await OrdersService.instance.submitOrderFromCart(
-        cartItems: snapshot.cart,
+        cartItems: cartForSubmit,
         customerName: snapshot.customerName,
         phone: snapshot.phone,
         address:
@@ -2291,7 +2351,7 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
         Align(
           alignment: AlignmentDirectional.centerEnd,
           child: TextButton.icon(
-            onPressed: _clearCart,
+            onPressed: () => unawaited(_clearCart()),
             icon: const Icon(Icons.delete_outline_rounded, size: 16),
             label: Text(s.tr('تفريغ F8', 'Clear F8')),
             style: TextButton.styleFrom(
@@ -2304,8 +2364,8 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
         ..._cart.map(
           (item) => PosCartLine(
             item: item,
-            onIncrease: () => _updateCartQuantity(item.id, item.quantity + 1),
-            onDecrease: () => _updateCartQuantity(item.id, item.quantity - 1),
+            onIncrease: () => unawaited(_updateCartQuantity(item.id, item.quantity + 1)),
+            onDecrease: () => unawaited(_updateCartQuantity(item.id, item.quantity - 1)),
           ),
         ),
       ],

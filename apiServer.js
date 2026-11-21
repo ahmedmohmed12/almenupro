@@ -12,6 +12,7 @@ const {
   loginRestaurantAdmin,
   loginCashierSession,
   isSuperAdmin,
+  isRestaurantAdmin,
   isCashier,
   isKitchen,
   isDriver,
@@ -87,6 +88,12 @@ const {
 } = require('./lib/menuCategories');
 const { assignTargetKitchen, findKitchenByLogin, orderTargetKitchenId } = require('./lib/kitchenRouting');
 const { handleTableRoutes, normalizeFeatures, isKitchenManagementEnabled, isTableManagementEnabled, isDeliveryManagementEnabled } = require('./lib/tableRoutes');
+const {
+  stampKitchenSent,
+  normalizeKitchenLine,
+  enforceKitchenItemMutation,
+  stampOrderKitchenVoidNotice,
+} = require('./lib/kitchenDispatchLock');
 const { applyGuestOrderToTable } = require('./lib/diningTables');
 const { handleReviewRoutes } = require('./lib/reviewRoutes');
 const { handleOrderRatingRoutes, createRatingToken } = require('./lib/orderRating');
@@ -790,11 +797,13 @@ async function routeRequest(req, res, url, pathname) {
   }
 
   if (await handleTableRoutes(req, res, url, {
+    ...posDeps(),
     readBody,
     sendJson,
     authError,
     requireAuth,
     isCashier,
+    isRestaurantAdmin,
     assertRestaurantAccess,
     resolveScopedRestaurantId: (req, url, auth) =>
       resolveScopedRestaurantId(req, url, auth, { allowPublicDefault: false }),
@@ -2184,8 +2193,58 @@ async function routeRequest(req, res, url, pathname) {
       const existingTs =
         Date.parse(duplicate.updatedAt || duplicate.createdAt || 0) || 0;
       if (incomingTs > existingTs) {
+        let lock = null;
+        if (Array.isArray(body.items) && body.items.length > 0) {
+          const auth = parseAuthHeader(req);
+          const restaurantIdForLock =
+            duplicate.restaurant_id || duplicate.restaurantId || restaurantId;
+          lock = await enforceKitchenItemMutation({
+            previousItems: duplicate.items || [],
+            nextItems: body.items,
+            body,
+            auth,
+            restaurantId: restaurantIdForLock,
+            deps: {
+              ...posDeps(),
+              filterByRestaurant,
+            },
+            context: {
+              entityType: 'order',
+              entityId: duplicate.id,
+              orderType: duplicate.orderType || duplicate.order_type || 'pickup',
+            },
+          });
+          if (!lock.ok) {
+            sendJson(res, lock.status || 403, {
+              error: lock.error,
+              code: lock.code,
+              violations: lock.violations,
+            });
+            return true;
+          }
+          if (lock.auditEvents?.length) {
+            await posDeps().appendAuditEvents(lock.auditEvents);
+          }
+        }
         const merged = preferNewerOrder(duplicate, stampOfflineTx({ ...duplicate, ...body }, body));
-        const patched = await dataStore.patchOrderById(duplicate.id, merged, existingOrders);
+        if (Array.isArray(merged.items)) {
+          merged.items = merged.items.map((line) => normalizeKitchenLine(line));
+        }
+        if (
+          body.kitchenDispatched === true ||
+          body.kitchen_dispatched === true ||
+          body.markKitchenSent === true
+        ) {
+          merged.items = stampKitchenSent(merged.items || [], { onlyUnsent: true });
+        }
+        if (lock?.violations?.length) {
+          Object.assign(merged, stampOrderKitchenVoidNotice(merged, lock.violations));
+        }
+        const patched = await dataStore.patchOrderById(
+          duplicate.id,
+          merged,
+          existingOrders,
+        );
         sendJson(res, 200, patched || merged);
         return true;
       }
@@ -2320,6 +2379,23 @@ async function routeRequest(req, res, url, pathname) {
       createdStatus,
       createdAt,
     );
+    if (Array.isArray(created.items)) {
+      created.items = created.items.map((line) => normalizeKitchenLine(line));
+      const paymentStatus = String(
+        created.paymentStatus || created.payment_status || '',
+      ).toLowerCase();
+      const shouldStampKitchen =
+        body.kitchenDispatched === true ||
+        body.kitchen_dispatched === true ||
+        body.markKitchenSent === true ||
+        (paymentStatus === 'pending_payment' &&
+          String(created.orderSource || created.order_source || '')
+            .toLowerCase()
+            .includes('pos'));
+      if (shouldStampKitchen) {
+        created.items = stampKitchenSent(created.items, { onlyUnsent: true });
+      }
+    }
     try {
       const assignment = await assignTargetKitchen({
         body: created,

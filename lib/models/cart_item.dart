@@ -38,6 +38,8 @@ class CartItem {
     this.offerId,
     this.originalUnitPrice,
     this.bundleItemIds = const [],
+    this.isSentToKitchen = false,
+    this.sentToKitchenAt,
   });
 
   final String id;
@@ -48,6 +50,8 @@ class CartItem {
   final String? offerId;
   final double? originalUnitPrice;
   final List<int> bundleItemIds;
+  final bool isSentToKitchen;
+  final DateTime? sentToKitchenAt;
 
   double get unitPrice {
     final modifiers =
@@ -73,6 +77,8 @@ class CartItem {
     String? offerId,
     double? originalUnitPrice,
     List<int>? bundleItemIds,
+    bool? isSentToKitchen,
+    DateTime? sentToKitchenAt,
   }) {
     return CartItem(
       id: id ?? this.id,
@@ -83,6 +89,8 @@ class CartItem {
       offerId: offerId ?? this.offerId,
       originalUnitPrice: originalUnitPrice ?? this.originalUnitPrice,
       bundleItemIds: bundleItemIds ?? this.bundleItemIds,
+      isSentToKitchen: isSentToKitchen ?? this.isSentToKitchen,
+      sentToKitchenAt: sentToKitchenAt ?? this.sentToKitchenAt,
     );
   }
 }
