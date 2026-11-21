@@ -417,6 +417,16 @@ class _TableQrOrderingScreenState extends State<TableQrOrderingScreen> {
     if (cart.isEmpty) {
       throw Exception('السلة فارغة');
     }
+    if (_usingDemo || widget.useDemoCatalog) {
+      throw Exception(
+        'وضع تجريبي — لا يُرسل الطلب للمطبخ. افتح رابط QR الصحيح أو حمّل منيو المطعم الحقيقي.',
+      );
+    }
+    if (_branchId.isEmpty || _tableId.isEmpty) {
+      throw Exception(
+        'معرّف الطاولة أو الفرع غير مكتمل — لا يمكن إرسال طلب حقيقي.',
+      );
+    }
     if (_table?.isAwaitingCheck == true) {
       throw Exception('تم طلب الحساب ولا يمكن إرسال طلب جديد');
     }
@@ -493,8 +503,8 @@ class _TableQrOrderingScreenState extends State<TableQrOrderingScreen> {
                           Expanded(
                             child: Text(
                               strings.tr(
-                                'عرض تجريبي للمنيو — جاهز للطلب السريع',
-                                'Demo menu preview — ready for quick ordering',
+                                'عرض تجريبي للمنيو — للمعاينة فقط (لا يُرسل للمطبخ)',
+                                'Demo menu preview — display only (not sent to kitchen)',
                               ),
                               style: const TextStyle(fontSize: 12.5),
                             ),
