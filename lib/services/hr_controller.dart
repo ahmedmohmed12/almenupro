@@ -4,7 +4,9 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/hr_models.dart';
+import 'pos_operations_service.dart';
 import 'hr_compliance.dart';
+import 'hr_kitchen_void_payroll.dart';
 
 abstract class HrStore {
   Future<Map<String, dynamic>?> load();
@@ -200,6 +202,10 @@ class HrController extends ChangeNotifier {
         if (row.month == month.month && row.year == month.year && row.status == PayrollStatus.paid)
           row.id: PayrollStatus.paid,
     };
+    final kitchenVoidByEmployee = await HrKitchenVoidPayroll.debtsForMonth(
+      month: month.month,
+      year: month.year,
+    );
     final fresh = buildMonthlyPayroll(
       employees: employees,
       attendance: attendance,
@@ -207,6 +213,7 @@ class HrController extends ChangeNotifier {
       month: month.month,
       year: month.year,
       penalties: penalties,
+      kitchenVoidByEmployee: kitchenVoidByEmployee,
       existingStatus: kept,
     );
     payroll = [
@@ -226,6 +233,27 @@ class HrController extends ChangeNotifier {
         if (row.id == id) (slip = row.copyWith(status: PayrollStatus.paid)) else row,
     ];
     final paid = slip;
+    if (paid != null && paid.kitchenVoidDeduction > 0) {
+      try {
+        final liabilityResult =
+            await PosOperationsService.instance.fetchKitchenVoidLiabilities(
+          status: 'ALL',
+        );
+        final staff = await PosOperationsService.instance.fetchStaffUsers();
+        final ids = await HrKitchenVoidPayroll.liabilityIdsForEmployeeMonth(
+          employeeId: paid.employeeId,
+          month: paid.month,
+          year: paid.year,
+          liabilities: liabilityResult.liabilities,
+          staff: staff,
+        );
+        await HrKitchenVoidPayroll.markPayrollDeducted(
+          month: paid.month,
+          year: paid.year,
+          liabilityIds: ids,
+        );
+      } catch (_) {}
+    }
     if (paid != null && paid.loanDeduction > 0) {
       records = [
         for (final row in records)

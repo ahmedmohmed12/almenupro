@@ -336,6 +336,7 @@ class PayrollModel {
     this.absenceDeduction = 0,
     this.lateDeduction = 0,
     this.penalties = 0,
+    this.kitchenVoidDeduction = 0,
   });
 
   final String id;
@@ -352,6 +353,7 @@ class PayrollModel {
   final double absenceDeduction;
   final double lateDeduction;
   final double penalties;
+  final double kitchenVoidDeduction;
 
   Map<String, dynamic> toJson() => {
         'id': id,
@@ -368,6 +370,7 @@ class PayrollModel {
         'absenceDeduction': absenceDeduction,
         'lateDeduction': lateDeduction,
         'penalties': penalties,
+        'kitchenVoidDeduction': kitchenVoidDeduction,
       };
 
   factory PayrollModel.fromJson(Map<String, dynamic> json) {
@@ -386,6 +389,7 @@ class PayrollModel {
       absenceDeduction: _num(json['absenceDeduction']),
       lateDeduction: _num(json['lateDeduction']),
       penalties: _num(json['penalties']),
+      kitchenVoidDeduction: _num(json['kitchenVoidDeduction']),
     );
   }
 
@@ -405,6 +409,7 @@ class PayrollModel {
       absenceDeduction: absenceDeduction,
       lateDeduction: lateDeduction,
       penalties: penalties,
+      kitchenVoidDeduction: kitchenVoidDeduction,
     );
   }
 }

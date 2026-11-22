@@ -7,6 +7,8 @@ import 'package:flutter/material.dart';
 import '../../../models/hr_models.dart';
 import '../../../services/hr_compliance.dart';
 import '../../../services/hr_controller.dart';
+import '../../../services/hr_job_roles.dart';
+import '../../../services/hr_pos_cashier_sync.dart';
 import '../../../utils/whatsapp_launcher.dart';
 import '../settings/link_hub_qr_download.dart';
 import '../../../models/staff_user.dart';
@@ -277,7 +279,12 @@ class _EmployeesTabState extends State<_EmployeesTab> {
           alignment: AlignmentDirectional.centerStart,
           child: FilledButton.icon(
             style: FilledButton.styleFrom(backgroundColor: _burgundy),
-            onPressed: () => _editEmployee(context, hr, null),
+            onPressed: () async {
+              await _editEmployee(context, hr, null);
+              if (context.mounted) {
+                await (context.findAncestorStateOfType<_EmployeesTabState>())?._loadPosStaff();
+              }
+            },
             icon: const Icon(Icons.person_add_alt),
             label: const Text('موظف جديد'),
           ),
@@ -315,7 +322,10 @@ class _EmployeesTabState extends State<_EmployeesTab> {
                       ),
                     IconButton(
                       icon: const Icon(Icons.edit_outlined),
-                      onPressed: () => _editEmployee(context, hr, employee),
+                      onPressed: () async {
+                        await _editEmployee(context, hr, employee);
+                        await _loadPosStaff();
+                      },
                     ),
                   ],
                 ),
@@ -437,7 +447,9 @@ class _PayrollTab extends StatelessWidget {
               child: ListTile(
                 title: Text(_name(hr, row.employeeId)),
                 subtitle: Text(
-                  'الصافي ${row.netSalary.toStringAsFixed(3)} • استقطاع ${row.deductions.toStringAsFixed(3)} • سلفة ${row.loanDeduction.toStringAsFixed(3)}',
+                  'الصافي ${row.netSalary.toStringAsFixed(3)} • استقطاع ${row.deductions.toStringAsFixed(3)}'
+                  '${row.kitchenVoidDeduction > 0 ? ' • مديونية مطبخ ${row.kitchenVoidDeduction.toStringAsFixed(3)}' : ''}'
+                  ' • سلفة ${row.loanDeduction.toStringAsFixed(3)}',
                 ),
                 trailing: row.status == PayrollStatus.paid
                     ? const Text('مدفوع', style: TextStyle(color: Color(0xFF15803D)))
@@ -468,7 +480,17 @@ Future<void> _editEmployee(
 ) async {
   final name = TextEditingController(text: current?.name ?? '');
   final phone = TextEditingController(text: current?.phone ?? '');
-  final job = TextEditingController(text: current?.jobTitle ?? '');
+  final jobCustom = TextEditingController(
+    text: current != null && !HrRestaurantJobs.presetJobs.contains(current.jobTitle)
+        ? current.jobTitle
+        : '',
+  );
+  var jobPreset = (() {
+    final title = current?.jobTitle.trim() ?? '';
+    if (title.isEmpty) return HrRestaurantJobs.cashier;
+    if (HrRestaurantJobs.presetJobs.contains(title)) return title;
+    return 'أخرى';
+  })();
   final branch = TextEditingController(text: current?.branchId ?? '');
   final pin = TextEditingController(text: current?.pinCode ?? '');
   final basic = TextEditingController(text: '${current?.basicSalary ?? 0}');
@@ -508,9 +530,46 @@ Future<void> _editEmployee(
               children: [
                 TextField(controller: name, decoration: const InputDecoration(labelText: 'الاسم')),
                 TextField(controller: phone, decoration: const InputDecoration(labelText: 'الهاتف')),
-                TextField(controller: job, decoration: const InputDecoration(labelText: 'المسمى')),
+                DropdownButtonFormField<String>(
+                  value: jobPreset,
+                  decoration: const InputDecoration(
+                    labelText: 'مهمة الموظف في المطعم',
+                    border: OutlineInputBorder(),
+                  ),
+                  items: [
+                    for (final entry in HrRestaurantJobs.presetJobs)
+                      DropdownMenuItem(value: entry, child: Text(entry)),
+                  ],
+                  onChanged: (value) => setLocal(() => jobPreset = value ?? jobPreset),
+                ),
+                if (jobPreset == 'أخرى')
+                  TextField(
+                    controller: jobCustom,
+                    decoration: const InputDecoration(
+                      labelText: 'المسمى / المهمة',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                if (HrRestaurantJobs.isCashierJob(
+                  jobPreset == 'أخرى' ? jobCustom.text : jobPreset,
+                ))
+                  const Padding(
+                    padding: EdgeInsets.only(top: 6),
+                    child: Text(
+                      'عند الحفظ يُربط الموظف تلقائياً ككاشير POS (دور كاشير فقط) برمز الدخول والفرع.',
+                      style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                    ),
+                  ),
                 TextField(controller: branch, decoration: const InputDecoration(labelText: 'الفرع')),
-                TextField(controller: pin, decoration: const InputDecoration(labelText: 'رمز الدخول')),
+                TextField(
+                  controller: pin,
+                  keyboardType: TextInputType.number,
+                  maxLength: 4,
+                  decoration: const InputDecoration(
+                    labelText: 'رمز الدخول (4 أرقام)',
+                    counterText: '',
+                  ),
+                ),
                 TextField(controller: basic, decoration: const InputDecoration(labelText: 'الراتب الأساسي')),
                 TextField(controller: housing, decoration: const InputDecoration(labelText: 'بدل السكن')),
                 TextField(controller: other, decoration: const InputDecoration(labelText: 'بدلات أخرى')),
@@ -655,12 +714,13 @@ Future<void> _editEmployee(
     ),
   );
   if (saved == true && name.text.trim().isNotEmpty) {
-    await hr.saveEmployee(
-      EmployeeModel(
+    final resolvedJob =
+        jobPreset == 'أخرى' ? jobCustom.text.trim() : jobPreset.trim();
+    final employee = EmployeeModel(
         id: current?.id ?? 'emp_${DateTime.now().microsecondsSinceEpoch}',
         name: name.text.trim(),
         phone: phone.text.trim(),
-        jobTitle: job.text.trim(),
+        jobTitle: resolvedJob.isEmpty ? jobPreset : resolvedJob,
         branchId: branch.text.trim(),
         status: active ? EmployeeStatus.active : EmployeeStatus.inactive,
         pinCode: pin.text.trim(),
@@ -677,12 +737,28 @@ Future<void> _editEmployee(
         iqamaExpiryDate: iqama,
         healthCardExpiryDate: health,
         passportExpiryDate: passport,
-      ),
-    );
+      );
+    await hr.saveEmployee(employee);
+    String? syncError;
+    try {
+      await HrPosCashierSync.syncAfterEmployeeSave(employee);
+    } catch (error) {
+      syncError = error.toString().replaceFirst('Exception: ', '');
+    }
+    if (context.mounted) {
+      final messenger = ScaffoldMessenger.of(context);
+      if (syncError == null && HrRestaurantJobs.isCashierJob(employee.jobTitle)) {
+        messenger.showSnackBar(
+          const SnackBar(content: Text('تم حفظ الموظف وربط كاشير POS')),
+        );
+      } else if (syncError != null) {
+        messenger.showSnackBar(SnackBar(content: Text(syncError)));
+      }
+    }
   }
   name.dispose();
   phone.dispose();
-  job.dispose();
+  jobCustom.dispose();
   branch.dispose();
   pin.dispose();
   basic.dispose();

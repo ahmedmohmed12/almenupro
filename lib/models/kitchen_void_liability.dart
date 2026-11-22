@@ -6,6 +6,7 @@ class KitchenVoidLiability {
     required this.orderId,
     required this.cashierId,
     required this.cashierName,
+    this.employeeId,
     required this.itemId,
     required this.itemName,
     required this.quantityRemoved,
@@ -36,6 +37,7 @@ class KitchenVoidLiability {
   final String? entityId;
   final String cashierId;
   final String cashierName;
+  final String? employeeId;
   final String itemId;
   final String? menuItemId;
   final String itemName;
@@ -54,6 +56,9 @@ class KitchenVoidLiability {
   final String? reviewedByName;
   final String? reviewNote;
   final String? reviewedAt;
+  final String? payrollDeductedAt;
+  final int? payrollDeductedMonth;
+  final int? payrollDeductedYear;
 
   bool get isPending => approvalStatus.toUpperCase() == 'PENDING';
   bool get isApproved => approvalStatus.toUpperCase() == 'APPROVED';
@@ -86,6 +91,7 @@ class KitchenVoidLiability {
       entityId: (json['entityId'] ?? json['entity_id'])?.toString(),
       cashierId: (json['cashierId'] ?? json['cashier_id'] ?? '').toString(),
       cashierName: (json['cashierName'] ?? json['cashier_name'] ?? '').toString(),
+      employeeId: (json['employeeId'] ?? json['employee_id'])?.toString(),
       itemId: (json['itemId'] ?? json['item_id'] ?? '').toString(),
       menuItemId: (json['menuItemId'] ?? json['menu_item_id'])?.toString(),
       itemName: (json['itemName'] ?? json['item_name'] ?? '').toString(),
@@ -108,6 +114,14 @@ class KitchenVoidLiability {
           (json['reviewedByName'] ?? json['reviewed_by_name'])?.toString(),
       reviewNote: (json['reviewNote'] ?? json['review_note'])?.toString(),
       reviewedAt: (json['reviewedAt'] ?? json['reviewed_at'])?.toString(),
+      payrollDeductedAt:
+          (json['payrollDeductedAt'] ?? json['payroll_deducted_at'])?.toString(),
+      payrollDeductedMonth: json['payrollDeductedMonth'] is num
+          ? (json['payrollDeductedMonth'] as num).toInt()
+          : int.tryParse('${json['payroll_deducted_month'] ?? ''}'),
+      payrollDeductedYear: json['payrollDeductedYear'] is num
+          ? (json['payrollDeductedYear'] as num).toInt()
+          : int.tryParse('${json['payroll_deducted_year'] ?? ''}'),
     );
   }
 }

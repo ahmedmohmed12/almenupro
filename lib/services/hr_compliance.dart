@@ -221,6 +221,7 @@ class PayrollBreakdown {
     required this.lateDeduction,
     required this.penalties,
     required this.loanDeduction,
+    this.kitchenVoidDeduction = 0,
   });
 
   final double basicSalary;
@@ -230,12 +231,14 @@ class PayrollBreakdown {
   final double lateDeduction;
   final double penalties;
   final double loanDeduction;
+  final double kitchenVoidDeduction;
 
-  double get deductions => absenceDeduction + lateDeduction + penalties;
+  double get deductions =>
+      absenceDeduction + lateDeduction + penalties + kitchenVoidDeduction;
 
   double get gross => basicSalary + totalAllowances + overtimeAmount;
 
-  /// Net = (basic + allowances + overtime) − (recorded absence/late + penalties + loan).
+  /// Net = (basic + allowances + overtime) − (recorded absence/late + penalties + loan + kitchen void debt).
   /// Days without a punch stay in the basic salary.
   double get netSalary => gross - deductions - loanDeduction;
 }
@@ -247,6 +250,7 @@ PayrollBreakdown calculatePayroll({
   required int month,
   required int year,
   double penalties = 0,
+  double kitchenVoidDeduction = 0,
 }) {
   final monthDays = resolveScheduledAttendance(
     employee: employee,
@@ -307,6 +311,7 @@ PayrollBreakdown calculatePayroll({
         : loan.amount;
   }
 
+  final kitchenDebt = kitchenVoidDeduction < 0 ? 0.0 : kitchenVoidDeduction;
   return PayrollBreakdown(
     basicSalary: employee.basicSalary,
     totalAllowances: employee.totalAllowances,
@@ -315,6 +320,7 @@ PayrollBreakdown calculatePayroll({
     lateDeduction: lateDeduction,
     penalties: penaltyTotal,
     loanDeduction: loanDeduction,
+    kitchenVoidDeduction: kitchenDebt,
   );
 }
 
@@ -325,6 +331,7 @@ List<PayrollModel> buildMonthlyPayroll({
   required int month,
   required int year,
   double penalties = 0,
+  Map<String, double> kitchenVoidByEmployee = const {},
   Map<String, PayrollStatus> existingStatus = const {},
 }) {
   final rows = <PayrollModel>[];
@@ -337,6 +344,7 @@ List<PayrollModel> buildMonthlyPayroll({
       month: month,
       year: year,
       penalties: penalties,
+      kitchenVoidDeduction: kitchenVoidByEmployee[employee.id] ?? 0,
     );
     final id = 'pay_${employee.id}_${year}_$month';
     rows.add(
@@ -355,6 +363,7 @@ List<PayrollModel> buildMonthlyPayroll({
         absenceDeduction: breakdown.absenceDeduction,
         lateDeduction: breakdown.lateDeduction,
         penalties: breakdown.penalties,
+        kitchenVoidDeduction: breakdown.kitchenVoidDeduction,
       ),
     );
   }

@@ -820,6 +820,28 @@ class PosOperationsService extends ChangeNotifier {
     return KitchenVoidLiability.fromJson(Map<String, dynamic>.from(raw));
   }
 
+  Future<void> applyKitchenVoidPayrollDeductions({
+    required int month,
+    required int year,
+    required List<String> liabilityIds,
+  }) async {
+    if (liabilityIds.isEmpty) return;
+    final response = await http
+        .post(
+          _posUri('/pos/kitchen-void-liabilities/apply-payroll'),
+          headers: _headers,
+          body: jsonEncode({
+            'month': month,
+            'year': year,
+            'liabilityIds': liabilityIds,
+          }),
+        )
+        .timeout(const Duration(seconds: 30));
+    if (response.statusCode != 200) {
+      throw Exception(_readError(response, 'فشل تسجيل خصم مديونية المطبخ'));
+    }
+  }
+
   bool canReviewRemoteApprovals() {
     final roleId =
         (cashierSession?.roleId ?? activeShift?.roleId ?? '').toLowerCase();
