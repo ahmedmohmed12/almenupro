@@ -144,6 +144,7 @@ class _AdminAnalyticsReportsPanelState extends State<AdminAnalyticsReportsPanel>
                 ),
                 if (widget.showKitchenVoidTab)
                   PosKitchenVoidLiabilitiesPage(
+                    adminDashboard: true,
                     onPendingSummaryChanged: (_) => unawaited(_refreshPendingBadge()),
                   ),
               ],

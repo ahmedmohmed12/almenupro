@@ -10,11 +10,15 @@ class PosKitchenVoidLiabilitiesPage extends StatefulWidget {
   const PosKitchenVoidLiabilitiesPage({
     super.key,
     this.onPendingSummaryChanged,
+    this.adminDashboard = false,
   });
 
   /// Called after each refresh so parent UI (e.g. tab badge) can update.
   final void Function(KitchenVoidLiabilitySummary summary)?
       onPendingSummaryChanged;
+
+  /// Admin analytics tab: all restaurant records, pending first (not shift-scoped).
+  final bool adminDashboard;
 
   @override
   State<PosKitchenVoidLiabilitiesPage> createState() =>
@@ -46,13 +50,22 @@ class _PosKitchenVoidLiabilitiesPageState extends State<PosKitchenVoidLiabilitie
     super.dispose();
   }
 
+  List<KitchenVoidLiability> get _displayRows {
+    if (!widget.adminDashboard) return _rows;
+    final pending = _rows.where((row) => row.isPending).toList();
+    if (pending.isNotEmpty) return pending;
+    return _rows;
+  }
+
   Future<void> _refresh() async {
     final shift = PosOperationsService.instance.activeShift;
     final canReview = _canReview;
     try {
       final result = await PosOperationsService.instance.fetchKitchenVoidLiabilities(
-        shiftId: canReview ? null : shift?.id,
-        status: canReview ? 'PENDING' : 'ALL',
+        shiftId: (widget.adminDashboard || canReview) ? null : shift?.id,
+        status: widget.adminDashboard
+            ? 'ALL'
+            : (canReview ? 'PENDING' : 'ALL'),
       );
       if (!mounted) return;
       setState(() {
@@ -186,12 +199,22 @@ class _PosKitchenVoidLiabilitiesPageState extends State<PosKitchenVoidLiabilitie
               child: Text(_error!, style: const TextStyle(color: Colors.red)),
             ),
           const SizedBox(height: 12),
-          if (_rows.isEmpty)
+          if (widget.adminDashboard &&
+              _summary.pendingCount == 0 &&
+              _rows.isNotEmpty)
+            const Padding(
+              padding: EdgeInsets.only(bottom: 8),
+              child: Text(
+                'لا توجد مسؤوليات معلّقة — قد تكون قد وُوفق عليها تلقائياً عند استخدام رمز المشرف.',
+                style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+              ),
+            ),
+          if (_displayRows.isEmpty)
             const Padding(
               padding: EdgeInsets.symmetric(vertical: 32),
               child: Center(child: Text('لا توجد مسؤوليات في القائمة الحالية')),
             ),
-          for (final row in _rows)
+          for (final row in _displayRows)
             Card(
               child: Padding(
                 padding: const EdgeInsets.all(12),

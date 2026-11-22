@@ -5,6 +5,7 @@ const assert = require('node:assert/strict');
 const {
   enforceKitchenItemMutation,
   detectKitchenLockViolations,
+  mergeKitchenSentFromPrevious,
 } = require('../lib/kitchenDispatchLock');
 const {
   buildLiabilitiesFromLock,
@@ -144,6 +145,27 @@ test('pending liability amount uses removed quantity', () => {
   assert.equal(records[0].amount, 5);
   assert.equal(records[0].approvalStatus, 'PENDING');
   assert.ok(records[0].elapsedMinutes >= 10);
+});
+
+test('mergeKitchenSentFromPrevious keeps kitchen flags on PATCH payloads', () => {
+  const prev = [
+    {
+      id: 'line_1',
+      name: 'Laban',
+      quantity: 2,
+      unitPrice: 1,
+      isSentToKitchen: true,
+      sentToKitchenAt: '2026-01-01T10:00:00.000Z',
+    },
+  ];
+  const nextPayload = [
+    { id: 'line_1', name: 'Laban', quantity: 1, unitPrice: 1 },
+  ];
+  const merged = mergeKitchenSentFromPrevious(prev, nextPayload);
+  assert.equal(merged[0].isSentToKitchen, true);
+  assert.equal(merged[0].sentToKitchenAt, '2026-01-01T10:00:00.000Z');
+  const violations = detectKitchenLockViolations(prev, merged);
+  assert.equal(violations.length, 1);
 });
 
 test('shift settlement: approved waived vs rejected debt', () => {

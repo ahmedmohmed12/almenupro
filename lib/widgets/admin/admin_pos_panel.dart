@@ -37,6 +37,7 @@ import '../../models/order_payment_line.dart';
 import '../../utils/order_payment_utils.dart';
 import '../../utils/order_payments.dart';
 import '../../utils/kitchen_dispatch.dart';
+import '../../utils/pos_pending_orders.dart';
 import '../../utils/pos_cart_from_order.dart';
 import '../../utils/pos_customer_contact.dart';
 import 'pos/pos_kitchen_line_override_dialog.dart';
@@ -605,11 +606,60 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
   }
 
   void _schedulePickupHoldSave() {
-    if (_settlingHeldOrder == null) return;
+    if (_isDineIn || !_isPickup) return;
+    final needsSync =
+        _settlingHeldOrder != null ||
+        _cart.any((item) => item.isSentToKitchen);
+    if (!needsSync) return;
     _pickupHoldSaveTimer?.cancel();
     _pickupHoldSaveTimer = Timer(const Duration(milliseconds: 700), () {
-      unawaited(_persistPickupHoldOrder());
+      unawaited(_syncPickupHeldKitchenMutation());
     });
+  }
+
+  Future<void> _ensurePickupHoldServerLink() async {
+    if (_settlingHeldOrder != null || _isDineIn || !_isPickup) return;
+    if (!_cart.any((item) => item.isSentToKitchen)) return;
+
+    await OrdersDemoService.refreshFromApi();
+  var candidates = pendingPosPickupOrders(OrdersDemoService.loadedOrders);
+  if (_restaurantId.isNotEmpty) {
+      candidates = candidates
+          .where(
+            (order) =>
+                (order.restaurantId ?? '').trim() == _restaurantId.trim(),
+          )
+          .toList();
+    }
+    final shift = PosOperationsService.instance.activeShift;
+    if (shift != null && shift.id.trim().isNotEmpty) {
+      final scoped = candidates
+          .where((order) => orderBelongsToShift(order, shift.id))
+          .toList();
+      if (scoped.isNotEmpty) candidates = scoped;
+    }
+
+    if (candidates.isEmpty) return;
+
+    final phone = _posCustomerPhone().trim();
+    Order? match;
+    if (phone.isNotEmpty) {
+      for (final order in candidates) {
+        if (order.phone.trim() == phone) {
+          match = order;
+          break;
+        }
+      }
+    }
+    match ??= candidates.first;
+    if (!mounted) return;
+    _maybeHydrateHeldPickup(match);
+  }
+
+  Future<void> _syncPickupHeldKitchenMutation() async {
+    if (_isDineIn || !_isPickup) return;
+    await _ensurePickupHoldServerLink();
+    await _persistPickupHoldOrder();
   }
 
   void _bumpCart() {
@@ -705,7 +755,10 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
       final message = error.toString().replaceFirst('Exception: ', '');
       if (message.contains('KITCHEN') ||
           message.contains('المشرف') ||
-          message.contains('سبب')) {
+          message.contains('سبب') ||
+          message.contains('فشل') ||
+          message.contains('401') ||
+          message.contains('403')) {
         _showMessage(message);
       }
     }
