@@ -4,7 +4,6 @@ import 'package:flutter/services.dart';
 import '../../../models/pos_role.dart';
 import '../../../models/staff_user.dart';
 import '../../../services/pos_operations_service.dart';
-import 'pos_add_staff_dialog.dart';
 import 'pos_staff_empty_state.dart';
 
 /// PIN login + add-cashier entry used in admin staff tab and POS shell.
@@ -142,10 +141,6 @@ class _PosCashierLoginPanelState extends State<PosCashierLoginPanel> {
   }
 
   Widget _buildLoginForm() {
-    final canManageStaff =
-        PosOperationsService.instance.allows(PosPermissionKeys.manageStaff) ||
-            PosOperationsService.instance.allows(PosPermissionKeys.posAccess);
-
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -191,17 +186,6 @@ class _PosCashierLoginPanelState extends State<PosCashierLoginPanel> {
                 )
               : const Text('دخول'),
         ),
-        if (_staff.isNotEmpty && canManageStaff) ...[
-          const SizedBox(height: 8),
-          OutlinedButton.icon(
-            onPressed: () async {
-              await showPosAddStaffDialog(context);
-              await _loadStaff();
-            },
-            icon: const Icon(Icons.person_add),
-            label: const Text('إضافة موظف / كاشير جديد'),
-          ),
-        ],
         const SizedBox(height: 8),
         TextButton(
           onPressed: _continueAsAdmin,

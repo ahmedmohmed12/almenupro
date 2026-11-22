@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
@@ -8,6 +9,9 @@ import '../../../services/hr_compliance.dart';
 import '../../../services/hr_controller.dart';
 import '../../../utils/whatsapp_launcher.dart';
 import '../settings/link_hub_qr_download.dart';
+import '../../../models/staff_user.dart';
+import '../../../services/pos_operations_service.dart';
+import 'hr_provision_pos_cashier_dialog.dart';
 
 const _burgundy = Color(0xFF800020);
 const _lightOrange = Color(0xFFFF9F43);
@@ -194,16 +198,81 @@ class _DocCard extends StatelessWidget {
   }
 }
 
-class _EmployeesTab extends StatelessWidget {
+class _EmployeesTab extends StatefulWidget {
   const _EmployeesTab({required this.hr});
 
   final HrController hr;
+
+  @override
+  State<_EmployeesTab> createState() => _EmployeesTabState();
+}
+
+class _EmployeesTabState extends State<_EmployeesTab> {
+  var _loadingStaff = true;
+  List<StaffUser> _posStaff = const [];
+
+  HrController get hr => widget.hr;
+
+  @override
+  void initState() {
+    super.initState();
+    hr.addListener(_onHrChanged);
+    unawaited(_loadPosStaff());
+  }
+
+  @override
+  void dispose() {
+    hr.removeListener(_onHrChanged);
+    super.dispose();
+  }
+
+  void _onHrChanged() {
+    if (mounted) setState(() {});
+  }
+
+  StaffUser? _linkedCashier(String employeeId) {
+    for (final row in _posStaff) {
+      if (row.employeeId == employeeId && row.isActive) return row;
+    }
+    return null;
+  }
+
+  Future<void> _loadPosStaff() async {
+    setState(() => _loadingStaff = true);
+    try {
+      final rows = await PosOperationsService.instance.fetchStaffUsers();
+      if (!mounted) return;
+      setState(() {
+        _posStaff = rows;
+        _loadingStaff = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _posStaff = const [];
+        _loadingStaff = false;
+      });
+    }
+  }
+
+  Future<void> _assignCashier(EmployeeModel employee) async {
+    final created = await showHrProvisionPosCashierDialog(
+      context,
+      employee: employee,
+    );
+    if (created != null) await _loadPosStaff();
+  }
 
   @override
   Widget build(BuildContext context) {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
+        const Text(
+          'إنشاء وتعيين الكاشير يتم حصرياً من هنا — اربط موظف HR برمز PIN لدخول POS (دور كاشير فقط).',
+          style: TextStyle(fontSize: 12, color: Color(0xFF64748B), height: 1.35),
+        ),
+        const SizedBox(height: 10),
         Align(
           alignment: AlignmentDirectional.centerStart,
           child: FilledButton.icon(
@@ -222,11 +291,33 @@ class _EmployeesTab extends StatelessWidget {
               child: ListTile(
                 title: Text(employee.name),
                 subtitle: Text(
-                  '${employee.jobTitle} • ${_formatShift(employee.shiftStartMinutes)}–${_formatShift(employee.shiftEndMinutes)} • ${employee.status == EmployeeStatus.active ? 'نشط' : 'متوقف'}',
+                  [
+                    employee.jobTitle,
+                    '${_formatShift(employee.shiftStartMinutes)}–${_formatShift(employee.shiftEndMinutes)}',
+                    employee.status == EmployeeStatus.active ? 'نشط' : 'متوقف',
+                    if (_loadingStaff) '… جاري تحميل ربط POS'
+                    else if (_linkedCashier(employee.id) != null)
+                      'كاشير POS: ${_linkedCashier(employee.id)!.maskedPin}'
+                    else if (employee.status == EmployeeStatus.active)
+                      'بدون حساب كاشير POS',
+                  ].join(' • '),
                 ),
-                trailing: IconButton(
-                  icon: const Icon(Icons.edit_outlined),
-                  onPressed: () => _editEmployee(context, hr, employee),
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (!_loadingStaff &&
+                        employee.status == EmployeeStatus.active &&
+                        _linkedCashier(employee.id) == null)
+                      IconButton(
+                        tooltip: 'تعيين كاشير POS',
+                        icon: const Icon(Icons.point_of_sale_outlined, color: _burgundy),
+                        onPressed: () => _assignCashier(employee),
+                      ),
+                    IconButton(
+                      icon: const Icon(Icons.edit_outlined),
+                      onPressed: () => _editEmployee(context, hr, employee),
+                    ),
+                  ],
                 ),
               ),
             ),

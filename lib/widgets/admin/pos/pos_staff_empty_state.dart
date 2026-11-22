@@ -2,10 +2,9 @@ import 'package:flutter/material.dart';
 
 import '../../../models/staff_user.dart';
 import '../../../services/pos_operations_service.dart';
-import 'pos_add_staff_dialog.dart';
 
-/// Empty-state panel shown on POS login when no cashiers exist yet.
-class PosStaffEmptyState extends StatefulWidget {
+/// Shown on POS login when no cashiers exist — directs to HR only.
+class PosStaffEmptyState extends StatelessWidget {
   const PosStaffEmptyState({
     super.key,
     required this.onStaffAdded,
@@ -16,42 +15,9 @@ class PosStaffEmptyState extends StatefulWidget {
   final bool compact;
 
   @override
-  State<PosStaffEmptyState> createState() => _PosStaffEmptyStateState();
-}
-
-class _PosStaffEmptyStateState extends State<PosStaffEmptyState> {
-  var _seeding = false;
-  String? _error;
-
-  Future<void> _quickSeed() async {
-    setState(() {
-      _seeding = true;
-      _error = null;
-    });
-    try {
-      await seedDefaultPosStaff();
-      widget.onStaffAdded();
-    } catch (error) {
-      if (!mounted) return;
-      setState(() {
-        _error = error.toString().replaceFirst('Exception: ', '');
-      });
-    } finally {
-      if (mounted) setState(() => _seeding = false);
-    }
-  }
-
-  Future<void> _openAddDialog() async {
-    final created = await showPosAddStaffDialog(context);
-    if (created != null) {
-      widget.onStaffAdded();
-    }
-  }
-
-  @override
   Widget build(BuildContext context) {
     return Container(
-      padding: EdgeInsets.all(widget.compact ? 12 : 16),
+      padding: EdgeInsets.all(compact ? 12 : 16),
       decoration: BoxDecoration(
         color: Colors.orange.shade50,
         borderRadius: BorderRadius.circular(12),
@@ -66,7 +32,7 @@ class _PosStaffEmptyStateState extends State<PosStaffEmptyState> {
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  'لا يوجد موظفون كاشير بعد',
+                  'لا يوجد كاشير POS بعد',
                   style: TextStyle(
                     fontWeight: FontWeight.bold,
                     color: Colors.orange.shade900,
@@ -77,68 +43,20 @@ class _PosStaffEmptyStateState extends State<PosStaffEmptyState> {
           ),
           const SizedBox(height: 6),
           Text(
-            'أضف كاشيراً برمز PIN للبدء، أو استخدم الإعداد السريع (Admin / 1234).',
+            'أنشئ الموظف في لوحة الإدارة → شؤون الموظفين → تبويب «الموظفون»، ثم اضغط أيقونة POS لتعيين رمز PIN للكاشير.',
             style: TextStyle(color: Colors.orange.shade900, fontSize: 13),
           ),
-          if (_error != null) ...[
-            const SizedBox(height: 8),
-            Text(_error!, style: TextStyle(color: Colors.red.shade700, fontSize: 13)),
-          ],
-          const SizedBox(height: 12),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              FilledButton.icon(
-                onPressed: _openAddDialog,
-                icon: const Icon(Icons.person_add),
-                label: const Text('إضافة موظف / كاشير جديد'),
-              ),
-              OutlinedButton.icon(
-                onPressed: _seeding ? null : _quickSeed,
-                icon: _seeding
-                    ? const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.bolt),
-                label: const Text('إضافة كاشير افتراضي سريع (Admin / 1234)'),
-              ),
-            ],
+          const SizedBox(height: 8),
+          Align(
+            alignment: AlignmentDirectional.centerStart,
+            child: OutlinedButton.icon(
+              onPressed: onStaffAdded,
+              icon: const Icon(Icons.refresh),
+              label: const Text('إعادة تحميل القائمة'),
+            ),
           ),
         ],
       ),
-    );
-  }
-}
-
-/// Toolbar button for managing cashiers from POS shift banner area.
-class PosManageStaffButton extends StatelessWidget {
-  const PosManageStaffButton({
-    super.key,
-    required this.onChanged,
-  });
-
-  final VoidCallback onChanged;
-
-  Future<void> _open(BuildContext context) async {
-    final created = await showPosAddStaffDialog(context);
-    if (created != null) {
-      onChanged();
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return OutlinedButton.icon(
-      style: OutlinedButton.styleFrom(
-        foregroundColor: Colors.white,
-        side: const BorderSide(color: Colors.white70),
-      ),
-      onPressed: () => _open(context),
-      icon: const Icon(Icons.group_add, size: 18),
-      label: const Text('إضافة كاشير'),
     );
   }
 }

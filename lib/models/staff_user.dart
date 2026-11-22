@@ -5,6 +5,7 @@ class StaffUser {
     required this.roleId,
     this.isActive = true,
     this.pin,
+    this.employeeId,
     this.restaurantId,
     this.restaurantName,
     this.createdAt,
@@ -16,6 +17,7 @@ class StaffUser {
   final String roleId;
   final bool isActive;
   final String? pin;
+  final String? employeeId;
   final String? restaurantId;
   final String? restaurantName;
   final DateTime? createdAt;
@@ -35,6 +37,7 @@ class StaffUser {
       roleId: json['roleId']?.toString() ?? json['role_id']?.toString() ?? 'cashier',
       isActive: json['isActive'] != false && json['is_active'] != false,
       pin: json['pin']?.toString() ?? json['maskedPin']?.toString(),
+      employeeId: json['employeeId']?.toString() ?? json['employee_id']?.toString(),
       restaurantId: json['restaurantId']?.toString() ??
           json['restaurant_id']?.toString(),
       restaurantName: json['restaurantName']?.toString() ??
@@ -50,6 +53,7 @@ class StaffUser {
         'roleId': roleId,
         'isActive': isActive,
         if (pin != null && pin.isNotEmpty) 'pin': pin,
+        if (employeeId != null && employeeId!.isNotEmpty) 'employeeId': employeeId,
       };
 }
 

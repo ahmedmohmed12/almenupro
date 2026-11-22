@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 
 import '../../../models/staff_user.dart';
 import '../../../services/pos_operations_service.dart';
-import 'pos_add_staff_dialog.dart';
 import 'pos_staff_empty_state.dart';
 
 class PosStaffPage extends StatefulWidget {
@@ -33,11 +32,6 @@ class _PosStaffPageState extends State<PosStaffPage> {
     }
   }
 
-  Future<void> _addStaff() async {
-    final created = await showPosAddStaffDialog(context);
-    if (created != null) await _load();
-  }
-
   @override
   Widget build(BuildContext context) {
     return Padding(
@@ -45,20 +39,14 @@ class _PosStaffPageState extends State<PosStaffPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Row(
-            children: [
-              const Expanded(
-                child: Text(
-                  'إدارة الموظفين / الكاشير',
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                ),
-              ),
-              FilledButton.icon(
-                onPressed: _addStaff,
-                icon: const Icon(Icons.person_add),
-                label: const Text('إضافة كاشير'),
-              ),
-            ],
+          const Text(
+            'كاشير POS (عرض فقط)',
+            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 6),
+          const Text(
+            'التعيين من لوحة الإدارة → شؤون الموظفين → الموظفون.',
+            style: TextStyle(fontSize: 13, color: Color(0xFF64748B)),
           ),
           const SizedBox(height: 16),
           Expanded(
@@ -77,7 +65,11 @@ class _PosStaffPageState extends State<PosStaffPage> {
                               child: Text(member.name.isNotEmpty ? member.name[0] : '?'),
                             ),
                             title: Text(member.name),
-                            subtitle: Text('الدور: ${member.roleId} • PIN: ${member.maskedPin}'),
+                            subtitle: Text(
+                              'الدور: ${member.roleId}'
+                              '${member.employeeId != null ? ' • HR: ${member.employeeId}' : ''}'
+                              ' • PIN: ${member.maskedPin}',
+                            ),
                           );
                         },
                       ),

@@ -484,12 +484,24 @@ class PosOperationsService extends ChangeNotifier {
     required String name,
     required String roleId,
     required String pin,
+    String? employeeId,
+    bool hrProvision = false,
   }) async {
+    final headers = Map<String, String>.from(_headers);
+    if (hrProvision) {
+      headers['X-Staff-Provision-Source'] = 'hr';
+    }
     final response = await http
         .post(
           _posUri('/pos/staff'),
-          headers: _headers,
-          body: jsonEncode({'name': name, 'roleId': roleId, 'pin': pin}),
+          headers: headers,
+          body: jsonEncode({
+            'name': name,
+            'roleId': roleId,
+            'pin': pin,
+            if (employeeId != null && employeeId.isNotEmpty) 'employeeId': employeeId,
+            if (hrProvision) 'provisionSource': 'hr',
+          }),
         )
         .timeout(const Duration(seconds: 30));
 
@@ -510,16 +522,24 @@ class PosOperationsService extends ChangeNotifier {
     String? roleId,
     String? pin,
     bool? isActive,
+    String? employeeId,
+    bool hrProvision = false,
   }) async {
+    final headers = Map<String, String>.from(_headers);
+    if (hrProvision) {
+      headers['X-Staff-Provision-Source'] = 'hr';
+    }
     final response = await http
         .patch(
           _posUri('/pos/staff/$id'),
-          headers: _headers,
+          headers: headers,
           body: jsonEncode({
             if (name != null) 'name': name,
             if (roleId != null) 'roleId': roleId,
             if (pin != null) 'pin': pin,
             if (isActive != null) 'isActive': isActive,
+            if (employeeId != null) 'employeeId': employeeId,
+            if (hrProvision) 'provisionSource': 'hr',
           }),
         )
         .timeout(const Duration(seconds: 30));

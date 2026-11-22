@@ -9,7 +9,6 @@ import '../../services/super_admin_scope_service.dart';
 import 'admin_corner_toast.dart';
 import 'admin_responsive_layout.dart';
 import 'pos/pos_add_staff_dialog.dart';
-import 'pos/pos_staff_empty_state.dart';
 
 class AdminPosRolesStaffCard extends StatefulWidget {
   const AdminPosRolesStaffCard({super.key});
@@ -99,20 +98,6 @@ class _AdminPosRolesStaffCardState extends State<AdminPosRolesStaffCard> {
       AdminCornerToast.error(context, 'تعذر حفظ صلاحيات POS');
     } finally {
       if (mounted) setState(() => _savingRoles = false);
-    }
-  }
-
-  Future<void> _addStaff() async {
-    try {
-      final created = await showPosAddStaffDialog(context);
-      if (created == null) return;
-
-      await _load();
-      if (!mounted) return;
-      AdminCornerToast.success(context, 'تم إضافة الموظف');
-    } catch (_) {
-      if (!mounted) return;
-      AdminCornerToast.error(context, 'تعذر إضافة الموظف');
     }
   }
 
@@ -250,24 +235,17 @@ class _AdminPosRolesStaffCardState extends State<AdminPosRolesStaffCard> {
                     ),
                   ),
                   const Divider(height: 32),
-                  Row(
-                    children: [
-                      const Expanded(
-                        child: Text(
-                          'الموظفون والكاشير حسب المطعم',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                      if (SuperAdminScopeService.instance.hasEffectiveRestaurant)
-                        FilledButton.icon(
-                          onPressed: _addStaff,
-                          icon: const Icon(Icons.person_add),
-                          label: const Text('إضافة موظف'),
-                        ),
-                    ],
+                  const Text(
+                    'الكاشير المرتبط بـ POS (للعرض فقط)',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  const Text(
+                    'إنشاء وتعيين الكاشير حصرياً من شؤون الموظفين → تبويب الموظفون.',
+                    style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
                   ),
                   const SizedBox(height: 8),
                   if (_loadError != null)
@@ -276,21 +254,12 @@ class _AdminPosRolesStaffCardState extends State<AdminPosRolesStaffCard> {
                       style: TextStyle(color: Colors.red.shade700),
                     )
                   else if (_staff.isEmpty)
-                    SuperAdminScopeService.instance.hasEffectiveRestaurant
-                        ? PosStaffEmptyState(
-                            compact: true,
-                            onStaffAdded: () async {
-                              await _load();
-                              if (!mounted) return;
-                              AdminCornerToast.success(context, 'تم إضافة الموظف');
-                            },
-                          )
-                        : const Padding(
-                            padding: EdgeInsets.symmetric(vertical: 16),
-                            child: Text(
-                              'لا يوجد موظفون أو كاشير محفوظون حالياً. اختر مطعماً لإضافة موظفين.',
-                            ),
-                          )
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 16),
+                      child: Text(
+                        'لا يوجد كاشير POS بعد — عيّنهم من شؤون الموظفين.',
+                      ),
+                    )
                   else
                     ..._staffByRestaurant.entries.map(_buildRestaurantStaffGroup),
                 ],

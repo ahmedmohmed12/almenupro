@@ -19,7 +19,6 @@ import '../../../services/restaurant_settings_service.dart';
 import '../../../utils/admin_route_nav.dart';
 import '../../language_toggle_button.dart';
 import '../admin_pos_panel.dart';
-import 'pos_add_staff_dialog.dart';
 import 'pos_close_shift_dialog.dart';
 import 'pos_layout.dart';
 import 'pos_approvals_page.dart';
@@ -604,13 +603,6 @@ class _PosShiftShellState extends State<PosShiftShell> {
   Widget _buildCashierLogin() {
     final s = AppStrings.of(context);
     final isCashierJwt = AdminAuthService.instance.isCashier;
-    final canAddStaff =
-        !isCashierJwt &&
-        (AdminAuthService.instance.isRestaurantAdmin ||
-            AdminAuthService.instance.isSuperAdmin ||
-            PosOperationsService.instance.allows(
-              PosPermissionKeys.manageStaff,
-            ));
     final canContinueAsAdmin =
         !isCashierJwt &&
         (AdminAuthService.instance.isRestaurantAdmin ||
@@ -697,19 +689,6 @@ class _PosShiftShellState extends State<PosShiftShell> {
                   onPressed: _loading ? null : _loginCashier,
                   child: Text(s.tr('دخول', 'Sign in')),
                 ),
-                if (canAddStaff) ...[
-                  const SizedBox(height: 8),
-                  OutlinedButton.icon(
-                    onPressed: () async {
-                      await showPosAddStaffDialog(context);
-                      await _refreshStaff();
-                    },
-                    icon: const Icon(Icons.person_add),
-                    label: Text(
-                      s.tr('إضافة موظف / كاشير جديد', 'Add staff / cashier'),
-                    ),
-                  ),
-                ],
                 if (canContinueAsAdmin) ...[
                   const SizedBox(height: 8),
                   TextButton(

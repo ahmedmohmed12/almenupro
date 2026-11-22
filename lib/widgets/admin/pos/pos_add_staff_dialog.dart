@@ -186,30 +186,24 @@ class _PosAddStaffDialogState extends State<PosAddStaffDialog> {
   }
 }
 
-/// Opens the add-staff dialog. Returns the created [StaffUser] or null.
-Future<StaffUser?> showPosAddStaffDialog(
-  BuildContext context, {
-  String initialName = '',
-  String initialPin = '',
-  PosStaffFormRole initialRole = PosStaffFormRole.cashier,
-}) {
-  return showDialog<StaffUser>(
+/// @deprecated Use [showHrProvisionPosCashierDialog] from شؤون الموظفين only.
+Future<StaffUser?> showPosAddStaffDialog(BuildContext context) async {
+  await showDialog<void>(
     context: context,
-    builder: (context) => PosAddStaffDialog(
-      initialName: initialName,
-      initialPin: initialPin,
-      initialRole: initialRole,
+    builder: (context) => AlertDialog(
+      title: const Text('تعيين الكاشير'),
+      content: const Text(
+        'إنشاء وتعيين الكاشير متاح فقط من لوحة الإدارة → شؤون الموظفين → تبويب «الموظفون».',
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('حسناً'),
+        ),
+      ],
     ),
   );
-}
-
-/// Creates a default Admin cashier (PIN 1234) for quick setup.
-Future<StaffUser> seedDefaultPosStaff() {
-  return PosOperationsService.instance.createStaffUser(
-    name: 'Admin',
-    roleId: PosStaffFormRole.branchManager.roleId,
-    pin: '1234',
-  );
+  return null;
 }
 
 String roleLabelForStaff(StaffUser member, {List<PosRole>? roles}) {
