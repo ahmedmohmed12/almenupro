@@ -4,6 +4,7 @@ import '../models/delivery_address_details.dart';
 import '../models/invoice_language.dart';
 import '../models/order.dart';
 import '../models/pos_role.dart';
+import '../utils/kitchen_modification_delta.dart';
 import '../utils/pos_receipt_html.dart';
 import 'admin_auth_service.dart';
 import 'pos_operations_service.dart';
@@ -171,6 +172,39 @@ abstract final class PosPrintHelper {
     } catch (_) {
       return false;
     }
+  }
+
+  static Future<void> printKitchenModification({
+    required Order order,
+    required KitchenModificationDelta delta,
+    bool respectAutoPrint = true,
+  }) async {
+    if (delta.isEmpty) return;
+    await ensureReady();
+    if (!canPrint) return;
+  final cfg = settings;
+  if (respectAutoPrint && !cfg.autoPrintKitchen) return;
+
+    final html = PosReceiptHtml.buildKitchenModification(
+      order: order,
+      delta: delta,
+      restaurantName: restaurantName,
+      restaurantPhone: restaurantPhone,
+      widthMm: cfg.widthMm,
+      fontSize: cfg.fontSize,
+      language: invoiceLanguage,
+    );
+    if (html.trim().isEmpty) return;
+
+    final silent = await _tryQzSilentPrint(
+      html: html,
+      orderId: '${order.id}-mod',
+      copies: 1,
+      widthMm: cfg.widthMm,
+      printerName: cfg.qzPrinterName,
+    );
+    if (silent) return;
+    await printPosReceiptHtml(html, zeroClick: false);
   }
 
   static Future<void> printIfAuto({

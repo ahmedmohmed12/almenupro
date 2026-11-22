@@ -37,6 +37,7 @@ import '../../models/order_payment_line.dart';
 import '../../utils/order_payment_utils.dart';
 import '../../utils/order_payments.dart';
 import '../../utils/kitchen_dispatch.dart';
+import '../../utils/kitchen_modification_delta.dart';
 import '../../utils/pos_pending_orders.dart';
 import '../../utils/pos_cart_from_order.dart';
 import '../../utils/pos_customer_contact.dart';
@@ -127,6 +128,7 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
 
   final List<CartItem> _cart = [];
   KitchenOverrideAuthorization? _pendingKitchenOverride;
+  List<CartItem> _kitchenSyncBaseline = const [];
   List<MenuItem> _allItems = const [];
   List<SalesPlatformConfig> _salesPlatforms = SalesPlatformConfig.defaults();
   PosPlatformSelection _platformSelection = PosPlatformSelection(
@@ -323,10 +325,56 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
       ),
     );
     _settlingHeldOrder = order;
+    _syncKitchenBaseline();
     if (mounted) {
       setState(() {});
       _cartTick.value++;
     }
+  }
+
+  List<CartItem> _cloneCartSnapshot(Iterable<CartItem> items) => [
+        for (final item in items)
+          item.copyWith(
+            selectedOptions: List<SelectedOption>.from(item.selectedOptions),
+          ),
+      ];
+
+  void _syncKitchenBaseline() {
+    if (_cart.any((line) => line.isSentToKitchen)) {
+      _kitchenSyncBaseline = _cloneCartSnapshot(_cart);
+    }
+  }
+
+  Order _kitchenPrintOrder({Order? ref}) {
+    final subtotal = _cart.fold<double>(0, (sum, item) => sum + item.totalPrice);
+    final held = ref ?? _settlingHeldOrder;
+    final table = widget.dineInTable;
+    return OrdersDemoService.orderFromCart(
+      cartItems: List.from(_cart),
+      customerName: held?.customerName ?? _posCustomerName(),
+      phone: held?.phone ?? _posCustomerPhone(),
+      address: _isDineIn
+          ? (table != null ? 'طاولة ${table.number}' : 'صالة')
+          : 'استلام من المحل',
+      paymentMethod: held?.paymentMethod ?? _paymentMethod,
+      invoiceNumber: held?.invoiceNumber,
+      id: held?.id,
+      orderType: _isDineIn ? OrderType.dineIn : OrderType.pickup,
+      tableId: table?.id,
+      subtotal: subtotal,
+    );
+  }
+
+  Future<void> _maybePrintKitchenModification({
+    required List<CartItem> before,
+    Order? orderRef,
+  }) async {
+    final delta = computeKitchenModificationDelta(before, _cart);
+    if (!delta.hasKitchenRelevantChange) return;
+    await PosPrintHelper.printKitchenModification(
+      order: orderRef ?? _kitchenPrintOrder(),
+      delta: delta,
+    );
   }
 
   @override
@@ -685,6 +733,9 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
   Future<void> _persistDineInSession() async {
     final table = widget.dineInTable;
     if (table == null) return;
+    final before = _cloneCartSnapshot(
+      _kitchenSyncBaseline.isNotEmpty ? _kitchenSyncBaseline : _cart,
+    );
     try {
       final cashier = PosOperationsService.instance.cashierSession;
       final shift = PosOperationsService.instance.activeShift;
@@ -706,6 +757,8 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
       );
       _pendingKitchenOverride = null;
       widget.onDineInSessionUpdated?.call(updated);
+      await _maybePrintKitchenModification(before: before);
+      _syncKitchenBaseline();
     } catch (error) {
       final message = error.toString().replaceFirst('Exception: ', '');
       if (message.contains('KITCHEN_DISPATCH') ||
@@ -719,6 +772,9 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
   Future<void> _persistPickupHoldOrder() async {
     final held = _settlingHeldOrder;
     if (held == null || _cart.isEmpty) return;
+    final before = _cloneCartSnapshot(
+      _kitchenSyncBaseline.isNotEmpty ? _kitchenSyncBaseline : _cart,
+    );
     try {
       final shift = PosOperationsService.instance.activeShift;
       final cashier = PosOperationsService.instance.cashierSession;
@@ -742,6 +798,8 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
       if (saved != null) {
         _settlingHeldOrder = saved;
         OrdersDemoService.replaceVisibleOrder(saved);
+        await _maybePrintKitchenModification(before: before, orderRef: saved);
+        _syncKitchenBaseline();
       }
     } catch (error) {
       final message = error.toString().replaceFirst('Exception: ', '');
@@ -1422,6 +1480,7 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
             ),
           );
       }
+      _syncKitchenBaseline();
       (widget.onOrderSubmitted ?? widget.onOrdersSubmitted)?.call();
       final autoPrint = PosPrintHelper.settings.autoPrintKitchen;
       if (autoPrint) {

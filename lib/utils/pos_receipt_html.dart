@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 import '../models/invoice_language.dart';
 import '../models/order.dart';
 import '../services/pos_print_settings_service.dart';
+import 'kitchen_modification_delta.dart';
 
 enum PosReceiptKind { kitchen, customer }
 
@@ -475,6 +476,118 @@ class PosReceiptHtml {
       @page { size: ${w}mm auto; margin: 2mm 2mm; }
     }
   ''';
+  }
+
+  static String buildKitchenModification({
+    required Order order,
+    required KitchenModificationDelta delta,
+    required String restaurantName,
+    String? restaurantPhone,
+    PosReceiptPaperWidth? paperWidth,
+    double? widthMm,
+    PosPrintFontSize fontSize = PosPrintFontSize.medium,
+    InvoiceLanguage language = InvoiceLanguage.arabic,
+  }) {
+    if (delta.isEmpty) return '';
+    final ar = language.isArabic;
+    final resolvedWidth =
+        widthMm ?? (paperWidth == PosReceiptPaperWidth.mm58 ? 58.0 : 80.0);
+    final w = resolvedWidth.clamp(40.0, 120.0);
+    final fonts = _fontScale(fontSize, w);
+    final orderId = order.invoiceNumber ?? order.id;
+    final time = DateFormat('hh:mm a').format(DateTime.now().toLocal());
+    final dateLine = DateFormat('yyyy-MM-dd').format(DateTime.now().toLocal());
+
+    String section(String title, List<KitchenModificationLine> lines) {
+      if (lines.isEmpty) return '';
+      final rows = lines
+          .map(
+            (line) => '''
+        <div class="kitchen-item">
+          <div class="kitchen-qty">${line.quantity}</div>
+          <div class="kitchen-details">
+            <div class="kitchen-name">${_escape(line.name)}</div>
+            ${line.detail != null ? '<div class="mod-detail">${_escape(line.detail!)}</div>' : ''}
+            ${(line.notes ?? '').trim().isNotEmpty ? '<div class="note">${_escape(line.notes!.trim())}</div>' : ''}
+          </div>
+        </div>''',
+          )
+          .join();
+      return '''
+      <div class="mod-section">
+        <div class="mod-section-title">${_escape(title)}</div>
+        <div class="kitchen-items">$rows</div>
+      </div>''';
+    }
+
+    final body = [
+      section(ar ? 'إضافات' : 'Added', delta.added),
+      section(ar ? 'تعديلات' : 'Changed', delta.changed),
+      section(ar ? 'إلغاء / تقليل' : 'Void / reduced', delta.voided),
+    ].join();
+
+    final tableLabel = _tableLabel(order, ar: ar);
+    final tableLine = tableLabel != null
+        ? '<div class="order-no">${_escape(tableLabel)}</div>'
+        : '';
+
+    return '''
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>${ar ? 'فاتورة معدّلة' : 'Modified ticket'}</title>
+  <style>
+    ${_thermalCss(widthMm: w, fonts: fonts)}
+    .mod-banner {
+      border: 3px solid #000;
+      text-align: center;
+      font-weight: 900;
+      font-size: ${(fonts.kitchen * 1.05).toStringAsFixed(1)}px;
+      padding: 8px 4px;
+      margin: 8px 0;
+      line-height: 1.25;
+    }
+    .mod-subtitle {
+      text-align: center;
+      font-size: ${(fonts.base * 0.9).toStringAsFixed(1)}px;
+      font-weight: 700;
+      margin-bottom: 6px;
+    }
+    .mod-section { margin: 8px 0; }
+    .mod-section-title {
+      font-weight: 800;
+      font-size: ${fonts.title.toStringAsFixed(1)}px;
+      border-bottom: 2px dashed #000;
+      margin-bottom: 4px;
+      padding-bottom: 2px;
+    }
+    .mod-detail {
+      font-size: ${(fonts.base * 0.9).toStringAsFixed(1)}px;
+      font-weight: 700;
+    }
+  </style>
+</head>
+<body class="kitchen-ticket">
+  <div class="receipt-root">
+    <div class="receipt-header">
+      <div class="brand">${_escape(restaurantName)}</div>
+      ${restaurantPhone?.trim().isNotEmpty == true ? '<div class="store-meta">${_escape(restaurantPhone!.trim())}</div>' : ''}
+    </div>
+    <div class="mod-banner">${ar ? 'فاتورة معدّلة' : 'MODIFIED TICKET'}</div>
+    <div class="mod-subtitle">${ar ? 'تحديث على طلب موجود — لا تُعِد تحضير ما سبق إرساله' : 'Update only — do not re-prepare prior items'}</div>
+    <div class="order-no">#${_escape(orderId)}</div>
+    $tableLine
+    <div class="status-row"><span class="pill">$time</span></div>
+    <div class="divider"></div>
+    $body
+    <div class="divider"></div>
+    <div class="footer-meta">$dateLine · ${_escape(order.customerName)}</div>
+    <div class="footer">${ar ? '— تحديث مطبخ —' : '— Kitchen update —'}</div>
+  </div>
+</body>
+</html>''';
   }
 
   static String _escape(String value) {
