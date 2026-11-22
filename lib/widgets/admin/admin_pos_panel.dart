@@ -623,14 +623,6 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
 
     await OrdersDemoService.refreshFromApi();
   var candidates = pendingPosPickupOrders(OrdersDemoService.loadedOrders);
-  if (_restaurantId.isNotEmpty) {
-      candidates = candidates
-          .where(
-            (order) =>
-                (order.restaurantId ?? '').trim() == _restaurantId.trim(),
-          )
-          .toList();
-    }
     final shift = PosOperationsService.instance.activeShift;
     if (shift != null && shift.id.trim().isNotEmpty) {
       final scoped = candidates
