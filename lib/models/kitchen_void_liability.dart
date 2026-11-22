@@ -27,6 +27,9 @@ class KitchenVoidLiability {
     this.reviewedByName,
     this.reviewNote,
     this.reviewedAt,
+    this.payrollDeductedAt,
+    this.payrollDeductedMonth,
+    this.payrollDeductedYear,
   });
 
   final String id;
