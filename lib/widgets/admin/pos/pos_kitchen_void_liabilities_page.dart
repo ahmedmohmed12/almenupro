@@ -3,10 +3,18 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../../models/kitchen_void_liability.dart';
+import '../../../services/admin_auth_service.dart';
 import '../../../services/pos_operations_service.dart';
 
 class PosKitchenVoidLiabilitiesPage extends StatefulWidget {
-  const PosKitchenVoidLiabilitiesPage({super.key});
+  const PosKitchenVoidLiabilitiesPage({
+    super.key,
+    this.onPendingSummaryChanged,
+  });
+
+  /// Called after each refresh so parent UI (e.g. tab badge) can update.
+  final void Function(KitchenVoidLiabilitySummary summary)?
+      onPendingSummaryChanged;
 
   @override
   State<PosKitchenVoidLiabilitiesPage> createState() =>
@@ -20,6 +28,10 @@ class _PosKitchenVoidLiabilitiesPageState extends State<PosKitchenVoidLiabilitie
   List<KitchenVoidLiability> _rows = const [];
   KitchenVoidLiabilitySummary _summary = const KitchenVoidLiabilitySummary();
   Timer? _timer;
+
+  static const _burgundy = Color(0xFF6B1124);
+
+  bool get _canReview => PosOperationsService.instance.canReviewRemoteApprovals();
 
   @override
   void initState() {
@@ -36,12 +48,11 @@ class _PosKitchenVoidLiabilitiesPageState extends State<PosKitchenVoidLiabilitie
 
   Future<void> _refresh() async {
     final shift = PosOperationsService.instance.activeShift;
-    final cashier = PosOperationsService.instance.cashierSession;
-    final manager = PosOperationsService.instance.canReviewRemoteApprovals();
+    final canReview = _canReview;
     try {
       final result = await PosOperationsService.instance.fetchKitchenVoidLiabilities(
-        shiftId: manager ? null : shift?.id,
-        status: manager ? 'PENDING' : 'ALL',
+        shiftId: canReview ? null : shift?.id,
+        status: canReview ? 'PENDING' : 'ALL',
       );
       if (!mounted) return;
       setState(() {
@@ -50,6 +61,7 @@ class _PosKitchenVoidLiabilitiesPageState extends State<PosKitchenVoidLiabilitie
         _loading = false;
         _error = null;
       });
+      widget.onPendingSummaryChanged?.call(result.summary);
     } catch (error) {
       if (!mounted) return;
       setState(() {
@@ -59,17 +71,39 @@ class _PosKitchenVoidLiabilitiesPageState extends State<PosKitchenVoidLiabilitie
     }
   }
 
-  Future<void> _review(KitchenVoidLiability row, {required bool approve}) async {
+  String _reviewerRoleId() {
     final cashier = PosOperationsService.instance.cashierSession;
+    final roleId = cashier?.roleId.trim() ?? '';
+    if (roleId.isNotEmpty) return roleId;
+    final auth = AdminAuthService.instance;
+    if (auth.isSuperAdmin) return 'super_admin';
+    if (auth.isRestaurantAdmin) return 'restaurant_admin';
+    return 'manager';
+  }
+
+  ({String? id, String? name}) _reviewerIdentity() {
+    final cashier = PosOperationsService.instance.cashierSession;
+    if (cashier != null) {
+      return (id: cashier.staff.id, name: cashier.staff.name);
+    }
+    final auth = AdminAuthService.instance;
+    return (
+      id: auth.auditUserId,
+      name: auth.auditUserName.isNotEmpty ? auth.auditUserName : 'مدير',
+    );
+  }
+
+  Future<void> _review(KitchenVoidLiability row, {required bool approve}) async {
+    final reviewer = _reviewerIdentity();
     setState(() => _busyId = row.id);
     try {
       await PosOperationsService.instance.reviewKitchenVoidLiability(
         row.id,
         approve: approve,
-        reviewNote: approve ? 'موافقة' : 'مديونية على الكاشير',
-        reviewedById: cashier?.staff.id,
-        reviewedByName: cashier?.staff.name,
-        roleId: cashier?.roleId,
+        reviewNote: approve ? 'موافقة (إعفاء الكاشير)' : 'مديونية على الكاشير',
+        reviewedById: reviewer.id,
+        reviewedByName: reviewer.name,
+        roleId: _reviewerRoleId(),
       );
       await _refresh();
     } catch (error) {
@@ -82,9 +116,49 @@ class _PosKitchenVoidLiabilitiesPageState extends State<PosKitchenVoidLiabilitie
     }
   }
 
+  Widget _pendingActions(KitchenVoidLiability row) {
+    final busy = _busyId == row.id;
+    return Padding(
+      padding: const EdgeInsets.only(top: 10),
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [
+          FilledButton.icon(
+            style: FilledButton.styleFrom(
+              backgroundColor: _burgundy,
+              minimumSize: const Size(0, 40),
+              padding: const EdgeInsets.symmetric(horizontal: 14),
+            ),
+            onPressed: busy ? null : () => _review(row, approve: true),
+            icon: busy
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                  )
+                : const Icon(Icons.check_circle_outline, size: 20),
+            label: const Text('موافقة (إعفاء)'),
+          ),
+          OutlinedButton.icon(
+            style: OutlinedButton.styleFrom(
+              foregroundColor: _burgundy,
+              side: const BorderSide(color: _burgundy),
+              minimumSize: const Size(0, 40),
+              padding: const EdgeInsets.symmetric(horizontal: 14),
+            ),
+            onPressed: busy ? null : () => _review(row, approve: false),
+            icon: const Icon(Icons.money_off_csred_outlined, size: 20),
+            label: const Text('رفض (مديونية)'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final manager = PosOperationsService.instance.canReviewRemoteApprovals();
     if (_loading) return const Center(child: CircularProgressIndicator());
 
     return RefreshIndicator(
@@ -132,26 +206,15 @@ class _PosKitchenVoidLiabilitiesPageState extends State<PosKitchenVoidLiabilitie
                     ),
                     Text('السبب: ${row.reason}'),
                     Text('الحالة: ${row.approvalStatus}'),
-                    if (manager && row.isPending) ...[
-                      const SizedBox(height: 8),
-                      Row(
-                        children: [
-                          FilledButton(
-                            onPressed: _busyId == row.id
-                                ? null
-                                : () => _review(row, approve: true),
-                            child: const Text('موافقة (إعفاء)'),
-                          ),
-                          const SizedBox(width: 8),
-                          OutlinedButton(
-                            onPressed: _busyId == row.id
-                                ? null
-                                : () => _review(row, approve: false),
-                            child: const Text('رفض (مديونية)'),
-                          ),
-                        ],
+                    if (row.isPending && _canReview) _pendingActions(row),
+                    if (row.isPending && !_canReview)
+                      const Padding(
+                        padding: EdgeInsets.only(top: 8),
+                        child: Text(
+                          'لا توجد صلاحية مراجعة — سجّل دخول مدير أو مشرف.',
+                          style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                        ),
                       ),
-                    ],
                   ],
                 ),
               ),

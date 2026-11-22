@@ -143,7 +143,9 @@ class _AdminAnalyticsReportsPanelState extends State<AdminAnalyticsReportsPanel>
                   ),
                 ),
                 if (widget.showKitchenVoidTab)
-                  const PosKitchenVoidLiabilitiesPage(),
+                  PosKitchenVoidLiabilitiesPage(
+                    onPendingSummaryChanged: (_) => unawaited(_refreshPendingBadge()),
+                  ),
               ],
             ),
           ),
