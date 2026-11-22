@@ -2,6 +2,8 @@ import '../models/hr_models.dart';
 
 const hrStandardDayMinutes = 8 * 60;
 
+double hrRoundMoney(double value) => double.parse(value.toStringAsFixed(3));
+
 DateTime hrDateOnly(DateTime value) => DateTime(value.year, value.month, value.day);
 
 int hrDaysUntil(DateTime expiry, DateTime now) {
@@ -233,14 +235,18 @@ class PayrollBreakdown {
   final double loanDeduction;
   final double kitchenVoidDeduction;
 
-  double get deductions =>
-      absenceDeduction + lateDeduction + penalties + kitchenVoidDeduction;
+  /// Attendance/HR penalties only (excludes kitchen void debt and loans).
+  double get operationalDeductions => absenceDeduction + lateDeduction + penalties;
+
+  /// Total withheld before loan: operational + kitchen void (مديونية مطبخ).
+  double get totalDeductionsBeforeLoan =>
+      operationalDeductions + kitchenVoidDeduction;
 
   double get gross => basicSalary + totalAllowances + overtimeAmount;
 
-  /// Net = (basic + allowances + overtime) − (recorded absence/late + penalties + loan + kitchen void debt).
-  /// Days without a punch stay in the basic salary.
-  double get netSalary => gross - deductions - loanDeduction;
+  /// Net = gross − operational − kitchen void debt − loan installment.
+  double get netSalary =>
+      gross - operationalDeductions - kitchenVoidDeduction - loanDeduction;
 }
 
 PayrollBreakdown calculatePayroll({
@@ -311,15 +317,16 @@ PayrollBreakdown calculatePayroll({
         : loan.amount;
   }
 
-  final kitchenDebt = kitchenVoidDeduction < 0 ? 0.0 : kitchenVoidDeduction;
+  final kitchenDebt =
+      hrRoundMoney(kitchenVoidDeduction < 0 ? 0.0 : kitchenVoidDeduction);
   return PayrollBreakdown(
-    basicSalary: employee.basicSalary,
-    totalAllowances: employee.totalAllowances,
-    overtimeAmount: overtimeAmount,
-    absenceDeduction: absenceDeduction,
-    lateDeduction: lateDeduction,
-    penalties: penaltyTotal,
-    loanDeduction: loanDeduction,
+    basicSalary: hrRoundMoney(employee.basicSalary),
+    totalAllowances: hrRoundMoney(employee.totalAllowances),
+    overtimeAmount: hrRoundMoney(overtimeAmount),
+    absenceDeduction: hrRoundMoney(absenceDeduction),
+    lateDeduction: hrRoundMoney(lateDeduction),
+    penalties: hrRoundMoney(penaltyTotal),
+    loanDeduction: hrRoundMoney(loanDeduction),
     kitchenVoidDeduction: kitchenDebt,
   );
 }
@@ -356,9 +363,9 @@ List<PayrollModel> buildMonthlyPayroll({
         basicSalary: breakdown.basicSalary,
         totalAllowances: breakdown.totalAllowances,
         overtimeAmount: breakdown.overtimeAmount,
-        deductions: breakdown.deductions,
+        deductions: breakdown.operationalDeductions,
         loanDeduction: breakdown.loanDeduction,
-        netSalary: breakdown.netSalary,
+        netSalary: hrRoundMoney(breakdown.netSalary),
         status: existingStatus[id] ?? PayrollStatus.draft,
         absenceDeduction: breakdown.absenceDeduction,
         lateDeduction: breakdown.lateDeduction,

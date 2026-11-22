@@ -447,9 +447,10 @@ class _PayrollTab extends StatelessWidget {
               child: ListTile(
                 title: Text(_name(hr, row.employeeId)),
                 subtitle: Text(
-                  'الصافي ${row.netSalary.toStringAsFixed(3)} • استقطاع ${row.deductions.toStringAsFixed(3)}'
-                  '${row.kitchenVoidDeduction > 0 ? ' • مديونية مطبخ ${row.kitchenVoidDeduction.toStringAsFixed(3)}' : ''}'
-                  ' • سلفة ${row.loanDeduction.toStringAsFixed(3)}',
+                  'الصافي ${_payrollMoney(row.netSalary)}'
+                  ' • استقطاع ${_payrollMoney(row.deductions)}'
+                  '${row.kitchenVoidDeduction > 0 ? ' • مديونية مطبخ ${_payrollMoney(row.kitchenVoidDeduction)}' : ''}'
+                  ' • سلفة ${_payrollMoney(row.loanDeduction)}',
                 ),
                 trailing: row.status == PayrollStatus.paid
                     ? const Text('مدفوع', style: TextStyle(color: Color(0xFF15803D)))
@@ -466,6 +467,8 @@ class _PayrollTab extends StatelessWidget {
 
 String _name(HrController hr, String id) =>
     hr.employeesById[id]?.name ?? id;
+
+String _payrollMoney(double value) => value.toStringAsFixed(3);
 
 String _filterLabel(DocAlertFilter filter) => switch (filter) {
       DocAlertFilter.all => 'الكل',

@@ -309,4 +309,25 @@ void main() {
     expect(breakdown.overtimeAmount, 2);
     expect(breakdown.netSalary, 372);
   });
+
+  test('kitchen void debt is separate from operational استقطاع', () {
+    final person = employee();
+    final breakdown = calculatePayroll(
+      employee: person,
+      attendance: const [],
+      records: const [],
+      month: 10,
+      year: 2026,
+      kitchenVoidDeduction: 4.5,
+    );
+    expect(breakdown.operationalDeductions, 0);
+    expect(breakdown.kitchenVoidDeduction, 4.5);
+    expect(breakdown.netSalary, 365.5);
+    expect(
+      breakdown.gross -
+          breakdown.operationalDeductions -
+          breakdown.kitchenVoidDeduction,
+      breakdown.netSalary,
+    );
+  });
 }
