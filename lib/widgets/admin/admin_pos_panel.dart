@@ -357,7 +357,7 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
           ? (table != null ? 'طاولة ${table.number}' : 'صالة')
           : 'استلام من المحل',
       paymentMethod: held?.paymentMethod ?? _paymentMethod,
-      invoiceNumber: held?.invoiceNumber,
+      invoiceNumber: held?.invoiceNumber ?? held?.id ?? '',
       id: held?.id,
       orderType: _isDineIn ? OrderType.dineIn : OrderType.pickup,
       tableId: table?.id,
