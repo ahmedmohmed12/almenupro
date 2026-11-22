@@ -1,10 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
-import '../../../models/pos_approval_request.dart';
-import '../../../services/pos_operations_service.dart';
 import '../../../utils/kitchen_dispatch.dart';
-import 'pos_remote_approval_panel.dart';
 
 Future<KitchenOverrideAuthorization?> showPosKitchenLineOverrideDialog(
   BuildContext context, {
@@ -60,16 +56,13 @@ class _KitchenLineOverrideDialog extends StatefulWidget {
 }
 
 class _KitchenLineOverrideDialogState extends State<_KitchenLineOverrideDialog> {
-  final _pinController = TextEditingController();
   final _otherReasonController = TextEditingController();
   String _reason = KitchenVoidReason.entryMistake;
   bool _otherSelected = false;
-  var _submitting = false;
   String? _error;
 
   @override
   void dispose() {
-    _pinController.dispose();
     _otherReasonController.dispose();
     super.dispose();
   }
@@ -83,29 +76,7 @@ class _KitchenLineOverrideDialogState extends State<_KitchenLineOverrideDialog> 
     return _reason;
   }
 
-  Map<String, dynamic> get _approvalPayload => {
-        'orderId': widget.orderId ?? widget.entityId,
-        'cartItemId': widget.cartItemId,
-        'itemName': widget.itemName,
-        if (widget.previousQuantity != null)
-          'previousQuantity': widget.previousQuantity,
-        if (widget.nextQuantity != null) 'nextQuantity': widget.nextQuantity,
-        'actionLabel': widget.actionLabel,
-      };
-
-  void _completeRemote(PosApprovalRequest request) {
-    Navigator.of(context).pop(
-      KitchenOverrideAuthorization(
-        reason: _resolvedReason,
-        approvalRequestId: request.id,
-        cartItemId: widget.cartItemId,
-        authorizedById: request.reviewedById,
-        authorizedByName: request.reviewedByName,
-      ),
-    );
-  }
-
-  Future<void> _submitConditional() async {
+  void _submitConditional() {
     if (_otherSelected && _otherReasonController.text.trim().isEmpty) {
       setState(() => _error = 'أدخل السبب');
       return;
@@ -116,62 +87,12 @@ class _KitchenLineOverrideDialogState extends State<_KitchenLineOverrideDialog> 
         cartItemId: widget.cartItemId,
       ),
     );
-  }
-
-  Future<void> _submit() async {
-    final pin = _pinController.text.trim();
-    if (pin.length < 4) {
-      setState(() => _error = 'أدخل رمز PIN للمشرف أو استخدم التأكيد مع مسؤولية معلّقة');
-      return;
-    }
-    if (_otherSelected && _otherReasonController.text.trim().isEmpty) {
-      setState(() => _error = 'أدخل السبب');
-      return;
-    }
-
-    setState(() {
-      _submitting = true;
-      _error = null;
-    });
-
-    try {
-      final cashier = PosOperationsService.instance.cashierSession;
-      final result = await PosOperationsService.instance.requestManagerOverride(
-        pin: pin,
-        action: 'kitchen_line_void',
-        entityId: widget.entityId,
-        performedById: cashier?.staff.id,
-        performedByName: cashier?.staff.name,
-      );
-      if (!mounted) return;
-      if (!result.authorized) {
-        setState(() => _error = 'رمز غير صحيح أو غير مصرح');
-        return;
-      }
-      Navigator.of(context).pop(
-        KitchenOverrideAuthorization(
-          managerPin: pin,
-          reason: _resolvedReason,
-          authorizedById: result.authorizedById,
-          authorizedByName: result.authorizedByName,
-          cartItemId: widget.cartItemId,
-        ),
-      );
-    } catch (error) {
-      if (!mounted) return;
-      setState(() => _error = error.toString().replaceFirst('Exception: ', ''));
-    } finally {
-      if (mounted) setState(() => _submitting = false);
-    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final shiftId =
-        widget.shiftId ?? PosOperationsService.instance.activeShift?.id ?? '';
-
     return AlertDialog(
-      title: const Text('تفويض مشرف — صنف بالمطبخ'),
+      title: const Text('تعديل صنف أُرسل للمطبخ'),
       content: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -182,6 +103,11 @@ class _KitchenLineOverrideDialogState extends State<_KitchenLineOverrideDialog> 
             Text(
               widget.itemName,
               style: const TextStyle(fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 10),
+            const Text(
+              'يُسجَّل إلغاء/تقليل المطبخ كمسؤولية معلّقة. الموافقة (إعفاء) أو الرفض (مديونية) من لوحة الإدارة فقط.',
+              style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
             ),
             const SizedBox(height: 14),
             const Text('سبب التعديل/الإلغاء'),
@@ -197,6 +123,7 @@ class _KitchenLineOverrideDialogState extends State<_KitchenLineOverrideDialog> 
                   setState(() {
                     _reason = value;
                     _otherSelected = false;
+                    _error = null;
                   });
                 },
               ),
@@ -213,63 +140,30 @@ class _KitchenLineOverrideDialogState extends State<_KitchenLineOverrideDialog> 
             if (_otherSelected) ...[
               TextField(
                 controller: _otherReasonController,
-                decoration: const InputDecoration(
+                decoration: InputDecoration(
                   labelText: 'اذكر السبب',
-                  border: OutlineInputBorder(),
+                  border: const OutlineInputBorder(),
+                  errorText: _error,
                 ),
+                onChanged: (_) => setState(() => _error = null),
               ),
               const SizedBox(height: 8),
-            ],
-            const Divider(),
-            PosRemoteApprovalPanel(
-              approvalType: PosApprovalTypes.voidSentItem,
-              reason: _otherSelected
-                  ? _otherReasonController.text.trim()
-                  : (KitchenVoidReason.options[_reason] ?? _reason),
-              shiftId: shiftId,
-              payload: _approvalPayload,
-              onApproved: _completeRemote,
-              onRejected: () => setState(
-                () => _error = 'رفض المشرف طلب الموافقة عن بُعد',
+            ] else if (_error != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Text(_error!, style: const TextStyle(color: Colors.red)),
               ),
-              onExpired: () => setState(
-                () => _error = 'انتهت صلاحية طلب الموافقة',
-              ),
-            ),
-            const Divider(),
-            TextField(
-              controller: _pinController,
-              obscureText: true,
-              keyboardType: TextInputType.number,
-              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-              decoration: InputDecoration(
-                labelText: 'PIN المشرف / مدير الفرع (حضورياً)',
-                border: const OutlineInputBorder(),
-                errorText: _error,
-              ),
-              onSubmitted: (_) => _submit(),
-            ),
           ],
         ),
       ),
       actions: [
         TextButton(
-          onPressed: _submitting ? null : () => Navigator.of(context).pop(),
+          onPressed: () => Navigator.of(context).pop(),
           child: const Text('إلغاء'),
         ),
-        FilledButton.tonal(
-          onPressed: _submitting ? null : _submitConditional,
-          child: const Text('تأكيد (مسؤولية معلّقة)'),
-        ),
         FilledButton(
-          onPressed: _submitting ? null : _submit,
-          child: _submitting
-              ? const SizedBox(
-                  width: 18,
-                  height: 18,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : const Text('تأكيد PIN'),
+          onPressed: _submitConditional,
+          child: const Text('تأكيد (مسؤولية معلّقة)'),
         ),
       ],
     );

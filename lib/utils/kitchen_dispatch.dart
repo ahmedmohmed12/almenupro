@@ -1,6 +1,4 @@
 import '../models/cart_item.dart';
-import '../services/admin_auth_service.dart';
-import '../services/pos_operations_service.dart';
 
 class KitchenVoidReason {
   KitchenVoidReason._();
@@ -43,17 +41,6 @@ class KitchenOverrideAuthorization {
       (approvalRequestId ?? '').trim().isNotEmpty && managerPin.isEmpty;
 }
 
-bool posStaffBypassesKitchenLock() {
-  if (!AdminAuthService.instance.isCashier) return true;
-  final session = PosOperationsService.instance.cashierSession;
-  final roleId = session?.roleId ?? '';
-  if (roleId == 'shift_supervisor' || roleId == 'pos_admin') return true;
-  final permissions = PosOperationsService.instance.effectivePermissions;
-  if (permissions['void_orders'] == true) return true;
-  if (permissions['manager_override'] == true) return true;
-  return false;
-}
-
 List<CartItem> stampKitchenDispatched(
   Iterable<CartItem> items, {
   DateTime? sentAt,
@@ -72,7 +59,6 @@ bool cartMutationNeedsKitchenOverride({
   required int nextQuantity,
 }) {
   if (!item.isSentToKitchen) return false;
-  if (posStaffBypassesKitchenLock()) return false;
   if (nextQuantity <= 0) return true;
   if (nextQuantity < item.quantity) return true;
   return false;

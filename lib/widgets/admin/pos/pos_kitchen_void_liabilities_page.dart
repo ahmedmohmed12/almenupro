@@ -32,7 +32,10 @@ class _PosKitchenVoidLiabilitiesPageState extends State<PosKitchenVoidLiabilitie
 
   static const _burgundy = Color(0xFF6B1124);
 
-  bool get _canReview => PosOperationsService.instance.canReviewRemoteApprovals();
+  bool get _canReview =>
+      widget.adminDashboard &&
+      (AdminAuthService.instance.isRestaurantAdmin ||
+          AdminAuthService.instance.isSuperAdmin);
 
   @override
   void initState() {
@@ -283,7 +286,7 @@ class _PosKitchenVoidLiabilitiesPageState extends State<PosKitchenVoidLiabilitie
                       const Padding(
                         padding: EdgeInsets.only(top: 8),
                         child: Text(
-                          'لا توجد صلاحية مراجعة — سجّل دخول مدير أو مشرف.',
+                          'مراجعة الإعفاء/المديونية من لوحة الإدارة → تبويب مسؤوليات إلغاء أصناف المطبخ.',
                           style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
                         ),
                       ),

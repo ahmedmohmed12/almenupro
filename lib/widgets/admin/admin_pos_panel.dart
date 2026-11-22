@@ -639,6 +639,7 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
           catalog: _allItems,
         ),
       );
+    _syncKitchenBaseline();
   }
 
   void _scheduleDineInSave() {
@@ -1119,6 +1120,9 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
     final index = _cart.indexWhere((item) => item.id == cartItemId);
     if (index == -1) return;
     final item = _cart[index];
+    if (_kitchenSyncBaseline.isEmpty && item.isSentToKitchen) {
+      _kitchenSyncBaseline = _cloneCartSnapshot(_cart);
+    }
     if (cartMutationNeedsKitchenOverride(item: item, nextQuantity: quantity)) {
       final auth = await showPosKitchenLineOverrideDialog(
         context,
@@ -1156,7 +1160,7 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
   }
 
   Future<void> _clearCart({bool skipKitchenGuard = false}) async {
-    if (!skipKitchenGuard && !posStaffBypassesKitchenLock()) {
+    if (!skipKitchenGuard) {
       final locked = _cart.where((item) => item.isSentToKitchen).toList();
       if (locked.isNotEmpty) {
         final auth = await showPosKitchenLineOverrideDialog(

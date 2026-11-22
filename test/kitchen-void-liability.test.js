@@ -93,6 +93,14 @@ test('checkout without kitchen line changes needs no authorization', async () =>
   assert.equal(lock.conditionalVoid, undefined);
 });
 
+test('kitchen void liability is always PENDING at record time', () => {
+  const { resolveLiabilityApprovalStatus } = require('../lib/kitchenVoidLiabilities');
+  assert.equal(resolveLiabilityApprovalStatus({ selfAuthorized: true }), 'PENDING');
+  assert.equal(resolveLiabilityApprovalStatus({ authorizedBy: { id: 'sup' } }), 'PENDING');
+  assert.equal(resolveLiabilityApprovalStatus({ remoteApprovalId: 'apr_1' }), 'PENDING');
+  assert.equal(resolveLiabilityApprovalStatus({ conditionalVoid: true }), 'PENDING');
+});
+
 test('cashier conditional void allows mutation with reason only', async () => {
   const lock = await enforceKitchenItemMutation({
     previousItems,

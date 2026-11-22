@@ -80,7 +80,7 @@ test('approved shift close request bypasses manager pin', async () => {
   assert.equal(memory[0].consumedAt != null, true);
 });
 
-test('kitchen mutation accepts approved void request', async () => {
+test('kitchen mutation records pending liability with reason (no remote waive)', async () => {
   const memory = [];
   const request = createApprovalRequestRecord({
     id: 'apr_void',
@@ -154,7 +154,9 @@ test('kitchen mutation accepts approved void request', async () => {
   });
 
   assert.equal(lock.ok, true);
-  assert.equal(lock.remoteApprovalId, 'apr_void');
+  assert.equal(lock.conditionalVoid, true);
+  assert.equal(lock.remoteApprovalId, undefined);
+  assert.ok(memory[0].consumedAt == null);
 });
 
 test('cannot reuse consumed approval', () => {
