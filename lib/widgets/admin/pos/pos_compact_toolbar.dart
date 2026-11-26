@@ -195,67 +195,10 @@ class _PosCompactToolbarState extends State<PosCompactToolbar> {
                             widget.onSelectOrderMode('platforms'),
                       ),
                     ],
-                    if (widget.onOpenPendingPickup != null) ...[
-                      const SizedBox(width: 8),
-                      StreamBuilder<List<Order>>(
-                        stream: OrdersService.instance.watchOrders(),
-                        initialData: OrdersDemoService.loadedOrders,
-                        builder: (context, snapshot) {
-                          final held = countPendingPosWalkInOrders(
-                            snapshot.data ?? const [],
-                          );
-                          return _OpsChip(
-                            label: 'معلق',
-                            icon: Icons.pause_circle_outline,
-                            count: held,
-                            tone:
-                                held > 0 ? _OpsTone.alert : _OpsTone.ready,
-                            onTap: widget.onOpenPendingPickup!,
-                          );
-                        },
-                      ),
-                    ],
-                    const SizedBox(width: 8),
-                    StreamBuilder<List<Order>>(
-                      stream: OrdersService.instance.watchOrders(),
-                      initialData: OrdersDemoService.loadedOrders,
-                      builder: (context, snapshot) {
-                        final count = scheduledHoldOrders(snapshot.data ?? const []).length;
-                        return _OpsChip(
-                          label: 'طلبات مجدولة',
-                          icon: Icons.notifications_active_outlined,
-                          count: count,
-                          tone: count > 0 ? _OpsTone.busy : _OpsTone.ready,
-                          onTap: () {
-                            Navigator.of(context).push(
-                              MaterialPageRoute<void>(
-                                builder: (_) => const ScheduledOrdersPage(),
-                              ),
-                            );
-                          },
-                        );
-                      },
+                    _OrderOpsToolbarChips(
+                      onOpenPendingPickup: widget.onOpenPendingPickup,
+                      onOpenDriverHandoff: widget.onOpenDriverHandoff,
                     ),
-                    if (widget.onOpenDriverHandoff != null) ...[
-                      const SizedBox(width: 8),
-                      StreamBuilder<List<Order>>(
-                        stream: OrdersService.instance.watchOrders(),
-                        initialData: const [],
-                        builder: (context, snapshot) {
-                          final handoff = (snapshot.data ?? [])
-                              .where((order) => order.needsCashierHandoff)
-                              .length;
-                          return _OpsChip(
-                            label: 'سائق',
-                            icon: Icons.moped_rounded,
-                            count: handoff,
-                            tone:
-                                handoff > 0 ? _OpsTone.busy : _OpsTone.ready,
-                            onTap: widget.onOpenDriverHandoff!,
-                          );
-                        },
-                      ),
-                    ],
                     if (widget.onOpenOnlineOrders != null) ...[
                       const SizedBox(width: 8),
                       ValueListenableBuilder<int>(
@@ -308,6 +251,72 @@ class _PosCompactToolbarState extends State<PosCompactToolbar> {
   }
 }
 
+/// Order badge chips — isolated [StreamBuilder] so order poll updates do not
+/// rebuild mode/search buttons in the parent toolbar.
+class _OrderOpsToolbarChips extends StatelessWidget {
+  const _OrderOpsToolbarChips({
+    this.onOpenPendingPickup,
+    this.onOpenDriverHandoff,
+  });
+
+  final VoidCallback? onOpenPendingPickup;
+  final VoidCallback? onOpenDriverHandoff;
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<List<Order>>(
+      stream: OrdersService.instance.watchOrders(),
+      initialData: OrdersDemoService.loadedOrders,
+      builder: (context, snapshot) {
+        final orders = snapshot.data ?? const [];
+        final held = countPendingPosWalkInOrders(orders);
+        final scheduled = scheduledHoldOrders(orders).length;
+        final handoff =
+            orders.where((o) => o.needsCashierHandoff).length;
+        return Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (onOpenPendingPickup != null) ...[
+              const SizedBox(width: 8),
+              _OpsChip(
+                label: 'معلق',
+                icon: Icons.pause_circle_outline,
+                count: held,
+                tone: held > 0 ? _OpsTone.alert : _OpsTone.ready,
+                onTap: onOpenPendingPickup!,
+              ),
+            ],
+            const SizedBox(width: 8),
+            _OpsChip(
+              label: 'طلبات مجدولة',
+              icon: Icons.notifications_active_outlined,
+              count: scheduled,
+              tone: scheduled > 0 ? _OpsTone.busy : _OpsTone.ready,
+              onTap: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => const ScheduledOrdersPage(),
+                  ),
+                );
+              },
+            ),
+            if (onOpenDriverHandoff != null) ...[
+              const SizedBox(width: 8),
+              _OpsChip(
+                label: 'سائق',
+                icon: Icons.moped_rounded,
+                count: handoff,
+                tone: handoff > 0 ? _OpsTone.busy : _OpsTone.ready,
+                onTap: onOpenDriverHandoff!,
+              ),
+            ],
+          ],
+        );
+      },
+    );
+  }
+}
+
 enum _OpsTone { ready, busy, waiter, alert }
 
 class _IconBtn extends StatelessWidget {
@@ -330,6 +339,7 @@ class _IconBtn extends StatelessWidget {
         borderRadius: BorderRadius.circular(8),
         child: InkWell(
           onTap: onTap,
+          behavior: HitTestBehavior.opaque,
           borderRadius: BorderRadius.circular(8),
           child: SizedBox(
             width: 44,
@@ -369,6 +379,7 @@ class _ModeChip extends StatelessWidget {
         borderRadius: radius,
         child: InkWell(
           onTap: onSelected,
+          behavior: HitTestBehavior.opaque,
           borderRadius: radius,
           child: Padding(
             padding: PosTheme.orderTypeButtonPadding,
@@ -430,6 +441,7 @@ class _OpsChip extends StatelessWidget {
         borderRadius: radius,
         child: InkWell(
           onTap: onTap,
+          behavior: HitTestBehavior.opaque,
           borderRadius: radius,
           child: Padding(
             padding: PosTheme.orderTypeButtonPadding,

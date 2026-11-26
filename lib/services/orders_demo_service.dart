@@ -54,14 +54,14 @@ class OrdersDemoService {
 
     await _refreshFromApi();
 
-    _pollTimer ??= Timer.periodic(const Duration(seconds: 4), (_) {
+    _pollTimer ??= Timer.periodic(const Duration(seconds: 8), (_) {
       unawaited(_refreshFromApi());
     });
   }
 
   static Future<void> resumeRealtime() async {
     _pollTimer?.cancel();
-    _pollTimer = Timer.periodic(const Duration(seconds: 4), (_) {
+    _pollTimer = Timer.periodic(const Duration(seconds: 8), (_) {
       unawaited(_refreshFromApi());
     });
     await _refreshFromApi();

@@ -49,7 +49,7 @@ class _PosDineInPageState extends State<PosDineInPage> {
     _elapsedTimer = Timer.periodic(const Duration(seconds: 30), (_) {
       if (mounted && _activeTable == null) setState(() {});
     });
-    _pollTimer = Timer.periodic(const Duration(seconds: 8), (_) {
+    _pollTimer = Timer.periodic(const Duration(seconds: 15), (_) {
       if (mounted && _activeTable == null) unawaited(_load(silent: true));
     });
     _liveSub = TableFloorLiveService.instance.watch(_restaurantId).listen((

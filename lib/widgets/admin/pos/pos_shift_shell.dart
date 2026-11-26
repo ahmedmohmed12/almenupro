@@ -448,13 +448,7 @@ class _PosShiftShellState extends State<PosShiftShell> {
     return Stack(
       fit: StackFit.expand,
       children: [
-        Offstage(
-          offstage: _selectedRoute != PosRoute.home,
-          child: TickerMode(
-            enabled: _selectedRoute == PosRoute.home,
-            child: _buildPosHome(),
-          ),
-        ),
+        if (_selectedRoute == PosRoute.home) _buildPosHome(),
         ?overlay,
       ],
     );
@@ -484,25 +478,27 @@ class _PosShiftShellState extends State<PosShiftShell> {
           tableManagementEnabled: _tableManagementEnabled,
           shiftLabel: shiftLabel,
         ),
-        PosInPageOverlay(
-          visible: _homeSheet == _PosHomeSheet.handoff,
-          title: s.tr('استلام من السائق', 'Driver handoff'),
-          onClose: _closeHomeSheet,
-          child: const PosDriverHandoffPage(
-            key: ValueKey('pos-warm-handoff'),
-            showPageHeader: false,
+        if (_homeSheet == _PosHomeSheet.handoff)
+          PosInPageOverlay(
+            visible: true,
+            title: s.tr('استلام من السائق', 'Driver handoff'),
+            onClose: _closeHomeSheet,
+            child: const PosDriverHandoffPage(
+              key: ValueKey('pos-warm-handoff'),
+              showPageHeader: false,
+            ),
           ),
-        ),
-        PosInPageOverlay(
-          visible: _homeSheet == _PosHomeSheet.orders,
-          title: s.tr('طلبات الموقع', 'Online orders'),
-          onClose: _closeHomeSheet,
-          child: PosOnlineOrdersPage(
-            key: const ValueKey('pos-warm-orders'),
-            showPageHeader: false,
-            tableManagementEnabled: _tableManagementEnabled,
+        if (_homeSheet == _PosHomeSheet.orders)
+          PosInPageOverlay(
+            visible: true,
+            title: s.tr('طلبات الموقع', 'Online orders'),
+            onClose: _closeHomeSheet,
+            child: PosOnlineOrdersPage(
+              key: const ValueKey('pos-warm-orders'),
+              showPageHeader: false,
+              tableManagementEnabled: _tableManagementEnabled,
+            ),
           ),
-        ),
       ],
     );
   }

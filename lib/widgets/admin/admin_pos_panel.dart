@@ -416,6 +416,17 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
         cachedId != _restaurantId) {
       return;
     }
+    final nextKitchen = settings.kitchenManagementEnabled;
+    final nextFleet = settings.deliveryManagementEnabled;
+    final nextPlatforms = settings.resolvedSalesPlatforms;
+    final platformIds = nextPlatforms.map((p) => p.id).join(',');
+    final prevPlatformIds =
+        _salesPlatforms.map((p) => p.id).join(',');
+    if (nextKitchen == _kitchenManagementEnabled &&
+        nextFleet == _fleetDeliveryEnabled &&
+        platformIds == prevPlatformIds) {
+      return;
+    }
     setState(() => _applySettings(settings));
   }
 
@@ -505,6 +516,8 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
 
   Future<void> _loadRemainingMenu(int total, int startOffset) async {
     var offset = startOffset;
+    var merged = List<MenuItem>.from(_allItems);
+    var pagesSincePaint = 0;
     while (offset < total) {
       final page = await ApiService.instance.fetchItemsPage(
         restaurantId: _restaurantId,
@@ -514,12 +527,19 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
       );
       if (page.items.isEmpty) break;
       offset += page.items.length;
+      merged = _mergeItems(merged, page.items);
+      pagesSincePaint += 1;
       if (!mounted) return;
-      setState(() {
-        _allItems = _mergeItems(_allItems, page.items);
-      });
+      final atEnd = offset >= total;
+      if (atEnd || pagesSincePaint >= 4) {
+        pagesSincePaint = 0;
+        setState(() => _allItems = merged);
+      }
     }
-    unawaited(PosSyncService.instance.cacheCatalog(_restaurantId, _allItems));
+    if (mounted && !identical(_allItems, merged)) {
+      setState(() => _allItems = merged);
+    }
+    unawaited(PosSyncService.instance.cacheCatalog(_restaurantId, merged));
   }
 
   Future<void> _loadPosExtras() async {
@@ -643,13 +663,15 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
   }
 
   void _scheduleDineInSave() {
-    _localCartTimer?.cancel();
-    _localCartTimer = Timer(const Duration(milliseconds: 400), () {
-      unawaited(_persistLocalCart());
-    });
+    if (!_isDineIn) {
+      _localCartTimer?.cancel();
+      _localCartTimer = Timer(const Duration(milliseconds: 900), () {
+        unawaited(_persistLocalCart());
+      });
+    }
     if (!_isDineIn) return;
     _sessionSaveTimer?.cancel();
-    _sessionSaveTimer = Timer(const Duration(milliseconds: 700), () {
+    _sessionSaveTimer = Timer(const Duration(milliseconds: 1600), () {
       unawaited(_persistDineInSession());
     });
   }
@@ -944,10 +966,12 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
     final digits = WhatsAppPhone.digitsOnly(_phoneController.text);
     if (digits.length < 8) {
       _lookupDebounce?.cancel();
-      setState(() {
-        _recentOrders = const [];
-        _customerOrderCount = 0;
-      });
+      if (_recentOrders.isNotEmpty || _customerOrderCount != 0) {
+        setState(() {
+          _recentOrders = const [];
+          _customerOrderCount = 0;
+        });
+      }
       return;
     }
     if (digits == _lastLookupPhone) return;
