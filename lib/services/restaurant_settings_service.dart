@@ -236,6 +236,7 @@ class RestaurantSettingsService extends ChangeNotifier {
     _setCache(next, effectiveId ?? '');
     await _saveCache(next, effectiveId ?? '');
     await _syncFirebase(next);
+    notifyListeners();
   }
 
   Future<void> savePosSettings(

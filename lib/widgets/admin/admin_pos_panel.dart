@@ -407,6 +407,15 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
     super.dispose();
   }
 
+  static String _platformsSignature(List<SalesPlatformConfig> platforms) {
+    return platforms
+        .map(
+          (p) =>
+              '${p.id}:${p.commissionPercent.toStringAsFixed(3)}:${p.name}:${p.colorArgb}',
+        )
+        .join('|');
+  }
+
   void _onSettingsChanged() {
     final settings = RestaurantSettingsService.instance.cached;
     final cachedId = RestaurantSettingsService.instance.cachedRestaurantId;
@@ -419,12 +428,11 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
     final nextKitchen = settings.kitchenManagementEnabled;
     final nextFleet = settings.deliveryManagementEnabled;
     final nextPlatforms = settings.resolvedSalesPlatforms;
-    final platformIds = nextPlatforms.map((p) => p.id).join(',');
-    final prevPlatformIds =
-        _salesPlatforms.map((p) => p.id).join(',');
+    final platformSig = _platformsSignature(nextPlatforms);
+    final prevSig = _platformsSignature(_salesPlatforms);
     if (nextKitchen == _kitchenManagementEnabled &&
         nextFleet == _fleetDeliveryEnabled &&
-        platformIds == prevPlatformIds) {
+        platformSig == prevSig) {
       return;
     }
     setState(() => _applySettings(settings));
@@ -503,8 +511,28 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
     _fleetDeliveryEnabled = settings.deliveryManagementEnabled;
     final platforms = settings.resolvedSalesPlatforms;
     _salesPlatforms = platforms;
-    if (_platformSelection.platform.id.isEmpty ||
-        !platforms.any((p) => p.id == _platformSelection.platform.id)) {
+    final selectedId = _platformSelection.platform.id;
+    SalesPlatformConfig? refreshed;
+    for (final p in platforms) {
+      if (p.id == selectedId) {
+        refreshed = p;
+        break;
+      }
+    }
+
+    if (refreshed != null) {
+      _platformSelection = PosPlatformSelection(
+        platform: refreshed,
+        externalOrderId: _platformSelection.externalOrderId,
+        deliveryFee: _platformSelection.deliveryFee,
+        trackCommission: _platformSelection.trackCommission,
+        commissionPercent: _platformSelection.trackCommission
+            ? refreshed.commissionPercent
+            : _platformSelection.commissionPercent,
+        manualNetRevenue: _platformSelection.manualNetRevenue,
+      );
+    } else if (selectedId.isEmpty ||
+        !platforms.any((p) => p.id == selectedId)) {
       _platformSelection = PosPlatformSelection(
         platform: platforms.firstWhere(
           (p) => p.isLocal,
@@ -2415,6 +2443,7 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
           PosCompactToolbar(
             orderMode: _orderMode,
             onSelectOrderMode: _selectOrderMode,
+            onOpenPlatforms: () => unawaited(_openPlatformsPickerFromToolbar()),
             onOpenSearch: () => unawaited(_openSearchOverlay(barcodeMode: false)),
             onOpenBarcode: () => unawaited(_openSearchOverlay(barcodeMode: true)),
             onOpenTables: widget.onOpenTables,
@@ -2480,6 +2509,47 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
     );
   }
 
+  Future<void> _openPlatformsPickerFromToolbar() async {
+    final externals =
+        _salesPlatforms.where((p) => p.isExternal).toList(growable: false);
+    if (externals.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'لا توجد منصات مفعّلة — أضفها من لوحة الأدمن (المنصات والعمولات).',
+          ),
+        ),
+      );
+      return;
+    }
+
+    final picked = await showPosPlatformPickerDialog(
+      context,
+      platforms: _salesPlatforms,
+      selected: _platformSelection.isExternal ? _platformSelection.platform : null,
+    );
+    if (picked == null || !mounted) return;
+
+    setState(() {
+      _orderMode = 'platforms';
+      _isPickup = true;
+      _platformSelection = PosPlatformSelection(
+        platform: picked,
+        externalOrderId: _platformSelection.externalOrderId,
+        deliveryFee: _platformSelection.deliveryFee,
+        trackCommission: true,
+        commissionPercent: picked.commissionPercent,
+        manualNetRevenue: null,
+      );
+    });
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _formKey.currentState?.reset();
+    });
+  }
+
   void _selectOrderMode(String mode) {
     final local = _salesPlatforms.firstWhere(
       (p) => p.isLocal,
@@ -2518,18 +2588,24 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
           _platformDeliveryFeeController.clear();
           break;
         case 'platforms':
-          final platform = _platformSelection.isExternal
-              ? _platformSelection.platform
-              : (externals.isNotEmpty ? externals.first : local);
           _isPickup = true;
-          _platformSelection = PosPlatformSelection(
-            platform: platform,
-            externalOrderId: _platformSelection.externalOrderId,
-            deliveryFee: _platformSelection.deliveryFee,
-            trackCommission: platform.isExternal,
-            commissionPercent:
-                platform.isExternal ? platform.commissionPercent : null,
-          );
+          if (_platformSelection.isExternal) {
+            SalesPlatformConfig? live;
+            for (final p in externals) {
+              if (p.id == _platformSelection.platform.id) {
+                live = p;
+                break;
+              }
+            }
+            final platform = live ?? _platformSelection.platform;
+            _platformSelection = PosPlatformSelection(
+              platform: platform,
+              externalOrderId: _platformSelection.externalOrderId,
+              deliveryFee: _platformSelection.deliveryFee,
+              trackCommission: true,
+              commissionPercent: platform.commissionPercent,
+            );
+          }
           break;
       }
     });

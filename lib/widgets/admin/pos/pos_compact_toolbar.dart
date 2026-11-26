@@ -25,6 +25,7 @@ class PosCompactToolbar extends StatefulWidget {
     this.onOpenPendingPickup,
     this.onOpenDriverHandoff,
     this.onOpenOnlineOrders,
+    this.onOpenPlatforms,
     this.tableManagementEnabled = false,
     this.showOrderModes = true,
     this.shiftLabel,
@@ -38,6 +39,7 @@ class PosCompactToolbar extends StatefulWidget {
   final VoidCallback? onOpenPendingPickup;
   final VoidCallback? onOpenDriverHandoff;
   final VoidCallback? onOpenOnlineOrders;
+  final VoidCallback? onOpenPlatforms;
   final bool tableManagementEnabled;
   final bool showOrderModes;
   /// Optional short shift caption (e.g. cashier name) shown on the maroon bar.
@@ -191,8 +193,13 @@ class _PosCompactToolbarState extends State<PosCompactToolbar> {
                         label: 'منصات',
                         icon: Icons.hub_outlined,
                         selected: widget.orderMode == 'platforms',
-                        onSelected: () =>
-                            widget.onSelectOrderMode('platforms'),
+                        onSelected: () {
+                          if (widget.onOpenPlatforms != null) {
+                            widget.onOpenPlatforms!();
+                          } else {
+                            widget.onSelectOrderMode('platforms');
+                          }
+                        },
                       ),
                     ],
                     _OrderOpsToolbarChips(

@@ -6,6 +6,148 @@ import '../../../models/sales_platform_config.dart';
 import 'pos_theme.dart';
 import 'pos_ui_components.dart';
 
+/// Cashier-only picker: configured delivery platforms from admin (no add/edit).
+Future<SalesPlatformConfig?> showPosPlatformPickerDialog(
+  BuildContext context, {
+  required List<SalesPlatformConfig> platforms,
+  SalesPlatformConfig? selected,
+}) {
+  final externals =
+      platforms.where((p) => p.isExternal).toList(growable: false);
+  if (externals.isEmpty) return Future.value();
+
+  return showDialog<SalesPlatformConfig>(
+    context: context,
+    builder: (dialogContext) {
+      return Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        insetPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 24),
+        child: SizedBox(
+          width: 440,
+          height: MediaQuery.sizeOf(dialogContext).height * 0.62,
+          child: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 4, 8),
+                child: Row(
+                  children: [
+                    const Expanded(
+                      child: Text(
+                        'اختر منصة التوصيل',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      onPressed: () => Navigator.pop(dialogContext),
+                      icon: const Icon(Icons.close),
+                    ),
+                  ],
+                ),
+              ),
+              const Padding(
+                padding: EdgeInsets.fromLTRB(16, 0, 16, 8),
+                child: Text(
+                  'المنصات والعمولات من لوحة الأدمن فقط.',
+                  style: TextStyle(fontSize: 12, color: PosTheme.textMuted),
+                ),
+              ),
+              const Divider(height: 1),
+              Expanded(
+                child: ListView.separated(
+                  padding: const EdgeInsets.fromLTRB(12, 12, 12, 16),
+                  itemCount: externals.length,
+                  separatorBuilder: (_, _) => const SizedBox(height: 8),
+                  itemBuilder: (context, index) {
+                    final platform = externals[index];
+                    final isSelected =
+                        selected != null && selected.id == platform.id;
+                    return Material(
+                      color: isSelected
+                          ? platform.color.withValues(alpha: 0.1)
+                          : PosTheme.surfaceAlt,
+                      borderRadius: BorderRadius.circular(14),
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(14),
+                        onTap: () => Navigator.pop(dialogContext, platform),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 12,
+                          ),
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(
+                              color: isSelected
+                                  ? platform.color
+                                  : platform.color.withValues(alpha: 0.28),
+                              width: isSelected ? 1.5 : 1,
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              Container(
+                                width: 44,
+                                height: 44,
+                                decoration: BoxDecoration(
+                                  color: platform.color.withValues(alpha: 0.14),
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Icon(
+                                  platform.icon,
+                                  color: platform.color,
+                                  size: 22,
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      platform.name,
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.w800,
+                                        fontSize: 15,
+                                      ),
+                                    ),
+                                    Text(
+                                      platform.commissionPercent > 0
+                                          ? 'عمولة ${platform.commissionPercent.toStringAsFixed(1)}%'
+                                          : 'بدون عمولة محددة',
+                                      style: const TextStyle(
+                                        fontSize: 12,
+                                        color: PosTheme.textMuted,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              if (isSelected)
+                                Icon(Icons.check_circle, color: platform.color)
+                              else
+                                Icon(
+                                  Icons.chevron_left,
+                                  color: platform.color.withValues(alpha: 0.7),
+                                ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    },
+  );
+}
+
 class PosPlatformSelection {
   const PosPlatformSelection({
     required this.platform,
@@ -133,150 +275,23 @@ class PosPlatformSelector extends StatelessWidget {
   }
 
   Future<void> _openPlatformPicker(BuildContext context) async {
-    final externals = _externalPlatforms;
-    if (externals.isEmpty) return;
+    if (_externalPlatforms.isEmpty) return;
 
-    final picked = await showDialog<SalesPlatformConfig>(
-      context: context,
-      builder: (dialogContext) {
-        return Dialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(18),
-          ),
-          insetPadding: const EdgeInsets.symmetric(
-            horizontal: 18,
-            vertical: 24,
-          ),
-          child: SizedBox(
-            width: 440,
-            height: MediaQuery.sizeOf(dialogContext).height * 0.62,
-            child: Column(
-              children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 12, 4, 8),
-                  child: Row(
-                    children: [
-                      const Expanded(
-                        child: Text(
-                          'منصات التوصيل',
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                      ),
-                      IconButton(
-                        onPressed: () => Navigator.pop(dialogContext),
-                        icon: const Icon(Icons.close),
-                      ),
-                    ],
-                  ),
-                ),
-                const Divider(height: 1),
-                Expanded(
-                  child: ListView.separated(
-                    padding: const EdgeInsets.fromLTRB(12, 12, 12, 16),
-                    itemCount: externals.length,
-                    separatorBuilder: (_, _) => const SizedBox(height: 8),
-                    itemBuilder: (context, index) {
-                      final platform = externals[index];
-                      final selected = selection.platform.id == platform.id;
-                      return Material(
-                        color: selected
-                            ? platform.color.withValues(alpha: 0.1)
-                            : PosTheme.surfaceAlt,
-                        borderRadius: BorderRadius.circular(14),
-                        child: InkWell(
-                          borderRadius: BorderRadius.circular(14),
-                          onTap: () => Navigator.pop(dialogContext, platform),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 14,
-                              vertical: 12,
-                            ),
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(14),
-                              border: Border.all(
-                                color: selected
-                                    ? platform.color
-                                    : platform.color.withValues(alpha: 0.28),
-                                width: selected ? 1.5 : 1,
-                              ),
-                            ),
-                            child: Row(
-                              children: [
-                                Container(
-                                  width: 40,
-                                  height: 40,
-                                  decoration: BoxDecoration(
-                                    color: platform.color.withValues(
-                                      alpha: 0.14,
-                                    ),
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                  child: Icon(
-                                    platform.icon,
-                                    color: platform.color,
-                                    size: 20,
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        platform.name,
-                                        style: const TextStyle(
-                                          fontWeight: FontWeight.w800,
-                                          fontSize: 15,
-                                        ),
-                                      ),
-                                      if (platform.commissionPercent > 0)
-                                        Text(
-                                          'عمولة ${platform.commissionPercent.toStringAsFixed(1)}%',
-                                          style: const TextStyle(
-                                            fontSize: 12,
-                                            color: PosTheme.textMuted,
-                                          ),
-                                        ),
-                                    ],
-                                  ),
-                                ),
-                                if (selected)
-                                  Icon(
-                                    Icons.check_circle,
-                                    color: platform.color,
-                                  )
-                                else
-                                  Icon(
-                                    Icons.chevron_left,
-                                    color: platform.color.withValues(
-                                      alpha: 0.7,
-                                    ),
-                                  ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
+    final picked = await showPosPlatformPickerDialog(
+      context,
+      platforms: platforms,
+      selected: selection.isExternal ? selection.platform : null,
     );
 
     if (picked == null) return;
     _update(
-      _copySelection(
+      PosPlatformSelection(
         platform: picked,
-        commissionPercent:
-            selection.commissionPercent ?? picked.commissionPercent,
+        externalOrderId: selection.externalOrderId,
+        deliveryFee: selection.deliveryFee,
+        trackCommission: true,
+        commissionPercent: picked.commissionPercent,
+        manualNetRevenue: null,
       ),
     );
   }
@@ -319,6 +334,39 @@ class PosPlatformSelector extends StatelessWidget {
                 ),
             ],
           ),
+        ],
+        if (!isExternal && hasExternal && compactHeader) ...[
+          Material(
+            color: PosTheme.surfaceAlt,
+            borderRadius: BorderRadius.circular(12),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(12),
+              onTap: () => _openPlatformPicker(context),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                child: Row(
+                  children: [
+                    const Icon(Icons.hub_outlined, color: Color(0xFF0EA5E9)),
+                    const SizedBox(width: 10),
+                    const Expanded(
+                      child: Text(
+                        'اختر منصة التوصيل',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w800,
+                          fontSize: 14,
+                        ),
+                      ),
+                    ),
+                    Icon(
+                      Icons.chevron_left,
+                      color: Colors.grey.shade600,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
         ],
         if (isExternal) ...[
           if (showSourceToggle) const SizedBox(height: 8),

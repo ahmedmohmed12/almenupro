@@ -58,10 +58,13 @@ class _AdminPlatformSettingsCardState extends State<AdminPlatformSettingsCard> {
   Future<void> _save() async {
     setState(() => _saving = true);
     try {
+      final restaurantId =
+          SuperAdminScopeService.instance.effectiveRestaurantId;
       await RestaurantSettingsService.instance.saveSalesPlatforms(
         salesPlatforms: _platforms,
-        restaurantId: SuperAdminScopeService.instance.effectiveRestaurantId,
+        restaurantId: restaurantId,
       );
+      await RestaurantSettingsService.instance.load(restaurantId: restaurantId);
       if (!mounted) return;
       final fromCache =
           RestaurantSettingsService.instance.cached?.resolvedSalesPlatforms;
