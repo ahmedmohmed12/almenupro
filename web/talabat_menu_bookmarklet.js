@@ -4,7 +4,8 @@
  */
 (function exportTalabatMenuForAlMenuPro() {
   const SOURCE = 'almenupro-talabat-bookmarklet';
-  const VERSION = 2;
+  const VERSION = 3;
+  const OVERLAY_ID = 'almenupro-talabat-overlay';
   const SUCCESS_MSG =
     'تم نسخ بيانات المنيو بنجاح — الصقها الآن في المنصة';
 
@@ -200,21 +201,161 @@
     setTimeout(() => box.remove(), isError ? 8000 : 12000);
   }
 
-  function showSummary(items) {
+  function categorySummary(items) {
     const byCat = {};
     for (const item of items) {
       const c = item.categoryName || 'عام';
       byCat[c] = (byCat[c] || 0) + 1;
     }
     const lines = Object.keys(byCat)
-      .slice(0, 8)
+      .slice(0, 6)
       .map((k) => `${k}: ${byCat[k]}`);
     const more =
-      Object.keys(byCat).length > 8
-        ? `… و${Object.keys(byCat).length - 8} أقسام أخرى`
+      Object.keys(byCat).length > 6
+        ? ` (+${Object.keys(byCat).length - 6} أقسام)`
         : '';
-    const summary = lines.join(' · ') + (more ? ' ' + more : '');
-    showNotice(`${SUCCESS_MSG}\n(${items.length} صنف — ${summary})`, false);
+    return lines.join(' · ') + more;
+  }
+
+  async function copyTextToClipboard(text) {
+    if (navigator.clipboard?.writeText) {
+      try {
+        await navigator.clipboard.writeText(text);
+        return true;
+      } catch (_) {}
+    }
+    try {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.setAttribute('readonly', '');
+      ta.style.cssText =
+        'position:fixed;top:0;left:0;width:2em;height:2em;padding:0;border:0;outline:0;opacity:0';
+      document.body.appendChild(ta);
+      ta.focus();
+      ta.select();
+      ta.setSelectionRange(0, text.length);
+      const ok = document.execCommand('copy');
+      ta.remove();
+      return ok;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  function showCopyOverlay(json, items, payload) {
+    const prev = document.getElementById(OVERLAY_ID);
+    if (prev) prev.remove();
+
+    const root = document.createElement('div');
+    root.id = OVERLAY_ID;
+    root.setAttribute('dir', 'rtl');
+    root.style.cssText =
+      'position:fixed;inset:0;z-index:2147483646;background:rgba(15,23,42,.55);display:flex;align-items:center;justify-content:center;padding:16px;font-family:Tahoma,Arial,sans-serif';
+
+    const panel = document.createElement('div');
+    panel.style.cssText =
+      'background:#fff;border-radius:14px;max-width:560px;width:100%;max-height:min(90vh,720px);display:flex;flex-direction:column;box-shadow:0 20px 50px rgba(0,0,0,.35);overflow:hidden';
+
+    const header = document.createElement('div');
+    header.style.cssText =
+      'padding:14px 16px;background:#6B1124;color:#fff;font-weight:700;font-size:16px';
+    header.textContent = `بيانات المنيو (${items.length} صنف)`;
+
+    const sub = document.createElement('div');
+    sub.style.cssText = 'padding:8px 16px;font-size:12px;color:#444;background:#fafafa';
+    sub.textContent = categorySummary(items) || '';
+
+    const status = document.createElement('div');
+    status.style.cssText =
+      'padding:8px 16px;font-size:13px;font-weight:600;color:#92400e;background:#fffbeb;border-bottom:1px solid #fde68a';
+    status.textContent = 'جاري محاولة النسخ التلقائي…';
+
+    const ta = document.createElement('textarea');
+    ta.readOnly = true;
+    ta.value = json;
+    ta.style.cssText =
+      'margin:0;padding:12px 16px;border:0;resize:vertical;min-height:180px;max-height:40vh;font:12px/1.4 Consolas,monospace;direction:ltr;text-align:left;flex:1 1 auto';
+
+    const actions = document.createElement('div');
+    actions.style.cssText =
+      'display:flex;gap:8px;padding:12px 16px;border-top:1px solid #eee;flex-wrap:wrap';
+
+    const copyBtn = document.createElement('button');
+    copyBtn.type = 'button';
+    copyBtn.textContent = 'نسخ إلى الحافظة';
+    copyBtn.style.cssText =
+      'flex:1;min-width:140px;padding:10px 14px;border:0;border-radius:8px;background:#166534;color:#fff;font-weight:700;cursor:pointer;font-size:14px';
+
+    const selectBtn = document.createElement('button');
+    selectBtn.type = 'button';
+    selectBtn.textContent = 'تحديد الكل';
+    selectBtn.style.cssText =
+      'padding:10px 14px;border:1px solid #ccc;border-radius:8px;background:#fff;cursor:pointer;font-size:14px';
+
+    const closeBtn = document.createElement('button');
+    closeBtn.type = 'button';
+    closeBtn.textContent = 'إغلاق';
+    closeBtn.style.cssText =
+      'padding:10px 14px;border:0;border-radius:8px;background:#64748b;color:#fff;cursor:pointer;font-size:14px';
+
+    const setStatus = (text, ok) => {
+      status.textContent = text;
+      status.style.color = ok ? '#166534' : '#b45309';
+      status.style.background = ok ? '#ecfdf5' : '#fffbeb';
+      status.style.borderColor = ok ? '#a7f3d0' : '#fde68a';
+    };
+
+    const runCopy = async () => {
+      copyBtn.disabled = true;
+      copyBtn.textContent = 'جاري النسخ…';
+      const ok = await copyTextToClipboard(json);
+      copyBtn.disabled = false;
+      copyBtn.textContent = 'نسخ إلى الحافظة';
+      if (ok) {
+        setStatus(
+          '✓ تم النسخ للحافظة — الصق الآن في المنصة (تعبئة المنيو).',
+          true,
+        );
+        showNotice(SUCCESS_MSG, false);
+      } else {
+        setStatus(
+          'لم ينجح النسخ التلقائي. اضغط «تحديد الكل» ثم Ctrl+C أو انسخ يدوياً من الصندوق.',
+          false,
+        );
+      }
+      return ok;
+    };
+
+    copyBtn.addEventListener('click', runCopy);
+    selectBtn.addEventListener('click', () => {
+      ta.focus();
+      ta.select();
+      setStatus('تم التحديد — اضغط Ctrl+C للنسخ.', false);
+    });
+    closeBtn.addEventListener('click', () => root.remove());
+    root.addEventListener('click', (e) => {
+      if (e.target === root) root.remove();
+    });
+
+    actions.append(copyBtn, selectBtn, closeBtn);
+    panel.append(header, sub, status, ta, actions);
+    root.append(panel);
+    document.body.appendChild(root);
+
+    runCopy().then((autoOk) => {
+      if (autoOk) {
+        setStatus(
+          '✓ تم النسخ للحافظة — الصق الآن في المنصة (تعبئة المنيو).',
+          true,
+        );
+        showNotice(SUCCESS_MSG, false);
+      } else {
+        setStatus(
+          'افتح الصندوق أدناه واضغط «نسخ» أو حدّد النص وانسخه يدوياً (Ctrl+C).',
+          false,
+        );
+      }
+    });
   }
 
   let items = fromNextData();
@@ -237,41 +378,15 @@
   };
   const json = JSON.stringify(payload);
 
-  const finishOk = () => showSummary(items);
+  try {
+    window.__LAST_MENU_DATA__ = {
+      payload,
+      json,
+      items,
+      copiedAt: payload.scrapedAt,
+      menuUrl: payload.menuUrl,
+    };
+  } catch (_) {}
 
-  if (navigator.clipboard?.writeText) {
-    navigator.clipboard
-      .writeText(json)
-      .then(finishOk)
-      .catch(() => {
-        try {
-          const ta = document.createElement('textarea');
-          ta.value = json;
-          ta.style.cssText = 'position:fixed;left:-9999px';
-          document.body.appendChild(ta);
-          ta.select();
-          document.execCommand('copy');
-          ta.remove();
-          finishOk();
-        } catch (_) {
-          showNotice(
-            'تعذر النسخ التلقائي. انسخ النص من نافذة المتصفح بعد الموافقة.',
-            true,
-          );
-          prompt('انسخ هذا النص والصقه في المنصة:', json.slice(0, 500) + '…');
-        }
-      });
-  } else {
-    try {
-      const ta = document.createElement('textarea');
-      ta.value = json;
-      document.body.appendChild(ta);
-      ta.select();
-      document.execCommand('copy');
-      ta.remove();
-      finishOk();
-    } catch (_) {
-      showNotice('المتصفح لا يدعم النسخ — جرّب Chrome أو Edge.', true);
-    }
-  }
+  showCopyOverlay(json, items, payload);
 })();
