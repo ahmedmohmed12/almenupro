@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/order.dart';
@@ -1068,7 +1069,7 @@ class _AdminDashboardState extends State<AdminDashboard>
     required void Function(String message) onProgress,
     required void Function(int added, int skipped, int updated) onComplete,
     String? talabatCookie,
-    String? nextData,
+    String? menuJson,
   }) {
     return processAndSaveTalabatMenu(
       url: url,
@@ -1076,8 +1077,31 @@ class _AdminDashboardState extends State<AdminDashboard>
       onProgress: onProgress,
       onComplete: onComplete,
       talabatCookie: talabatCookie,
-      nextData: nextData,
+      menuJson: menuJson,
+      nextData: menuJson,
     );
+  }
+
+  Future<void> _copyTalabatBookmarklet() async {
+    try {
+      final code = await rootBundle.loadString(
+        'web/talabat_menu_bookmarklet.txt',
+      );
+      await Clipboard.setData(ClipboardData(text: code.trim()));
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'تم نسخ Bookmarklet — أنشئ مفضلة جديدة والصق الرابط في حقل URL',
+          ),
+        ),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('تعذر تحميل كود Bookmarklet')),
+      );
+    }
   }
 
   void _showAutofillDialog() {
@@ -1117,8 +1141,14 @@ class _AdminDashboardState extends State<AdminDashboard>
                     ),
                     const SizedBox(height: 8),
                     const Text(
-                      'إذا ظهر خطأ 403: افتح الرابط في Chrome، انسخ JSON من سكربت __NEXT_DATA__ (أدوات المطوّر → Elements)، والصقه أدناه.',
+                      'عند 403: افتح صفحة المطعم في Chrome → اضغط Bookmarklet → الصق JSON هنا (أو اترك الرابط فارغاً إن كان داخل JSON).',
                       style: TextStyle(fontSize: 12, color: Colors.black54),
+                    ),
+                    const SizedBox(height: 8),
+                    OutlinedButton.icon(
+                      onPressed: _copyTalabatBookmarklet,
+                      icon: const Icon(Icons.bookmark_add_outlined, size: 18),
+                      label: const Text('نسخ Bookmarklet إلى المفضلة'),
                     ),
                     const SizedBox(height: 15),
                     TextField(
@@ -1137,8 +1167,8 @@ class _AdminDashboardState extends State<AdminDashboard>
                       minLines: 2,
                       maxLines: 5,
                       decoration: const InputDecoration(
-                        labelText: 'بيانات __NEXT_DATA__ (اختياري — عند 403)',
-                        hintText: '{ "props": { "pageProps": ...',
+                        labelText: 'JSON يدوي — Bookmarklet أو __NEXT_DATA__',
+                        hintText: '{ "source": "almenupro-talabat-bookmarklet", "items": [',
                         border: OutlineInputBorder(),
                         alignLabelWithHint: true,
                       ),
@@ -1209,13 +1239,13 @@ class _AdminDashboardState extends State<AdminDashboard>
                             statusMessage = 'جاري الاتصال وسحب المنيو...';
                           });
 
-                          final nextData = nextDataController.text.trim();
+                          final menuJson = nextDataController.text.trim();
                           final cookie = cookieController.text.trim();
                           final ok = await _processAndSaveTalabatMenu(
                             url: url,
                             talabatCookie:
                                 cookie.isEmpty ? null : cookie,
-                            nextData: nextData.isEmpty ? null : nextData,
+                            menuJson: menuJson.isEmpty ? null : menuJson,
                             onProgress: (msg) {
                               setDialogState(() => statusMessage = msg);
                             },

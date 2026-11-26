@@ -106,7 +106,10 @@ const { ALL_PERMISSION_KEYS } = require('./lib/posPermissions');
 const { serveMenuImage, persistMenuItemsImages, proxyExternalImage, fetchUpstreamImage } = require('./lib/menuImageStorage');
 const { normalizeMenuItemsForApi, normalizeMenuItemForApi } = require('./lib/bilingualItemMigration');
 const { migrateMenuItems } = require('./lib/bilingualMenu');
-const { scrapeTalabatMenu } = require('./lib/talabatScraper');
+const {
+  scrapeTalabatMenu,
+  parseAnyManualMenuJson,
+} = require('./lib/talabatScraper');
 const { computeTopMenuItems } = require('./lib/topItemsAnalytics');
 const {
   buildDailySalesCsv,
@@ -3100,23 +3103,51 @@ async function routeRequest(req, res, url, pathname) {
       body.restaurant_id ||
       (await resolveScopedRestaurantId(req, url, auth));
     if (!restaurantId || !assertRestaurantAccess(auth, restaurantId, authError, res)) return true;
-    const sourceUrl = String(body.url || body.menuUrl || '').trim();
+    const cookie = String(body.cookie || body.talabatCookie || '').trim();
+    const html = String(body.html || '').trim();
+    const nextData = body.nextData ?? body.next_data ?? null;
+    const menuJson =
+      body.menuJson ?? body.menu_json ?? body.manualJson ?? body.bookmarklet ?? null;
+    let sourceUrl = String(body.url || body.menuUrl || '').trim();
+    let preParsed = null;
+    if (menuJson != null && menuJson !== '') {
+      try {
+        preParsed = parseAnyManualMenuJson(menuJson);
+      } catch (_) {
+        preParsed = null;
+      }
+    } else if (nextData != null && nextData !== '') {
+      try {
+        preParsed = parseAnyManualMenuJson(nextData);
+      } catch (_) {
+        preParsed = null;
+      }
+    }
+    if (!sourceUrl && preParsed?.menuUrl) {
+      sourceUrl = String(preParsed.menuUrl).trim();
+    }
     if (!sourceUrl) {
-      sendJson(res, 400, { error: 'رابط Talabat مطلوب' });
+      sendJson(res, 400, { error: 'رابط Talabat مطلوب (أو JSON فيه menuUrl)' });
       return true;
     }
     try {
-      const cookie = String(body.cookie || body.talabatCookie || '').trim();
-      const html = String(body.html || '').trim();
-      const nextData = body.nextData ?? body.next_data ?? null;
       console.log(
-        `[talabat/import] restaurant=${restaurantId} url=${sourceUrl} paste=${Boolean(html || nextData)}`,
+        `[talabat/import] restaurant=${restaurantId} url=${sourceUrl} paste=${Boolean(html || nextData || menuJson)}`,
       );
-      const scraped = await scrapeTalabatMenu(sourceUrl, {
-        cookie: cookie || process.env.TALABAT_CF_COOKIE,
-        html: html || undefined,
-        nextData: nextData ?? undefined,
-      });
+      let scraped;
+      if (preParsed?.items?.length) {
+        scraped = {
+          menuUrl: sourceUrl,
+          items: preParsed.items,
+        };
+      } else {
+        scraped = await scrapeTalabatMenu(sourceUrl, {
+          cookie: cookie || process.env.TALABAT_CF_COOKIE,
+          html: html || undefined,
+          nextData: nextData ?? undefined,
+          menuJson: menuJson ?? undefined,
+        });
+      }
       let items = await dataStore.readItems();
       const others = items.filter(
         (item) => String(item.restaurant_id || item.restaurantId) !== String(restaurantId),

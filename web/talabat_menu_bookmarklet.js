@@ -1,0 +1,184 @@
+/**
+ * AlMenuPro — Talabat menu export (bookmarklet source).
+ * Minified one-liner lives in web/talabat_menu_bookmarklet.txt
+ */
+(function exportTalabatMenuForAlMenuPro() {
+  const SOURCE = 'almenupro-talabat-bookmarklet';
+  const VERSION = 1;
+
+  function decodeHtml(value) {
+    return String(value || '')
+      .replace(/&amp;/g, '&')
+      .replace(/&#x27;/g, "'")
+      .replace(/&quot;/g, '"')
+      .trim();
+  }
+
+  function imageFromItem(item) {
+    const candidates = [
+      item.originalImage,
+      item.image,
+      item.imageUrl,
+      item.thumbnail,
+      item.nmrImage,
+      Array.isArray(item.images) ? item.images[0] : null,
+    ];
+    for (const raw of candidates) {
+      let url =
+        typeof raw === 'string'
+          ? raw
+          : raw && typeof raw === 'object'
+            ? raw.url || raw.src
+            : '';
+      url = decodeHtml(url);
+      if (!url) continue;
+      if (url.startsWith('//')) return 'https:' + url;
+      if (url.startsWith('http')) return url;
+      if (url.startsWith('/'))
+        return 'https://images.deliveryhero.io' + url;
+      return 'https://' + url.replace(/^\/+/, '');
+    }
+    return '';
+  }
+
+  function categoryName(item, fallback) {
+    return (
+      (item.originalSection || item.sectionName || fallback || 'عام').trim() ||
+      'عام'
+    );
+  }
+
+  function collectCategory(category, bucket, parentName) {
+    const name = category.name || parentName || 'عام';
+    for (const item of category.items || []) {
+      const n = (item.name || '').trim();
+      if (!n) continue;
+      bucket.push({
+        talabatId: item.id != null ? item.id : null,
+        name: n,
+        description: (item.description || '').trim(),
+        price: Math.round((Number(item.price) || 0) * 1000) / 1000,
+        categoryName: categoryName(item, name),
+        imageUrl: imageFromItem(item),
+      });
+    }
+    for (const sub of category.subCategories || category.subcategories || []) {
+      collectCategory(
+        { ...sub, name: sub.name || name },
+        bucket,
+        sub.name || name,
+      );
+    }
+  }
+
+  function fromNextData() {
+    const el = document.getElementById('__NEXT_DATA__');
+    if (!el) return null;
+    let next;
+    try {
+      next = JSON.parse(el.textContent || '');
+    } catch (_) {
+      return null;
+    }
+    const menuState =
+      next.props?.pageProps?.initialMenuState?.menuData ||
+      next.props?.pageProps?.menuData;
+    if (!menuState?.categories?.length) return null;
+    const items = [];
+    for (const cat of menuState.categories) collectCategory(cat, items, cat.name);
+    const byId = new Map();
+    const byName = new Map();
+    for (const item of items) {
+      if (item.talabatId != null) {
+        if (!byId.has(item.talabatId)) byId.set(item.talabatId, item);
+      } else {
+        const key = item.name.toLowerCase();
+        if (!byName.has(key)) byName.set(key, item);
+      }
+    }
+    return [...byId.values(), ...byName.values()];
+  }
+
+  function fromDom() {
+    const items = [];
+    const seen = new Set();
+    const roots = document.querySelectorAll(
+      '[data-testid*="menu"], [class*="menu-item"], [class*="MenuItem"]',
+    );
+    const priceRe = /(\d+[.,]\d{1,3})/;
+    document.querySelectorAll('img[src*="deliveryhero"], img[src*="dhmedia"]').forEach((img) => {
+      const card =
+        img.closest('article') ||
+        img.closest('[class*="item"]') ||
+        img.closest('li') ||
+        img.parentElement;
+      if (!card) return;
+      const text = (card.innerText || '').trim();
+      const lines = text.split('\n').map((l) => l.trim()).filter(Boolean);
+      const name = lines[0] || '';
+      if (!name || name.length < 2 || seen.has(name)) return;
+      let price = 0;
+      for (const line of lines) {
+        const m = line.match(priceRe);
+        if (m) {
+          price = parseFloat(m[1].replace(',', '.')) || 0;
+          break;
+        }
+      }
+      seen.add(name);
+      items.push({
+        talabatId: null,
+        name,
+        description: lines.slice(1, 3).join(' ').replace(priceRe, '').trim(),
+        price,
+        categoryName: 'عام',
+        imageUrl: img.src || '',
+      });
+    });
+    if (items.length) return items;
+    return roots.length ? null : null;
+  }
+
+  let items = fromNextData();
+  if (!items?.length) items = fromDom();
+  if (!items?.length) {
+    alert(
+      'لم أجد أصنافاً. تأكد أن صفحة منيو Talabat مفتوحة بالكامل، ثم مرّر للأسفل لتحميل الأقسام وحاول مجدداً.',
+    );
+    return;
+  }
+
+  const payload = {
+    source: SOURCE,
+    version: VERSION,
+    menuUrl: location.href,
+    scrapedAt: new Date().toISOString(),
+    items,
+  };
+  const json = JSON.stringify(payload);
+
+  const done = (msg) => alert(msg);
+
+  const download = () => {
+    const blob = new Blob([json], { type: 'application/json;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'talabat-menu-' + Date.now() + '.json';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  };
+
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard
+      .writeText(json)
+      .then(() => done('تم نسخ ' + items.length + ' صنف إلى الحافظة + تنزيل JSON.'))
+      .catch(() => done('تم تنزيل JSON (' + items.length + ' صنف). حاول النسخ يدوياً من الملف.'));
+    download();
+  } else {
+    download();
+    done('تم تنزيل JSON (' + items.length + ' صنف). الصق محتوى الملف في الأدمن.');
+  }
+})();

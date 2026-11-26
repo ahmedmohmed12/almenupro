@@ -82,6 +82,7 @@ flutter:
   uses-material-design: true
 
   assets:
+    - web/talabat_menu_bookmarklet.txt
     - assets/app_icon.png
     - assets/sounds/order_bell.wav
     - assets/sounds/order_soft.wav

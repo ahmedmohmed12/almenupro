@@ -64,9 +64,12 @@ class _AdminPlatformSettingsCardState extends State<AdminPlatformSettingsCard> {
       );
       if (!mounted) return;
       AdminCornerToast.success(context, 'تم حفظ إعدادات المنصات');
-    } catch (_) {
+    } catch (error) {
       if (!mounted) return;
-      AdminCornerToast.error(context, 'تعذر حفظ إعدادات المنصات');
+      AdminCornerToast.error(
+        context,
+        error.toString().replaceFirst('Exception: ', ''),
+      );
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -122,6 +125,7 @@ class _AdminPlatformSettingsCardState extends State<AdminPlatformSettingsCard> {
         ),
       );
     });
+    await _save();
   }
 
   Future<void> _editPlatform(int index) async {
@@ -142,8 +146,10 @@ class _AdminPlatformSettingsCardState extends State<AdminPlatformSettingsCard> {
         name: result.name,
         commissionPercent: result.commissionPercent,
         colorArgb: result.colorArgb,
+        isBuiltIn: current.isBuiltIn,
       ),
     );
+    await _save();
   }
 
   Widget _addButton({required bool expanded}) {
@@ -350,11 +356,24 @@ class _PlatformEditorDialogState extends State<_PlatformEditorDialog> {
     super.dispose();
   }
 
+  double _parseCommission(String raw) {
+    final normalized = raw.trim().replaceAll(',', '.');
+    final value = double.tryParse(normalized) ?? 0;
+    if (value < 0) return 0;
+    if (value > 100) return 100;
+    return double.parse(value.toStringAsFixed(2));
+  }
+
   void _submit() {
     final id = _idController.text.trim().toLowerCase().replaceAll(' ', '_');
     final name = _nameController.text.trim();
-    final commission = double.tryParse(_commissionController.text.trim()) ?? 0;
-    if (id.isEmpty || name.isEmpty) return;
+    final commission = _parseCommission(_commissionController.text);
+    if (id.isEmpty || name.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('اسم المنصة والمعرّف مطلوبان')),
+      );
+      return;
+    }
     Navigator.of(context).pop(
       _PlatformFormResult(
         id: id,
@@ -382,6 +401,8 @@ class _PlatformEditorDialogState extends State<_PlatformEditorDialog> {
             children: [
             TextField(
               controller: _nameController,
+              enabled: !widget.lockId,
+              readOnly: widget.lockId,
               decoration: const InputDecoration(
                 labelText: 'اسم المنصة',
                 border: OutlineInputBorder(),
@@ -391,6 +412,7 @@ class _PlatformEditorDialogState extends State<_PlatformEditorDialog> {
             TextField(
               controller: _idController,
               enabled: !widget.lockId,
+              readOnly: widget.lockId,
               decoration: const InputDecoration(
                 labelText: 'المعرّف (ID)',
                 border: OutlineInputBorder(),
@@ -401,7 +423,9 @@ class _PlatformEditorDialogState extends State<_PlatformEditorDialog> {
               controller: _commissionController,
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
               inputFormatters: [
-                FilteringTextInputFormatter.allow(RegExp(r'^\d{0,2}(\.\d{0,2})?')),
+                FilteringTextInputFormatter.allow(
+                  RegExp(r'^\d{0,3}([.,]\d{0,2})?'),
+                ),
               ],
               decoration: const InputDecoration(
                 labelText: 'نسبة العمولة %',

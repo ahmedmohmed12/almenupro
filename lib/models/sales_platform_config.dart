@@ -137,7 +137,10 @@ class PlatformCatalog {
     final defaults = SalesPlatformConfig.defaults();
     final ordered = <SalesPlatformConfig>[];
     for (final builtin in defaults) {
-      ordered.add(byId.remove(builtin.id) ?? builtin);
+      final saved = byId.remove(builtin.id);
+      ordered.add(
+        saved != null ? saved.copyWith(isBuiltIn: true) : builtin,
+      );
     }
     ordered.addAll(byId.values);
     return ordered;

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../utils/talabat_manual_menu_json.dart';
 import 'api_service.dart';
 
 bool isWebUrl(String input) {
@@ -18,29 +19,39 @@ Future<bool> processAndSaveTalabatMenu({
   String? restaurantId,
   String? talabatCookie,
   String? nextData,
+  String? menuJson,
 }) async {
-  final normalizedUrl = url.trim();
+  final manual = (menuJson ?? nextData ?? '').trim();
+  var normalizedUrl = url.trim();
+  if (normalizedUrl.isEmpty && manual.isNotEmpty) {
+    normalizedUrl = menuUrlFromManualTalabatJson(manual) ?? '';
+  }
 
   if (normalizedUrl.isEmpty) {
-    onProgress('يرجى إدخال رابط صحيح أولاً');
+    onProgress('أدخل رابط Talabat أو الصق JSON من Bookmarklet (فيه menuUrl)');
     return false;
   }
 
-  if (!isTalabatMenuUrl(normalizedUrl)) {
-    onProgress('استخدم رابط Talabat (طلبات) الصحيح');
+  if (!isTalabatMenuUrl(normalizedUrl) && !looksLikeTalabatBookmarkletJson(manual)) {
+    onProgress('استخدم رابط Talabat (طلبات) أو JSON من Bookmarklet');
     return false;
   }
 
   final targetRestaurantId = restaurantId ?? ApiService.defaultRestaurantId;
 
   try {
-    onProgress('جاري سحب الأصناف والأسعار والصور من Talabat على السيرفر...');
+    onProgress(
+      manual.isNotEmpty
+          ? 'جاري استيراد الأصناف والصور من JSON الملصق...'
+          : 'جاري سحب الأصناف من Talabat على السيرفر...',
+    );
 
     final result = await ApiService.instance.importTalabatMenu(
       url: normalizedUrl,
       restaurantId: targetRestaurantId,
       talabatCookie: talabatCookie,
       nextData: nextData,
+      menuJson: menuJson ?? nextData,
     );
 
     if (result.synced == 0 && result.added == 0 && result.updated == 0) {

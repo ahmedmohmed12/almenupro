@@ -1500,6 +1500,7 @@ class ApiService {
     String? talabatCookie,
     String? html,
     String? nextData,
+    String? menuJson,
   }) async {
     try {
       final payload = <String, dynamic>{
@@ -1515,9 +1516,10 @@ class ApiService {
       if (htmlPayload != null && htmlPayload.isNotEmpty) {
         payload['html'] = htmlPayload;
       }
-      final next = nextData?.trim();
-      if (next != null && next.isNotEmpty) {
-        payload['nextData'] = next;
+      final manual = (menuJson ?? nextData)?.trim();
+      if (manual != null && manual.isNotEmpty) {
+        payload['menuJson'] = manual;
+        payload['nextData'] = manual;
       }
       final response = await http
           .post(
