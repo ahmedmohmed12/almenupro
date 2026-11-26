@@ -339,7 +339,6 @@ class _IconBtn extends StatelessWidget {
         borderRadius: BorderRadius.circular(8),
         child: InkWell(
           onTap: onTap,
-          behavior: HitTestBehavior.opaque,
           borderRadius: BorderRadius.circular(8),
           child: SizedBox(
             width: 44,
@@ -379,7 +378,6 @@ class _ModeChip extends StatelessWidget {
         borderRadius: radius,
         child: InkWell(
           onTap: onSelected,
-          behavior: HitTestBehavior.opaque,
           borderRadius: radius,
           child: Padding(
             padding: PosTheme.orderTypeButtonPadding,
@@ -441,7 +439,6 @@ class _OpsChip extends StatelessWidget {
         borderRadius: radius,
         child: InkWell(
           onTap: onTap,
-          behavior: HitTestBehavior.opaque,
           borderRadius: radius,
           child: Padding(
             padding: PosTheme.orderTypeButtonPadding,
