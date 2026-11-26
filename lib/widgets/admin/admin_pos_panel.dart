@@ -146,6 +146,7 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
   var _isPickup = true;
   /// Foodics order-type chip: local | takeaway | delivery | platforms
   var _orderMode = 'takeaway';
+  var _platformPickerOpen = false;
   String _selectedCategory = _allCategory;
   String _paymentMethod = 'كاش';
   PosPayMode _payMode = PosPayMode.cash;
@@ -416,6 +417,28 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
         .join('|');
   }
 
+  /// Rebuild cart + toolbar chrome without recomputing the full menu grid.
+  void _refreshPosChrome() => _cartTick.value++;
+
+  void _applyPlatformSelection(
+    PosPlatformSelection next, {
+    String? orderMode,
+    bool? isPickup,
+  }) {
+    final samePlatform =
+        _platformSelection.platform.id == next.platform.id &&
+        _platformSelection.trackCommission == next.trackCommission &&
+        _platformSelection.commissionPercent == next.commissionPercent &&
+        _platformSelection.deliveryFee == next.deliveryFee;
+    final sameMode = orderMode == null || orderMode == _orderMode;
+    if (samePlatform && sameMode) return;
+
+    _platformSelection = next;
+    if (orderMode != null) _orderMode = orderMode;
+    if (isPickup != null) _isPickup = isPickup;
+    _refreshPosChrome();
+  }
+
   void _onSettingsChanged() {
     final settings = RestaurantSettingsService.instance.cached;
     final cachedId = RestaurantSettingsService.instance.cachedRestaurantId;
@@ -435,7 +458,16 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
         platformSig == prevSig) {
       return;
     }
-    setState(() => _applySettings(settings));
+    final kitchenChanged = nextKitchen != _kitchenManagementEnabled;
+    final fleetChanged = nextFleet != _fleetDeliveryEnabled;
+    final platformOnly =
+        !kitchenChanged && !fleetChanged && platformSig != prevSig;
+    _applySettings(settings);
+    if (platformOnly) {
+      _refreshPosChrome();
+      return;
+    }
+    if (mounted) setState(() {});
   }
 
   Future<void> _loadPage() async {
@@ -2440,11 +2472,14 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          PosCompactToolbar(
-            orderMode: _orderMode,
-            onSelectOrderMode: _selectOrderMode,
-            onOpenPlatforms: () => unawaited(_openPlatformsPickerFromToolbar()),
-            onOpenSearch: () => unawaited(_openSearchOverlay(barcodeMode: false)),
+          ListenableBuilder(
+            listenable: _cartTick,
+            builder: (context, _) => PosCompactToolbar(
+              orderMode: _orderMode,
+              onSelectOrderMode: _selectOrderMode,
+              onOpenPlatforms: () => unawaited(_openPlatformsPickerFromToolbar()),
+              onOpenSearch: () =>
+                  unawaited(_openSearchOverlay(barcodeMode: false)),
             onOpenBarcode: () => unawaited(_openSearchOverlay(barcodeMode: true)),
             onOpenTables: widget.onOpenTables,
             onOpenPendingPickup: widget.onOpenPendingPickup,
@@ -2453,6 +2488,7 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
             tableManagementEnabled: widget.tableManagementEnabled,
             showOrderModes: !_isDineIn,
             shiftLabel: widget.shiftLabel,
+            ),
           ),
           if (_searchController.text.trim().isNotEmpty)
             Padding(
@@ -2510,6 +2546,7 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
   }
 
   Future<void> _openPlatformsPickerFromToolbar() async {
+    if (_platformPickerOpen) return;
     final externals =
         _salesPlatforms.where((p) => p.isExternal).toList(growable: false);
     if (externals.isEmpty) {
@@ -2524,30 +2561,32 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
       return;
     }
 
-    final picked = await showPosPlatformPickerDialog(
-      context,
-      platforms: _salesPlatforms,
-      selected: _platformSelection.isExternal ? _platformSelection.platform : null,
-    );
+    _platformPickerOpen = true;
+    SalesPlatformConfig? picked;
+    try {
+      picked = await showPosPlatformPickerDialog(
+        context,
+        platforms: _salesPlatforms,
+        selected:
+            _platformSelection.isExternal ? _platformSelection.platform : null,
+      );
+    } finally {
+      _platformPickerOpen = false;
+    }
     if (picked == null || !mounted) return;
 
-    setState(() {
-      _orderMode = 'platforms';
-      _isPickup = true;
-      _platformSelection = PosPlatformSelection(
+    _applyPlatformSelection(
+      PosPlatformSelection(
         platform: picked,
         externalOrderId: _platformSelection.externalOrderId,
         deliveryFee: _platformSelection.deliveryFee,
         trackCommission: true,
         commissionPercent: picked.commissionPercent,
         manualNetRevenue: null,
-      );
-    });
-
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      _formKey.currentState?.reset();
-    });
+      ),
+      orderMode: 'platforms',
+      isPickup: true,
+    );
   }
 
   void _selectOrderMode(String mode) {
@@ -2610,10 +2649,14 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
       }
     });
 
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      _formKey.currentState?.reset();
-    });
+    if (mode == 'delivery' || mode == 'scheduled') {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _formKey.currentState?.reset();
+      });
+    } else if (mode != 'platforms') {
+      _refreshPosChrome();
+    }
 
     if (mode == 'delivery' || mode == 'scheduled') {
       unawaited(_openDeliveryAddressDialog());
@@ -2723,20 +2766,17 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
                         showSourceToggle: false,
                         compactHeader: true,
                         onChanged: (next) {
-                          setState(() {
-                            _platformSelection = next;
-                            if (next.isExternal) {
-                              _orderMode = 'platforms';
-                            } else if (_isPickup &&
-                                (_orderMode == 'platforms' ||
-                                    _orderMode == 'local')) {
-                              _orderMode = 'takeaway';
-                            }
-                          });
-                          WidgetsBinding.instance.addPostFrameCallback((_) {
-                            if (!mounted) return;
-                            _formKey.currentState?.reset();
-                          });
+                          final mode = next.isExternal
+                              ? 'platforms'
+                              : (_isPickup &&
+                                      (_orderMode == 'platforms' ||
+                                          _orderMode == 'local'))
+                                  ? 'takeaway'
+                                  : _orderMode;
+                          _applyPlatformSelection(
+                            next,
+                            orderMode: mode,
+                          );
                         },
                       ),
                       const SizedBox(height: 8),

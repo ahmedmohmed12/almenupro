@@ -18,6 +18,7 @@ Future<SalesPlatformConfig?> showPosPlatformPickerDialog(
 
   return showDialog<SalesPlatformConfig>(
     context: context,
+    barrierDismissible: true,
     builder: (dialogContext) {
       return Dialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
@@ -284,16 +285,15 @@ class PosPlatformSelector extends StatelessWidget {
     );
 
     if (picked == null) return;
-    _update(
-      PosPlatformSelection(
-        platform: picked,
-        externalOrderId: selection.externalOrderId,
-        deliveryFee: selection.deliveryFee,
-        trackCommission: true,
-        commissionPercent: picked.commissionPercent,
-        manualNetRevenue: null,
-      ),
+    final next = PosPlatformSelection(
+      platform: picked,
+      externalOrderId: selection.externalOrderId,
+      deliveryFee: selection.deliveryFee,
+      trackCommission: true,
+      commissionPercent: picked.commissionPercent,
+      manualNetRevenue: null,
     );
+    WidgetsBinding.instance.addPostFrameCallback((_) => _update(next));
   }
 
   @override
