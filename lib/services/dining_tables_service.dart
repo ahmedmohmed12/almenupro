@@ -5,14 +5,35 @@ import '../models/menu_item.dart';
 import '../models/order.dart';
 import 'admin_auth_service.dart';
 import 'api_service.dart';
+import 'super_admin_scope_service.dart';
 
 class DiningTablesService {
   DiningTablesService._();
 
   static final DiningTablesService instance = DiningTablesService._();
 
-  Future<List<DiningTable>> fetchTables() async {
-    final decoded = await ApiService.instance.getJson('/tables');
+  String _scopedRestaurantId() {
+    final fromAuth = AdminAuthService.instance.restaurantId;
+    if (fromAuth != null && fromAuth.trim().isNotEmpty) {
+      return fromAuth.trim();
+    }
+    return SuperAdminScopeService.instance.effectiveRestaurantId;
+  }
+
+  static bool? tableManagementEnabledInPayload(Map<String, dynamic> decoded) {
+    final features = decoded['features'];
+    if (features is! Map) return null;
+    final map = Map<String, dynamic>.from(features);
+    return map['tableManagement'] == true || map['table_management'] == true;
+  }
+
+  Future<List<DiningTable>> fetchTables({String? restaurantId}) async {
+    final scoped = (restaurantId ?? _scopedRestaurantId()).trim();
+    final decoded = await ApiService.instance.getJson(
+      '/tables',
+      restaurantId: scoped.isEmpty ? null : scoped,
+      scopeRestaurant: true,
+    );
     final raw = decoded['tables'];
     if (raw is! List) return const [];
     return raw

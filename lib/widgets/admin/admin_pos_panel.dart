@@ -195,6 +195,7 @@ class _AdminPosPanelState extends State<AdminPosPanel> {
         isDineIn: _isDineIn,
         tableDisplayName: widget.dineInTable?.displayName,
         contactOptional: _customerContactOptional,
+        isExternalPlatform: _platformSelection.isExternal,
       );
 
   ({String name, String phone}) _resolvedCustomerContact() {

@@ -1448,8 +1448,20 @@ class ApiService {
     return _decodeObject(response, 'فشل في حفظ البيانات');
   }
 
-  Future<Map<String, dynamic>> getJson(String path) async {
-    final response = await _get(_uri(path), headers: _jsonHeaders);
+  Future<Map<String, dynamic>> getJson(
+    String path, {
+    String? restaurantId,
+    Map<String, String>? query,
+    bool scopeRestaurant = false,
+  }) async {
+    final mergedQuery = <String, String>{
+      if (scopeRestaurant) ..._restaurantQuery(restaurantId: restaurantId),
+      ...?query,
+    };
+    final response = await _get(
+      _uri(path, mergedQuery.isEmpty ? null : mergedQuery),
+      headers: _jsonHeaders,
+    );
     return _decodeObject(response, 'فشل في تحميل البيانات');
   }
 

@@ -96,8 +96,11 @@ class _AdminDashboardState extends State<AdminDashboard>
 
   bool get _whatsappConfigured => _loadedSettings?.hasWhatsappNumber ?? false;
 
-  bool get _tableManagementEnabled =>
-      _loadedSettings?.tableManagementEnabled == true;
+  bool get _tableManagementEnabled {
+    if (_loadedSettings?.tableManagementEnabled == true) return true;
+    return RestaurantSettingsService.instance.cached?.tableManagementEnabled ==
+        true;
+  }
 
   bool get _kitchenManagementEnabled =>
       _loadedSettings?.kitchenManagementEnabled == true;

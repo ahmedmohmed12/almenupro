@@ -15,6 +15,8 @@ import '../../../services/incoming_order_auto_accept_service.dart';
 import '../../../services/offline/pos_sync_service.dart';
 import '../../../services/pos_operations_service.dart';
 import '../../../services/pos_security_service.dart';
+import '../../../services/api_service.dart';
+import '../../../services/dining_tables_service.dart';
 import '../../../services/restaurant_settings_service.dart';
 import '../../../utils/admin_route_nav.dart';
 import '../../language_toggle_button.dart';
@@ -93,24 +95,51 @@ class _PosShiftShellState extends State<PosShiftShell> {
     WidgetsBinding.instance.addPostFrameCallback((_) => _onOrderFocusChanged());
   }
 
+  static bool _posUrlControlsRoute() {
+    if (!kIsWeb) return false;
+    final path = Uri.base.path.replaceAll(RegExp(r'/+$'), '');
+    if (path.isEmpty) return false;
+    return path == PosRoute.home.path ||
+        path.startsWith('${PosRoute.home.path}/');
+  }
+
+  Future<void> _applyTableFeatureFromTablesApi() async {
+    try {
+      final decoded = await ApiService.instance.getJson(
+        '/tables',
+        restaurantId: widget.restaurantId,
+        scopeRestaurant: true,
+      );
+      final fromApi =
+          DiningTablesService.tableManagementEnabledInPayload(decoded);
+      if (fromApi != true || !mounted) return;
+      setState(() => _tableManagementEnabled = true);
+    } catch (_) {}
+  }
+
   @override
   void didUpdateWidget(covariant PosShiftShell oldWidget) {
     super.didUpdateWidget(oldWidget);
-    final routeFromUrl = readPosRouteFromLocation();
     final tableChanged =
         oldWidget.tableManagementEnabled != widget.tableManagementEnabled;
-    if (routeFromUrl != _selectedRoute || tableChanged) {
+    final restaurantChanged = oldWidget.restaurantId != widget.restaurantId;
+    if (_posUrlControlsRoute()) {
+      final routeFromUrl = readPosRouteFromLocation();
+      if (routeFromUrl != _selectedRoute) {
+        setState(() => _selectedRoute = routeFromUrl);
+      }
+    }
+    if (tableChanged || restaurantChanged) {
+      final merged = widget.tableManagementEnabled || _tableManagementEnabled;
       setState(() {
-        if (routeFromUrl != _selectedRoute) {
-          _selectedRoute = routeFromUrl;
-        }
-        if (tableChanged) {
-          _tableManagementEnabled = widget.tableManagementEnabled;
-          if (!_tableManagementEnabled && _selectedRoute == PosRoute.dineIn) {
-            _selectedRoute = PosRoute.home;
-          }
+        _tableManagementEnabled = merged;
+        if (!_tableManagementEnabled && _selectedRoute == PosRoute.dineIn) {
+          _selectedRoute = PosRoute.home;
         }
       });
+      if (!merged) {
+        unawaited(_applyTableFeatureFromTablesApi());
+      }
     }
   }
 
@@ -146,9 +175,14 @@ class _PosShiftShellState extends State<PosShiftShell> {
         await PosOperationsService.instance.restoreCashierSessionIfNeeded();
       }
 
-      final settings = await RestaurantSettingsService.instance.load();
+      final settings = await RestaurantSettingsService.instance.load(
+        restaurantId: widget.restaurantId,
+      );
       _tableManagementEnabled =
           widget.tableManagementEnabled || settings.tableManagementEnabled;
+      if (!_tableManagementEnabled) {
+        await _applyTableFeatureFromTablesApi();
+      }
       PosSecurityService.instance.configure(
         autoLockMinutes: settings.posAutoLockMinutes,
         onLockChanged: () {
@@ -180,7 +214,12 @@ class _PosShiftShellState extends State<PosShiftShell> {
       }
       unawaited(PosSyncService.instance.start());
     } finally {
-      if (mounted) setState(() => _loading = false);
+      if (mounted) {
+        if (!_tableManagementEnabled) {
+          unawaited(_applyTableFeatureFromTablesApi());
+        }
+        setState(() => _loading = false);
+      }
     }
   }
 
@@ -344,12 +383,34 @@ class _PosShiftShellState extends State<PosShiftShell> {
   }
 
   void _openDineInTables() {
-    if (!_tableManagementEnabled) return;
+    if (!_tableManagementEnabled) {
+      unawaited(
+        _applyTableFeatureFromTablesApi().then((_) {
+          if (!mounted || !_tableManagementEnabled) return;
+          _openDineInTables();
+        }),
+      );
+      return;
+    }
+    if (_shift == null || !_shift!.isOpen) {
+      final s = AppStrings.of(context);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            s.tr(
+              'افتح وردية الكاشير أولاً لاستخدام الطاولات.',
+              'Open a cashier shift first to use tables.',
+            ),
+          ),
+        ),
+      );
+      return;
+    }
+    navigateToAdminPath(PosRoute.dineIn.path);
     setState(() {
       _selectedRoute = PosRoute.dineIn;
       _homeSheet = _PosHomeSheet.none;
     });
-    navigateToAdminPath(PosRoute.dineIn.path);
   }
 
   void _openPendingPickup() {

@@ -1,6 +1,5 @@
 import 'package:flutter/widgets.dart';
 
-import '../models/sales_platform_config.dart';
 import 'package:almenupro/l10n/app_strings.dart';
 
 /// When false, POS must collect customer name + phone (delivery-like flows).
@@ -11,7 +10,8 @@ bool posCustomerContactRequired({
 }) {
   if (isDineIn) return false;
   if (orderMode == 'delivery' || orderMode == 'scheduled') return true;
-  if (orderMode == 'platforms' && isExternalPlatform) return true;
+  // Platform orders (Talabat, Keeta, …): contact lives on the platform, not POS.
+  if (orderMode == 'platforms' && isExternalPlatform) return false;
   return false;
 }
 
@@ -28,6 +28,7 @@ String posDefaultCustomerName({
   required bool isDineIn,
   String? tableDisplayName,
   required bool contactOptional,
+  bool isExternalPlatform = false,
 }) {
   final trimmed = raw.trim();
   if (trimmed.isNotEmpty) return trimmed;
@@ -36,6 +37,9 @@ String posDefaultCustomerName({
     return (tableDisplayName?.trim().isNotEmpty ?? false)
         ? tableDisplayName!.trim()
         : 'طاولة';
+  }
+  if (isExternalPlatform) {
+    return AppStrings.read(context).tr('طلب منصة', 'Platform order');
   }
   return AppStrings.read(context).tr('استلام من المحل', 'Walk-in pickup');
 }

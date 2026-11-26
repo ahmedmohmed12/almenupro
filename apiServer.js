@@ -2869,9 +2869,14 @@ async function routeRequest(req, res, url, pathname) {
 
   if (pathname === '/api/settings' && req.method === 'GET') {
     const restaurants = await dataStore.readRestaurants();
-    const restaurantId =
+    const auth = parseAuthHeader(req);
+    let restaurantId =
       readRestaurantIdParam(req, url) ||
       resolveRestaurantFromQuery(url, restaurants);
+    if (auth) {
+      const scoped = resolveRestaurantId(auth, restaurantId);
+      if (scoped) restaurantId = scoped;
+    }
     const map = await dataStore.readSettingsMap();
     const stored = map.byRestaurant?.[restaurantId] || {};
     const payload = { ...defaultSettingsPayload(), ...stored };
