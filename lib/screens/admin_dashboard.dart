@@ -1067,17 +1067,23 @@ class _AdminDashboardState extends State<AdminDashboard>
     required String url,
     required void Function(String message) onProgress,
     required void Function(int added, int skipped, int updated) onComplete,
+    String? talabatCookie,
+    String? nextData,
   }) {
     return processAndSaveTalabatMenu(
       url: url,
       restaurantId: _activeRestaurantId,
       onProgress: onProgress,
       onComplete: onComplete,
+      talabatCookie: talabatCookie,
+      nextData: nextData,
     );
   }
 
   void _showAutofillDialog() {
     final urlController = TextEditingController();
+    final nextDataController = TextEditingController();
+    final cookieController = TextEditingController();
     var isLoading = false;
     String? statusMessage;
 
@@ -1106,8 +1112,13 @@ class _AdminDashboardState extends State<AdminDashboard>
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const Text(
-                      'أدخل رابط Talabat لسحب الأصناف — سيتم حفظ الصور محلياً على السيرفر تلقائياً:',
+                      'أدخل رابط Talabat لسحب الأصناف — سيتم حفظ الصور على السيرفر.',
                       style: TextStyle(fontSize: 13, color: Colors.black87),
+                    ),
+                    const SizedBox(height: 8),
+                    const Text(
+                      'إذا ظهر خطأ 403: افتح الرابط في Chrome، انسخ JSON من سكربت __NEXT_DATA__ (أدوات المطوّر → Elements)، والصقه أدناه.',
+                      style: TextStyle(fontSize: 12, color: Colors.black54),
                     ),
                     const SizedBox(height: 15),
                     TextField(
@@ -1117,6 +1128,27 @@ class _AdminDashboardState extends State<AdminDashboard>
                         labelText: 'رابط المنيو (Talabat URL)',
                         hintText: 'https://www.talabat.com/...',
                         prefixIcon: Icon(Icons.link),
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: nextDataController,
+                      minLines: 2,
+                      maxLines: 5,
+                      decoration: const InputDecoration(
+                        labelText: 'بيانات __NEXT_DATA__ (اختياري — عند 403)',
+                        hintText: '{ "props": { "pageProps": ...',
+                        border: OutlineInputBorder(),
+                        alignLabelWithHint: true,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: cookieController,
+                      decoration: const InputDecoration(
+                        labelText: 'Cookie من المتصفح (اختياري)',
+                        hintText: 'cf_clearance=...',
                         border: OutlineInputBorder(),
                       ),
                     ),
@@ -1177,8 +1209,13 @@ class _AdminDashboardState extends State<AdminDashboard>
                             statusMessage = 'جاري الاتصال وسحب المنيو...';
                           });
 
+                          final nextData = nextDataController.text.trim();
+                          final cookie = cookieController.text.trim();
                           final ok = await _processAndSaveTalabatMenu(
                             url: url,
+                            talabatCookie:
+                                cookie.isEmpty ? null : cookie,
+                            nextData: nextData.isEmpty ? null : nextData,
                             onProgress: (msg) {
                               setDialogState(() => statusMessage = msg);
                             },

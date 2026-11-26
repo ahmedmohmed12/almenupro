@@ -16,6 +16,8 @@ Future<bool> processAndSaveTalabatMenu({
   required void Function(String message) onProgress,
   required void Function(int added, int skipped, int updated) onComplete,
   String? restaurantId,
+  String? talabatCookie,
+  String? nextData,
 }) async {
   final normalizedUrl = url.trim();
 
@@ -37,6 +39,8 @@ Future<bool> processAndSaveTalabatMenu({
     final result = await ApiService.instance.importTalabatMenu(
       url: normalizedUrl,
       restaurantId: targetRestaurantId,
+      talabatCookie: talabatCookie,
+      nextData: nextData,
     );
 
     if (result.synced == 0 && result.added == 0 && result.updated == 0) {

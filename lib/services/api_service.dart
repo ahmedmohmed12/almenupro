@@ -1497,17 +1497,33 @@ class ApiService {
   Future<TalabatImportResult> importTalabatMenu({
     required String url,
     required String restaurantId,
+    String? talabatCookie,
+    String? html,
+    String? nextData,
   }) async {
     try {
+      final payload = <String, dynamic>{
+        'url': url,
+        'restaurantId': restaurantId,
+        'downloadImages': true,
+      };
+      final cookie = talabatCookie?.trim();
+      if (cookie != null && cookie.isNotEmpty) {
+        payload['cookie'] = cookie;
+      }
+      final htmlPayload = html?.trim();
+      if (htmlPayload != null && htmlPayload.isNotEmpty) {
+        payload['html'] = htmlPayload;
+      }
+      final next = nextData?.trim();
+      if (next != null && next.isNotEmpty) {
+        payload['nextData'] = next;
+      }
       final response = await http
           .post(
             _uri('/talabat/import'),
             headers: _jsonHeaders,
-            body: jsonEncode({
-              'url': url,
-              'restaurantId': restaurantId,
-              'downloadImages': true,
-            }),
+            body: jsonEncode(payload),
           )
           .timeout(const Duration(seconds: 180));
 

@@ -3106,8 +3106,17 @@ async function routeRequest(req, res, url, pathname) {
       return true;
     }
     try {
-      console.log(`[talabat/import] restaurant=${restaurantId} url=${sourceUrl}`);
-      const scraped = await scrapeTalabatMenu(sourceUrl);
+      const cookie = String(body.cookie || body.talabatCookie || '').trim();
+      const html = String(body.html || '').trim();
+      const nextData = body.nextData ?? body.next_data ?? null;
+      console.log(
+        `[talabat/import] restaurant=${restaurantId} url=${sourceUrl} paste=${Boolean(html || nextData)}`,
+      );
+      const scraped = await scrapeTalabatMenu(sourceUrl, {
+        cookie: cookie || process.env.TALABAT_CF_COOKIE,
+        html: html || undefined,
+        nextData: nextData ?? undefined,
+      });
       let items = await dataStore.readItems();
       const others = items.filter(
         (item) => String(item.restaurant_id || item.restaurantId) !== String(restaurantId),
