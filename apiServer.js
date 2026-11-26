@@ -3160,18 +3160,23 @@ async function routeRequest(req, res, url, pathname) {
     const html = String(body.html || '').trim();
     const nextData = body.nextData ?? body.next_data ?? null;
     const menuJson =
-      body.menuJson ?? body.menu_json ?? body.manualJson ?? body.bookmarklet ?? null;
+      body.menuJson ??
+      body.menu_json ??
+      body.manualJson ??
+      body.bookmarklet ??
+      body.paste ??
+      body.pastedData ??
+      body.pasted_data ??
+      null;
     let sourceUrl = String(body.url || body.menuUrl || '').trim();
     let preParsed = null;
-    if (menuJson != null && menuJson !== '') {
+    const pasteCandidates = [menuJson, nextData, html].filter(
+      (v) => v != null && String(v).trim() !== '',
+    );
+    for (const candidate of pasteCandidates) {
       try {
-        preParsed = parseAnyManualMenuJson(menuJson);
-      } catch (_) {
-        preParsed = null;
-      }
-    } else if (nextData != null && nextData !== '') {
-      try {
-        preParsed = parseAnyManualMenuJson(nextData);
+        preParsed = parseAnyManualMenuJson(candidate);
+        if (preParsed?.items?.length) break;
       } catch (_) {
         preParsed = null;
       }
@@ -3179,8 +3184,14 @@ async function routeRequest(req, res, url, pathname) {
     if (!sourceUrl && preParsed?.menuUrl) {
       sourceUrl = String(preParsed.menuUrl).trim();
     }
+    if (!sourceUrl && preParsed?.items?.length) {
+      sourceUrl = 'https://www.talabat.com/';
+    }
     if (!sourceUrl) {
-      sendJson(res, 400, { error: 'رابط Talabat مطلوب (أو JSON فيه menuUrl)' });
+      sendJson(res, 400, {
+        error:
+          'أدخل رابط Talabat أو الصق بيانات المنيو المنسوخة من صفحة المطعم',
+      });
       return true;
     }
     try {

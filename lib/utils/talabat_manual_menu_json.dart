@@ -28,3 +28,28 @@ bool looksLikeTalabatBookmarkletJson(String raw) {
     return false;
   }
 }
+
+/// JSON from bookmarklet, array of items, or simple text lines (name | price).
+bool looksLikeTalabatMenuPaste(String raw) {
+  final trimmed = raw.trim();
+  if (trimmed.isEmpty) return false;
+  if (looksLikeTalabatBookmarkletJson(trimmed)) return true;
+  if (trimmed.startsWith('[')) {
+    try {
+      final decoded = jsonDecode(trimmed);
+      return decoded is List && decoded.isNotEmpty;
+    } catch (_) {
+      return false;
+    }
+  }
+  if (trimmed.contains('almenupro-talabat-bookmarklet')) return true;
+  if (RegExp(r'قسم\s*[:：]', caseSensitive: false).hasMatch(trimmed)) {
+    return true;
+  }
+  final lines = trimmed.split('\n').where((l) => l.trim().isNotEmpty);
+  var pipeLines = 0;
+  for (final line in lines) {
+    if (line.contains('|') && RegExp(r'\d').hasMatch(line)) pipeLines++;
+  }
+  return pipeLines >= 1;
+}

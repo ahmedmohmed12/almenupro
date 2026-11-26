@@ -26,14 +26,18 @@ Future<bool> processAndSaveTalabatMenu({
   if (normalizedUrl.isEmpty && manual.isNotEmpty) {
     normalizedUrl = menuUrlFromManualTalabatJson(manual) ?? '';
   }
+  if (normalizedUrl.isEmpty && looksLikeTalabatMenuPaste(manual)) {
+    normalizedUrl = 'https://www.talabat.com/';
+  }
 
   if (normalizedUrl.isEmpty) {
-    onProgress('أدخل رابط Talabat أو الصق JSON من Bookmarklet (فيه menuUrl)');
+    onProgress('ألصق بيانات المنيو من Talabat أو أدخل رابط صفحة المطعم');
     return false;
   }
 
-  if (!isTalabatMenuUrl(normalizedUrl) && !looksLikeTalabatBookmarkletJson(manual)) {
-    onProgress('استخدم رابط Talabat (طلبات) أو JSON من Bookmarklet');
+  final hasPaste = manual.isNotEmpty && looksLikeTalabatMenuPaste(manual);
+  if (!hasPaste && !isTalabatMenuUrl(normalizedUrl)) {
+    onProgress('استخدم رابط صفحة المطعم على Talabat أو الصق البيانات المنسوخة');
     return false;
   }
 
@@ -41,9 +45,9 @@ Future<bool> processAndSaveTalabatMenu({
 
   try {
     onProgress(
-      manual.isNotEmpty
-          ? 'جاري استيراد الأصناف والصور من JSON الملصق...'
-          : 'جاري سحب الأصناف من Talabat على السيرفر...',
+      hasPaste
+          ? 'جاري إضافة الأصناف وحفظ الصور على السيرفر…'
+          : 'جاري سحب المنيو من Talabat (قد يفشل إن كان الموقع محجوباً)…',
     );
 
     final result = await ApiService.instance.importTalabatMenu(
@@ -55,14 +59,10 @@ Future<bool> processAndSaveTalabatMenu({
     );
 
     if (result.synced == 0 && result.added == 0 && result.updated == 0) {
-      onProgress('لم يتم العثور على أصناف في هذا الرابط');
+      onProgress('لم يتم العثور على أصناف — تأكد من لصق البيانات كاملة');
       return false;
     }
 
-    onProgress(
-      'تم الاستيراد: ${result.added} جديد، ${result.updated} محدّث '
-      '(${result.total} صنف في المنيو)',
-    );
     onComplete(result.added, result.skipped, result.updated);
     return true;
   } catch (error) {

@@ -1,10 +1,12 @@
 /**
  * AlMenuPro — Talabat menu export (bookmarklet source).
- * Minified one-liner lives in web/talabat_menu_bookmarklet.txt
+ * Minified one-liner: web/talabat_menu_bookmarklet.txt (npm run build:talabat-bookmarklet)
  */
 (function exportTalabatMenuForAlMenuPro() {
   const SOURCE = 'almenupro-talabat-bookmarklet';
-  const VERSION = 1;
+  const VERSION = 2;
+  const SUCCESS_MSG =
+    'تم نسخ بيانات المنيو بنجاح — الصقها الآن في المنصة';
 
   function decodeHtml(value) {
     return String(value || '')
@@ -12,6 +14,16 @@
       .replace(/&#x27;/g, "'")
       .replace(/&quot;/g, '"')
       .trim();
+  }
+
+  function normalizeImageUrl(raw) {
+    let url = typeof raw === 'string' ? raw : raw?.url || raw?.src || '';
+    url = decodeHtml(url);
+    if (!url) return '';
+    if (url.startsWith('//')) return 'https:' + url;
+    if (url.startsWith('http')) return url;
+    if (url.startsWith('/')) return 'https://images.deliveryhero.io' + url;
+    return 'https://' + url.replace(/^\/+/, '');
   }
 
   function imageFromItem(item) {
@@ -24,19 +36,8 @@
       Array.isArray(item.images) ? item.images[0] : null,
     ];
     for (const raw of candidates) {
-      let url =
-        typeof raw === 'string'
-          ? raw
-          : raw && typeof raw === 'object'
-            ? raw.url || raw.src
-            : '';
-      url = decodeHtml(url);
-      if (!url) continue;
-      if (url.startsWith('//')) return 'https:' + url;
-      if (url.startsWith('http')) return url;
-      if (url.startsWith('/'))
-        return 'https://images.deliveryhero.io' + url;
-      return 'https://' + url.replace(/^\/+/, '');
+      const url = normalizeImageUrl(raw);
+      if (url) return url;
     }
     return '';
   }
@@ -99,51 +100,129 @@
     return [...byId.values(), ...byName.values()];
   }
 
+  function sectionTitleFor(card) {
+    const section =
+      card.closest('section') ||
+      card.closest('[data-testid*="menu-category"]') ||
+      card.closest('[class*="category" i]') ||
+      card.parentElement;
+    if (!section) return 'عام';
+    const heading =
+      section.querySelector('h2, h3, h4, [data-testid*="category-name"]') ||
+      section.querySelector('[class*="title" i]');
+    const text = (heading?.textContent || '').trim();
+    return text.length > 1 && text.length < 80 ? text : 'عام';
+  }
+
+  function parsePriceFromText(text) {
+    const priceRe = /(\d{1,4}[.,]\d{1,3}|\d{1,4})\s*(?:د\.?ك|kd|kwd)?/i;
+    const m = String(text || '').match(priceRe);
+    if (!m) return 0;
+    const num = m[1].replace(',', '.');
+    return Math.round((parseFloat(num) || 0) * 1000) / 1000;
+  }
+
   function fromDom() {
     const items = [];
     const seen = new Set();
-    const roots = document.querySelectorAll(
-      '[data-testid*="menu"], [class*="menu-item"], [class*="MenuItem"]',
-    );
-    const priceRe = /(\d+[.,]\d{1,3})/;
-    document.querySelectorAll('img[src*="deliveryhero"], img[src*="dhmedia"]').forEach((img) => {
+    const priceRe = /(\d{1,4}[.,]\d{1,3}|\d{1,4})/;
+    const imgSelectors =
+      'img[src*="deliveryhero"], img[src*="dhmedia"], img[src*="talabat"]';
+    document.querySelectorAll(imgSelectors).forEach((img) => {
       const card =
+        img.closest('[data-testid*="menu-item"]') ||
         img.closest('article') ||
-        img.closest('[class*="item"]') ||
         img.closest('li') ||
-        img.parentElement;
+        img.closest('[class*="MenuItem" i]') ||
+        img.closest('[class*="menu-item" i]') ||
+        img.closest('[class*="dish" i]') ||
+        img.parentElement?.parentElement;
       if (!card) return;
       const text = (card.innerText || '').trim();
-      const lines = text.split('\n').map((l) => l.trim()).filter(Boolean);
-      const name = lines[0] || '';
-      if (!name || name.length < 2 || seen.has(name)) return;
+      const lines = text
+        .split('\n')
+        .map((l) => l.trim())
+        .filter(Boolean);
+      const name = (lines[0] || '').replace(priceRe, '').trim();
+      if (!name || name.length < 2 || seen.has(name.toLowerCase())) return;
       let price = 0;
       for (const line of lines) {
-        const m = line.match(priceRe);
-        if (m) {
-          price = parseFloat(m[1].replace(',', '.')) || 0;
+        if (priceRe.test(line)) {
+          price = parsePriceFromText(line);
+          if (price > 0) break;
+        }
+      }
+      let description = '';
+      for (let i = 1; i < lines.length; i++) {
+        const line = lines[i];
+        if (priceRe.test(line)) continue;
+        if (line.length > 2 && line !== name) {
+          description = line;
           break;
         }
       }
-      seen.add(name);
+      seen.add(name.toLowerCase());
       items.push({
         talabatId: null,
         name,
-        description: lines.slice(1, 3).join(' ').replace(priceRe, '').trim(),
+        description,
         price,
-        categoryName: 'عام',
-        imageUrl: img.src || '',
+        categoryName: sectionTitleFor(card),
+        imageUrl: normalizeImageUrl(img.src || img.getAttribute('data-src')),
       });
     });
-    if (items.length) return items;
-    return roots.length ? null : null;
+    return items.length ? items : null;
+  }
+
+  function showNotice(message, isError) {
+    const existing = document.getElementById('almenupro-talabat-toast');
+    if (existing) existing.remove();
+    const box = document.createElement('div');
+    box.id = 'almenupro-talabat-toast';
+    box.setAttribute('dir', 'rtl');
+    box.style.cssText = [
+      'position:fixed',
+      'top:16px',
+      'left:50%',
+      'transform:translateX(-50%)',
+      'z-index:2147483647',
+      'max-width:min(420px,92vw)',
+      'padding:14px 18px',
+      'border-radius:12px',
+      'font:600 15px/1.5 Tahoma,Arial,sans-serif',
+      'color:#fff',
+      'text-align:center',
+      'box-shadow:0 8px 32px rgba(0,0,0,.25)',
+      isError ? 'background:#b91c1c' : 'background:#166534',
+    ].join(';');
+    box.textContent = message;
+    document.body.appendChild(box);
+    setTimeout(() => box.remove(), isError ? 8000 : 12000);
+  }
+
+  function showSummary(items) {
+    const byCat = {};
+    for (const item of items) {
+      const c = item.categoryName || 'عام';
+      byCat[c] = (byCat[c] || 0) + 1;
+    }
+    const lines = Object.keys(byCat)
+      .slice(0, 8)
+      .map((k) => `${k}: ${byCat[k]}`);
+    const more =
+      Object.keys(byCat).length > 8
+        ? `… و${Object.keys(byCat).length - 8} أقسام أخرى`
+        : '';
+    const summary = lines.join(' · ') + (more ? ' ' + more : '');
+    showNotice(`${SUCCESS_MSG}\n(${items.length} صنف — ${summary})`, false);
   }
 
   let items = fromNextData();
   if (!items?.length) items = fromDom();
   if (!items?.length) {
-    alert(
-      'لم أجد أصنافاً. تأكد أن صفحة منيو Talabat مفتوحة بالكامل، ثم مرّر للأسفل لتحميل الأقسام وحاول مجدداً.',
+    showNotice(
+      'لم أجد أصنافاً. افتح صفحة المنيو في Talabat، مرّر للأسفل لتحميل كل الأقسام، ثم اضغط الأداة مرة أخرى.',
+      true,
     );
     return;
   }
@@ -153,32 +232,46 @@
     version: VERSION,
     menuUrl: location.href,
     scrapedAt: new Date().toISOString(),
+    itemCount: items.length,
     items,
   };
   const json = JSON.stringify(payload);
 
-  const done = (msg) => alert(msg);
+  const finishOk = () => showSummary(items);
 
-  const download = () => {
-    const blob = new Blob([json], { type: 'application/json;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'talabat-menu-' + Date.now() + '.json';
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
-  };
-
-  if (navigator.clipboard && navigator.clipboard.writeText) {
+  if (navigator.clipboard?.writeText) {
     navigator.clipboard
       .writeText(json)
-      .then(() => done('تم نسخ ' + items.length + ' صنف إلى الحافظة + تنزيل JSON.'))
-      .catch(() => done('تم تنزيل JSON (' + items.length + ' صنف). حاول النسخ يدوياً من الملف.'));
-    download();
+      .then(finishOk)
+      .catch(() => {
+        try {
+          const ta = document.createElement('textarea');
+          ta.value = json;
+          ta.style.cssText = 'position:fixed;left:-9999px';
+          document.body.appendChild(ta);
+          ta.select();
+          document.execCommand('copy');
+          ta.remove();
+          finishOk();
+        } catch (_) {
+          showNotice(
+            'تعذر النسخ التلقائي. انسخ النص من نافذة المتصفح بعد الموافقة.',
+            true,
+          );
+          prompt('انسخ هذا النص والصقه في المنصة:', json.slice(0, 500) + '…');
+        }
+      });
   } else {
-    download();
-    done('تم تنزيل JSON (' + items.length + ' صنف). الصق محتوى الملف في الأدمن.');
+    try {
+      const ta = document.createElement('textarea');
+      ta.value = json;
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      ta.remove();
+      finishOk();
+    } catch (_) {
+      showNotice('المتصفح لا يدعم النسخ — جرّب Chrome أو Edge.', true);
+    }
   }
 })();

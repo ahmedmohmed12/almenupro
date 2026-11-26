@@ -33,6 +33,7 @@ import '../services/pos_operations_service.dart';
 import '../services/restaurant_settings_service.dart';
 import '../services/super_admin_scope_service.dart';
 import '../services/talabat_menu_service.dart';
+import '../utils/talabat_manual_menu_json.dart';
 import '../widgets/admin/admin_analytics_reports_panel.dart';
 import '../widgets/admin/admin_corner_toast.dart';
 import '../widgets/admin/admin_pos_roles_staff_card.dart';
@@ -1092,24 +1093,25 @@ class _AdminDashboardState extends State<AdminDashboard>
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text(
-            'تم نسخ Bookmarklet — أنشئ مفضلة جديدة والصق الرابط في حقل URL',
+            'تم النسخ — أنشئ مفضلة جديدة، الصق في «العنوان»، واحفظها: سحب منيو Talabat',
           ),
+          duration: Duration(seconds: 6),
         ),
       );
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('تعذر تحميل كود Bookmarklet')),
+        const SnackBar(content: Text('تعذر تحميل أداة السحب')),
       );
     }
   }
 
   void _showAutofillDialog() {
     final urlController = TextEditingController();
-    final nextDataController = TextEditingController();
-    final cookieController = TextEditingController();
+    final pasteController = TextEditingController();
     var isLoading = false;
     String? statusMessage;
+    var statusOk = false;
 
     showDialog<void>(
       context: context,
@@ -1122,91 +1124,99 @@ class _AdminDashboardState extends State<AdminDashboard>
               ),
               title: const Row(
                 children: [
-                  Icon(Icons.cloud_download, color: Colors.brown),
+                  Icon(Icons.restaurant_menu, color: Colors.brown),
                   SizedBox(width: 10),
-                  Text(
-                    'تعبئة المنيو تلقائياً',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  Expanded(
+                    child: Text(
+                      'تعبئة المنيو من Talabat',
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    ),
                   ),
                 ],
               ),
-              content: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'أدخل رابط Talabat لسحب الأصناف — سيتم حفظ الصور على السيرفر.',
-                      style: TextStyle(fontSize: 13, color: Colors.black87),
-                    ),
-                    const SizedBox(height: 8),
-                    const Text(
-                      'عند 403: افتح صفحة المطعم في Chrome → اضغط Bookmarklet → الصق JSON هنا (أو اترك الرابط فارغاً إن كان داخل JSON).',
-                      style: TextStyle(fontSize: 12, color: Colors.black54),
-                    ),
-                    const SizedBox(height: 8),
-                    OutlinedButton.icon(
-                      onPressed: _copyTalabatBookmarklet,
-                      icon: const Icon(Icons.bookmark_add_outlined, size: 18),
-                      label: const Text('نسخ Bookmarklet إلى المفضلة'),
-                    ),
-                    const SizedBox(height: 15),
-                    TextField(
-                      controller: urlController,
-                      keyboardType: TextInputType.url,
-                      decoration: const InputDecoration(
-                        labelText: 'رابط المنيو (Talabat URL)',
-                        hintText: 'https://www.talabat.com/...',
-                        prefixIcon: Icon(Icons.link),
-                        border: OutlineInputBorder(),
+              content: SizedBox(
+                width: 440,
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      const Text(
+                        '① انسخ أداة السحب إلى المفضلة (مرة واحدة)\n'
+                        '② افتح منيو مطعمك على موقع Talabat\n'
+                        '③ اضغط الأداة في المفضلة — ستُنسخ البيانات تلقائياً\n'
+                        '④ ارجع هنا والصق واضغط «بدء التعبئة»',
+                        style: TextStyle(fontSize: 13, height: 1.45),
                       ),
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: nextDataController,
-                      minLines: 2,
-                      maxLines: 5,
-                      decoration: const InputDecoration(
-                        labelText: 'JSON يدوي — Bookmarklet أو __NEXT_DATA__',
-                        hintText: '{ "source": "almenupro-talabat-bookmarklet", "items": [',
-                        border: OutlineInputBorder(),
-                        alignLabelWithHint: true,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: cookieController,
-                      decoration: const InputDecoration(
-                        labelText: 'Cookie من المتصفح (اختياري)',
-                        hintText: 'cf_clearance=...',
-                        border: OutlineInputBorder(),
-                      ),
-                    ),
-                    if (statusMessage != null) ...[
                       const SizedBox(height: 12),
-                      Text(
-                        statusMessage!,
-                        style: TextStyle(
-                          color:
-                              statusMessage!.contains('نجاح') ||
-                                  statusMessage!.contains('تمت')
-                              ? Colors.green
-                              : Colors.brown,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 13,
+                      OutlinedButton.icon(
+                        onPressed: _copyTalabatBookmarklet,
+                        icon: const Icon(Icons.bookmark_add_outlined, size: 20),
+                        label: const Text('نسخ أداة السحب إلى المفضلة'),
+                      ),
+                      const SizedBox(height: 14),
+                      TextField(
+                        controller: urlController,
+                        keyboardType: TextInputType.url,
+                        decoration: const InputDecoration(
+                          labelText: 'رابط صفحة المطعم (اختياري)',
+                          hintText: 'يُملأ تلقائياً عند السحب من Talabat',
+                          prefixIcon: Icon(Icons.link),
+                          border: OutlineInputBorder(),
                         ),
                       ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: pasteController,
+                        minLines: 4,
+                        maxLines: 8,
+                        decoration: const InputDecoration(
+                          labelText: 'البيانات المنسوخة من Talabat',
+                          hintText: 'الصق هنا بعد الضغط على أداة السحب',
+                          prefixIcon: Icon(Icons.content_paste_go),
+                          border: OutlineInputBorder(),
+                          alignLabelWithHint: true,
+                        ),
+                      ),
+                      if (statusMessage != null) ...[
+                        const SizedBox(height: 14),
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: statusOk
+                                ? Colors.green.shade50
+                                : Colors.orange.shade50,
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                              color: statusOk
+                                  ? Colors.green.shade200
+                                  : Colors.orange.shade200,
+                            ),
+                          ),
+                          child: Text(
+                            statusMessage!,
+                            style: TextStyle(
+                              color: statusOk
+                                  ? Colors.green.shade900
+                                  : Colors.brown.shade800,
+                              fontWeight: FontWeight.w600,
+                              fontSize: 13,
+                            ),
+                          ),
+                        ),
+                      ],
                     ],
-                  ],
+                  ),
                 ),
               ),
               actions: [
                 TextButton(
                   onPressed: isLoading ? null : () => Navigator.pop(ctx),
-                  child: const Text('إلغاء'),
+                  child: const Text('إغلاق'),
                 ),
-                ElevatedButton.icon(
-                  style: ElevatedButton.styleFrom(
+                FilledButton.icon(
+                  style: FilledButton.styleFrom(
                     backgroundColor: Colors.brown,
                   ),
                   icon: isLoading
@@ -1218,46 +1228,52 @@ class _AdminDashboardState extends State<AdminDashboard>
                             strokeWidth: 2,
                           ),
                         )
-                      : const Icon(Icons.download, color: Colors.white),
-                  label: Text(
-                    isLoading ? 'جاري السحب...' : 'بدء التعبئة',
-                    style: const TextStyle(color: Colors.white),
-                  ),
+                      : const Icon(Icons.play_arrow),
+                  label: Text(isLoading ? 'جاري التعبئة…' : 'بدء التعبئة'),
                   onPressed: isLoading
                       ? null
                       : () async {
-                          final url = urlController.text.trim();
-                          if (url.isEmpty) {
+                          final paste = pasteController.text.trim();
+                          var url = urlController.text.trim();
+                          if (paste.isEmpty && url.isEmpty) {
                             setDialogState(() {
-                              statusMessage = 'يرجى إدخال رابط صحيح أولاً';
+                              statusOk = false;
+                              statusMessage =
+                                  'الصق البيانات المنسوخة من Talabat أو أدخل الرابط.';
                             });
                             return;
+                          }
+                          if (url.isEmpty && paste.isNotEmpty) {
+                            url = menuUrlFromManualTalabatJson(paste) ?? url;
                           }
 
                           setDialogState(() {
                             isLoading = true;
-                            statusMessage = 'جاري الاتصال وسحب المنيو...';
+                            statusOk = false;
+                            statusMessage = 'جاري إضافة الأصناف…';
                           });
 
-                          final menuJson = nextDataController.text.trim();
-                          final cookie = cookieController.text.trim();
                           final ok = await _processAndSaveTalabatMenu(
                             url: url,
-                            talabatCookie:
-                                cookie.isEmpty ? null : cookie,
-                            menuJson: menuJson.isEmpty ? null : menuJson,
+                            menuJson: paste.isEmpty ? null : paste,
                             onProgress: (msg) {
-                              setDialogState(() => statusMessage = msg);
+                              setDialogState(() {
+                                statusOk = false;
+                                statusMessage = msg;
+                              });
                             },
                             onComplete: (added, skipped, updated) {
                               setDialogState(() {
-                                if (added > 0 || skipped > 0 || updated > 0) {
-                                  statusMessage =
-                                      'تمت التعبئة! أُضيف $added، وتم تحديث $updated، وتجاهل $skipped.';
-                                } else {
-                                  statusMessage =
-                                      'لم تُضف أصناف جديدة. جرّب إعادة التعبئة لتحديث الأصناف الحالية.';
+                                statusOk = true;
+                                final total = added + updated;
+                                var msg =
+                                    'انتهى بنجاح.\n'
+                                    'أُضيف $added صنفاً جديداً، وتم تحديث $updated، '
+                                    'والمجموع المُعالَج: $total صنف.';
+                                if (skipped > 0) {
+                                  msg = '$msg\n(تجاهل $skipped)';
                                 }
+                                statusMessage = msg;
                               });
                               if (mounted) {
                                 setState(() => _menuRevision++);
@@ -1266,11 +1282,12 @@ class _AdminDashboardState extends State<AdminDashboard>
                           );
                           setDialogState(() {
                             isLoading = false;
-                            if (!ok &&
-                                (statusMessage == null ||
-                                    statusMessage!.contains('جاري'))) {
-                              statusMessage =
-                                  'فشل الاستيراد — تأكد من الرابط أو حاول مرة أخرى';
+                            if (!ok && !statusOk) {
+                              if (statusMessage == null ||
+                                  statusMessage!.contains('جاري')) {
+                                statusMessage =
+                                    'لم تنجح التعبئة. تأكد أنك لصقت البيانات كاملة بعد أداة السحب.';
+                              }
                             }
                           });
                         },
@@ -1280,7 +1297,10 @@ class _AdminDashboardState extends State<AdminDashboard>
           },
         );
       },
-    ).then((_) => urlController.dispose());
+    ).then((_) {
+      urlController.dispose();
+      pasteController.dispose();
+    });
   }
 
   @override
