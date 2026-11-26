@@ -21,6 +21,7 @@ import '../models/platform_item_mapping.dart';
 import '../models/restaurant.dart';
 import '../models/restaurant_review.dart';
 import '../models/restaurant_settings.dart';
+import '../models/sales_platform_config.dart';
 import '../models/signup_request.dart';
 import '../models/staff_user.dart';
 import '../models/upsell_recommendation.dart';
@@ -781,6 +782,39 @@ class ApiService {
     } catch (error) {
       throw Exception('خطأ في تحميل الإعدادات: $error');
     }
+  }
+
+  Future<List<SalesPlatformConfig>> putSalesPlatforms(
+    List<SalesPlatformConfig> platforms, {
+    String? restaurantId,
+  }) async {
+    final scoped =
+        restaurantId ?? SuperAdminScopeService.instance.effectiveRestaurantId;
+  final body = <String, dynamic>{
+      'restaurantId': scoped,
+      'salesPlatforms': platforms.map((p) => p.toJson()).toList(),
+    };
+    final response = await http
+        .put(
+          _uri('/settings/sales-platforms'),
+          headers: _jsonHeaders,
+          body: jsonEncode(body),
+        )
+        .timeout(_writeTimeout);
+    if (response.statusCode != 200) {
+      throw _exceptionFromResponse(response, 'فشل في حفظ عمولات المنصات');
+    }
+    final decoded = jsonDecode(response.body);
+    if (decoded is! Map) {
+      return platforms;
+    }
+    final raw = decoded['salesPlatforms'] ?? decoded['sales_platforms'];
+    if (raw is! List) return platforms;
+    return raw
+        .whereType<Map>()
+        .map((row) => SalesPlatformConfig.fromJson(Map<String, dynamic>.from(row)))
+        .where((p) => p.id.isNotEmpty)
+        .toList();
   }
 
   Future<RestaurantSettings> updateSettings(

@@ -117,6 +117,7 @@ const {
   computeDailySalesAnalytics,
 } = require('./lib/platformSalesAnalytics');
 const { computePlatformReconciliationReport } = require('./lib/platformReconciliationReport');
+const { normalizeSalesPlatformsList } = require('./lib/salesPlatformsSettings');
 const {
   backfillPlatformCustomers,
   listPlatformHistory,
@@ -2821,6 +2822,51 @@ async function routeRequest(req, res, url, pathname) {
     return true;
   }
 
+  if (pathname === '/api/settings/sales-platforms' && req.method === 'PUT') {
+    const auth = requireAuth(req, res);
+    if (!auth) return true;
+    const body = parseJson(await readBody(req));
+    const restaurantId =
+      body.restaurantId ||
+      body.restaurant_id ||
+      (await resolveScopedRestaurantId(req, url, auth));
+    if (!restaurantId || !assertRestaurantAccess(auth, restaurantId, authError, res)) {
+      return true;
+    }
+    const rows = normalizeSalesPlatformsList(
+      body.salesPlatforms || body.sales_platforms,
+    );
+    if (!rows.length) {
+      sendJson(res, 400, { error: 'قائمة المنصات فارغة' });
+      return true;
+    }
+    try {
+      const map = await dataStore.readSettingsMap();
+      map.byRestaurant = map.byRestaurant || {};
+      const current = map.byRestaurant[restaurantId] || defaultSettingsPayload();
+      const next = {
+        ...current,
+        salesPlatforms: rows,
+        sales_platforms: rows,
+        updatedAt: new Date().toISOString(),
+      };
+      map.byRestaurant[restaurantId] = next;
+      await dataStore.writeSettingsMap(map);
+      console.log(
+        `[settings/sales-platforms] restaurant=${restaurantId} count=${rows.length}`,
+      );
+      sendJson(res, 200, {
+        restaurantId,
+        salesPlatforms: rows,
+        updatedAt: next.updatedAt,
+      });
+    } catch (error) {
+      console.error('[settings/sales-platforms] failed:', error?.message || error);
+      sendJson(res, 500, { error: 'تعذر حفظ إعدادات المنصات' });
+    }
+    return true;
+  }
+
   if (pathname === '/api/settings' && req.method === 'GET') {
     const restaurants = await dataStore.readRestaurants();
     const restaurantId =
@@ -2873,6 +2919,13 @@ async function routeRequest(req, res, url, pathname) {
     );
     delete next.dynamic_menu_sorting_enabled;
     delete next.payday_start_day;
+    const platformRows = normalizeSalesPlatformsList(
+      body.salesPlatforms || body.sales_platforms || next.salesPlatforms || next.sales_platforms,
+    );
+    if (platformRows.length) {
+      next.salesPlatforms = platformRows;
+      next.sales_platforms = platformRows;
+    }
     delete next.restaurantId;
     delete next.restaurant_id;
     delete next.tableManagementEnabled;

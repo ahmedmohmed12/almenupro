@@ -203,14 +203,39 @@ class RestaurantSettingsService extends ChangeNotifier {
     required List<SalesPlatformConfig> salesPlatforms,
     String? restaurantId,
   }) async {
-    final current = await load(restaurantId: restaurantId);
-    await _persist(
-      current.copyWith(
-        salesPlatforms: salesPlatforms,
-        updatedAt: DateTime.now().toUtc(),
-      ),
-      restaurantId: restaurantId,
+    final scopedId = (restaurantId ??
+            SuperAdminScopeService.instance.effectiveRestaurantId)
+        .trim();
+    final effectiveId = scopedId.isEmpty ? restaurantId : scopedId;
+    final mergedLocal = PlatformCatalog.mergeWithDefaults(salesPlatforms);
+    final current = _cached ?? await load(restaurantId: effectiveId);
+    List<SalesPlatformConfig> merged = mergedLocal;
+    try {
+      final saved = await ApiService.instance.putSalesPlatforms(
+        salesPlatforms,
+        restaurantId: effectiveId,
+      );
+      merged = PlatformCatalog.mergeWithDefaults(saved);
+    } on ApiRequestException catch (error) {
+      // Production API may not have the dedicated route yet (404).
+      if (error.statusCode != 404 && error.statusCode != 405) rethrow;
+      await _persist(
+        current.copyWith(
+          salesPlatforms: mergedLocal,
+          updatedAt: DateTime.now().toUtc(),
+        ),
+        restaurantId: effectiveId,
+      );
+      return;
+    }
+
+    final next = current.copyWith(
+      salesPlatforms: merged,
+      updatedAt: DateTime.now().toUtc(),
     );
+    _setCache(next, effectiveId ?? '');
+    await _saveCache(next, effectiveId ?? '');
+    await _syncFirebase(next);
   }
 
   Future<void> savePosSettings(

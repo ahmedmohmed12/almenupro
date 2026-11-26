@@ -63,6 +63,13 @@ class _AdminPlatformSettingsCardState extends State<AdminPlatformSettingsCard> {
         restaurantId: SuperAdminScopeService.instance.effectiveRestaurantId,
       );
       if (!mounted) return;
+      final fromCache =
+          RestaurantSettingsService.instance.cached?.resolvedSalesPlatforms;
+      if (fromCache != null && fromCache.isNotEmpty) {
+        setState(() => _platforms = fromCache);
+      } else {
+        await _load();
+      }
       AdminCornerToast.success(context, 'تم حفظ إعدادات المنصات');
     } catch (error) {
       if (!mounted) return;
@@ -139,16 +146,15 @@ class _AdminPlatformSettingsCardState extends State<AdminPlatformSettingsCard> {
       ),
     );
     if (result == null) return;
-    _updatePlatform(
-      index,
-      current.copyWith(
-        id: result.id,
-        name: result.name,
-        commissionPercent: result.commissionPercent,
-        colorArgb: result.colorArgb,
-        isBuiltIn: current.isBuiltIn,
-      ),
+    final updated = List<SalesPlatformConfig>.from(_platforms);
+    updated[index] = current.copyWith(
+      id: result.id,
+      name: result.name,
+      commissionPercent: result.commissionPercent,
+      colorArgb: result.colorArgb,
+      isBuiltIn: current.isBuiltIn,
     );
+    setState(() => _platforms = updated);
     await _save();
   }
 
