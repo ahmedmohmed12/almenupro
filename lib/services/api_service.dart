@@ -362,6 +362,7 @@ class ApiService {
     bool tableManagementEnabled = false,
     bool kitchenManagementEnabled = false,
     bool deliveryManagementEnabled = false,
+    bool inventoryEnabled = false,
     GeoPointLite? location,
   }) async {
     final response = await http
@@ -386,6 +387,7 @@ class ApiService {
             'tableManagement': tableManagementEnabled,
             'kitchenManagement': kitchenManagementEnabled,
             'deliveryManagement': deliveryManagementEnabled,
+            'inventoryEnabled': inventoryEnabled,
             if (location != null) 'location': location.toMap(),
           }),
         )
@@ -1370,6 +1372,7 @@ class ApiService {
     bool? tableManagementEnabled,
     bool? kitchenManagementEnabled,
     bool? deliveryManagementEnabled,
+    bool? inventoryEnabled,
     GeoPointLite? location,
   }) async {
     final response = await http
@@ -1398,6 +1401,7 @@ class ApiService {
               'kitchenManagement': kitchenManagementEnabled,
             if (deliveryManagementEnabled != null)
               'deliveryManagement': deliveryManagementEnabled,
+            if (inventoryEnabled != null) 'inventoryEnabled': inventoryEnabled,
             if (location != null) 'location': location.toMap(),
           }),
         )

@@ -62,6 +62,8 @@ import '../widgets/admin/settings/admin_settings_tabbed_panel.dart';
 import '../widgets/admin/admin_menu_sidebar_footer.dart';
 import '../widgets/admin/admin_super_restaurants_panel.dart';
 import '../widgets/admin/admin_tables_panel.dart';
+import '../widgets/admin/inventory/inventory_module_page.dart';
+import '../widgets/admin/inventory/admin_menu_item_recipe_editor.dart';
 import '../widgets/admin/admin_sound_settings_card.dart';
 import '../widgets/admin/admin_top_header.dart';
 import '../widgets/admin/admin_smart_upsell_panel.dart';
@@ -105,6 +107,11 @@ class _AdminDashboardState extends State<AdminDashboard>
   bool get _kitchenManagementEnabled =>
       _loadedSettings?.kitchenManagementEnabled == true;
 
+  bool get _inventoryManagementEnabled {
+    if (_loadedSettings?.inventoryEnabled == true) return true;
+    return RestaurantSettingsService.instance.cached?.inventoryEnabled == true;
+  }
+
   List<AdminSidebarItem> get _sidebarItems {
     if (_isSuperAdmin) {
       return [
@@ -115,6 +122,9 @@ class _AdminDashboardState extends State<AdminDashboard>
         if (SuperAdminScopeService.instance.hasSelection &&
             _tableManagementEnabled)
           AdminSidebar.tablesItem,
+        if (SuperAdminScopeService.instance.hasSelection &&
+            _inventoryManagementEnabled)
+          AdminSidebar.inventoryItem,
       ];
     }
     return [
@@ -123,6 +133,7 @@ class _AdminDashboardState extends State<AdminDashboard>
       AdminSidebar.reservationsItem,
       AdminSidebar.hrItem,
       if (_tableManagementEnabled) AdminSidebar.tablesItem,
+      if (_inventoryManagementEnabled) AdminSidebar.inventoryItem,
     ];
   }
 
@@ -571,6 +582,193 @@ class _AdminDashboardState extends State<AdminDashboard>
     }
   }
 
+  Widget _buildMenuItemFormFields({
+    required void Function(void Function()) setDialogState,
+    required TextEditingController nameController,
+    required TextEditingController nameEnController,
+    required TextEditingController descController,
+    required TextEditingController descEnController,
+    required TextEditingController priceController,
+    required TextEditingController costPriceController,
+    required TextEditingController originalPriceController,
+    required TextEditingController categoryController,
+    required TextEditingController imageUrlController,
+    required TextEditingController videoWebmController,
+    required TextEditingController videoMp4Controller,
+    required bool isStory,
+    required bool isAvailable,
+    required bool showOnWebsite,
+    required List<Map<String, dynamic>> addonOptions,
+    required List<int> linkedItemIds,
+    required Object? editingItemId,
+    required ValueChanged<bool> onStoryChanged,
+    required ValueChanged<bool> onAvailableChanged,
+    required ValueChanged<bool> onShowOnWebsiteChanged,
+    required ValueChanged<List<Map<String, dynamic>>> onAddonsChanged,
+    required ValueChanged<List<int>> onLinkedChanged,
+  }) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const Text(
+          'أدخل الاسم والوصف بلغة واحدة — الترجمة للغة الأخرى تتم تلقائياً عند الحفظ.',
+          style: TextStyle(fontSize: 13, color: Color(0xFF666666)),
+        ),
+        const SizedBox(height: 12),
+        TextField(
+          controller: nameController,
+          decoration: const InputDecoration(
+            labelText: 'اسم الصنف (عربي)',
+            helperText: 'يُترجم تلقائياً للإنجليزية إذا تُرك الحقل الإنجليزي فارغاً',
+            border: OutlineInputBorder(),
+          ),
+        ),
+        const SizedBox(height: 12),
+        TextField(
+          controller: nameEnController,
+          decoration: const InputDecoration(
+            labelText: 'Item name (English) — اختياري',
+            border: OutlineInputBorder(),
+          ),
+        ),
+        const SizedBox(height: 12),
+        TextField(
+          controller: descController,
+          maxLines: 2,
+          decoration: const InputDecoration(
+            labelText: 'الوصف (عربي)',
+            border: OutlineInputBorder(),
+          ),
+        ),
+        const SizedBox(height: 12),
+        TextField(
+          controller: descEnController,
+          maxLines: 2,
+          decoration: const InputDecoration(
+            labelText: 'Description (English) — optional',
+            border: OutlineInputBorder(),
+          ),
+        ),
+        const SizedBox(height: 12),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: TextField(
+                controller: priceController,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                decoration: const InputDecoration(
+                  labelText: 'السعر النهائي (د.ك)',
+                  border: OutlineInputBorder(),
+                ),
+                onChanged: (_) => setDialogState(() {}),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: TextField(
+                controller: costPriceController,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                decoration: const InputDecoration(
+                  labelText: 'تكلفة الطعام (من المخزون)',
+                  border: OutlineInputBorder(),
+                ),
+                onChanged: (_) => setDialogState(() {}),
+              ),
+            ),
+          ],
+        ),
+        Builder(
+          builder: (context) {
+            final sellingPrice = double.tryParse(priceController.text.trim()) ?? 0;
+            final costPrice = double.tryParse(costPriceController.text.trim());
+            if (sellingPrice <= 0 || costPrice == null || costPrice < 0) {
+              return const SizedBox.shrink();
+            }
+            return Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: FoodCostBadge(sellingPrice: sellingPrice, costPrice: costPrice),
+            );
+          },
+        ),
+        const SizedBox(height: 12),
+        TextField(
+          controller: originalPriceController,
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          decoration: const InputDecoration(
+            labelText: 'السعر قبل الخصم (اختياري)',
+            border: OutlineInputBorder(),
+          ),
+        ),
+        const SizedBox(height: 12),
+        TextField(
+          controller: categoryController,
+          decoration: const InputDecoration(
+            labelText: 'اسم القسم / التصنيف (عربي)',
+            border: OutlineInputBorder(),
+          ),
+        ),
+        const SizedBox(height: 12),
+        TextField(
+          controller: imageUrlController,
+          keyboardType: TextInputType.url,
+          decoration: const InputDecoration(
+            labelText: 'مسار الصورة المحلية (اختياري)',
+            border: OutlineInputBorder(),
+          ),
+        ),
+        const SizedBox(height: 12),
+        TextField(
+          controller: videoWebmController,
+          keyboardType: TextInputType.url,
+          decoration: const InputDecoration(
+            labelText: 'رابط فيديو WebM (اختياري)',
+            border: OutlineInputBorder(),
+          ),
+        ),
+        const SizedBox(height: 12),
+        TextField(
+          controller: videoMp4Controller,
+          keyboardType: TextInputType.url,
+          decoration: const InputDecoration(
+            labelText: 'رابط فيديو MP4 احتياطي (اختياري)',
+            border: OutlineInputBorder(),
+          ),
+        ),
+        SwitchListTile(
+          title: const Text('إظهار ضمن القصص المميزة'),
+          value: isStory,
+          onChanged: onStoryChanged,
+        ),
+        SwitchListTile(
+          title: const Text('متوفر للطلب؟'),
+          value: isAvailable,
+          onChanged: onAvailableChanged,
+        ),
+        SwitchListTile(
+          title: const Text('يظهر في الموقع الإلكتروني؟'),
+          value: showOnWebsite,
+          onChanged: onShowOnWebsiteChanged,
+        ),
+        const SizedBox(height: 16),
+        const Divider(),
+        AdminItemAddonsEditor(
+          options: addonOptions,
+          itemId: int.tryParse(editingItemId?.toString() ?? ''),
+          onChanged: onAddonsChanged,
+        ),
+        const SizedBox(height: 16),
+        const Divider(),
+        AdminItemLinkedSidesEditor(
+          linkedItemIds: linkedItemIds,
+          currentItemId: int.tryParse(editingItemId?.toString() ?? ''),
+          onChanged: onLinkedChanged,
+        ),
+      ],
+    );
+  }
+
   Future<void> _showItemDialog({MenuItemRecord? record}) async {
     final isEditing = record != null;
     final Map<String, dynamic>? data = isEditing ? record.data : null;
@@ -661,217 +859,103 @@ class _AdminDashboardState extends State<AdminDashboard>
               ),
               title: Text(isEditing ? 'تعديل الصنف' : 'إضافة صنف جديد'),
               content: SizedBox(
-                width: 520,
-                child: SingleChildScrollView(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      const Text(
-                        'أدخل الاسم والوصف بلغة واحدة — الترجمة للغة الأخرى تتم تلقائياً عند الحفظ.',
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: Color(0xFF666666),
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      TextField(
-                        controller: nameController,
-                        decoration: const InputDecoration(
-                          labelText: 'اسم الصنف (عربي)',
-                          helperText:
-                              'يُترجم تلقائياً للإنجليزية إذا تُرك الحقل الإنجليزي فارغاً',
-                          border: OutlineInputBorder(),
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      TextField(
-                        controller: nameEnController,
-                        decoration: const InputDecoration(
-                          labelText: 'Item name (English) — اختياري',
-                          helperText:
-                              'أو أدخل الإنجليزية فقط لترجمة العربية تلقائياً',
-                          border: OutlineInputBorder(),
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      TextField(
-                        controller: descController,
-                        maxLines: 2,
-                        decoration: const InputDecoration(
-                          labelText: 'الوصف (عربي)',
-                          helperText: 'يُترجم تلقائياً عند الحفظ',
-                          border: OutlineInputBorder(),
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      TextField(
-                        controller: descEnController,
-                        maxLines: 2,
-                        decoration: const InputDecoration(
-                          labelText: 'Description (English) — optional',
-                          border: OutlineInputBorder(),
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Expanded(
-                            child: TextField(
-                              controller: priceController,
-                              keyboardType:
-                                  const TextInputType.numberWithOptions(
-                                    decimal: true,
+                width: 560,
+                height: isEditing && _inventoryManagementEnabled ? 560 : null,
+                child: isEditing && _inventoryManagementEnabled
+                    ? DefaultTabController(
+                        length: 2,
+                        child: Column(
+                          children: [
+                            const TabBar(
+                              labelColor: Color(0xFF6D1A36),
+                              indicatorColor: Color(0xFFFFA726),
+                              tabs: [
+                                Tab(text: 'بيانات الصنف'),
+                                Tab(text: 'المكونات / المخزون'),
+                              ],
+                            ),
+                            Expanded(
+                              child: TabBarView(
+                                children: [
+                                  SingleChildScrollView(
+                                    child: _buildMenuItemFormFields(
+                                      setDialogState: setDialogState,
+                                      nameController: nameController,
+                                      nameEnController: nameEnController,
+                                      descController: descController,
+                                      descEnController: descEnController,
+                                      priceController: priceController,
+                                      costPriceController: costPriceController,
+                                      originalPriceController: originalPriceController,
+                                      categoryController: categoryController,
+                                      imageUrlController: imageUrlController,
+                                      videoWebmController: videoWebmController,
+                                      videoMp4Controller: videoMp4Controller,
+                                      isStory: isStory,
+                                      isAvailable: isAvailable,
+                                      showOnWebsite: showOnWebsite,
+                                      addonOptions: addonOptions,
+                                      linkedItemIds: linkedItemIds,
+                                      editingItemId: editingItemId,
+                                      onStoryChanged: (val) =>
+                                          setDialogState(() => isStory = val),
+                                      onAvailableChanged: (val) =>
+                                          setDialogState(() => isAvailable = val),
+                                      onShowOnWebsiteChanged: (val) =>
+                                          setDialogState(() => showOnWebsite = val),
+                                      onAddonsChanged: (next) =>
+                                          setDialogState(() => addonOptions = next),
+                                      onLinkedChanged: (next) =>
+                                          setDialogState(() => linkedItemIds = next),
+                                    ),
                                   ),
-                              decoration: const InputDecoration(
-                                labelText: 'السعر النهائي (د.ك)',
-                                helperText: 'السعر بعد الخصم إن وُجد',
-                                border: OutlineInputBorder(),
-                              ),
-                              onChanged: (_) => setDialogState(() {}),
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: TextField(
-                              controller: costPriceController,
-                              keyboardType:
-                                  const TextInputType.numberWithOptions(
-                                    decimal: true,
+                                  AdminMenuItemRecipeEditor(
+                                    menuItemId: editingItemId.toString(),
+                                    sellingPrice:
+                                        double.tryParse(priceController.text.trim()) ?? 0,
+                                    addonOptions: addonOptions,
+                                    onCostSynced: (cost) {
+                                      costPriceController.text = cost.toStringAsFixed(5);
+                                      setDialogState(() {});
+                                    },
                                   ),
-                              decoration: const InputDecoration(
-                                labelText: 'تكلفة الطعام / Food Cost (د.ك)',
-                                helperText: 'تكلفة المكونات لكل حصة',
-                                border: OutlineInputBorder(),
+                                ],
                               ),
-                              onChanged: (_) => setDialogState(() {}),
                             ),
-                          ),
-                        ],
-                      ),
-                      Builder(
-                        builder: (context) {
-                          final sellingPrice =
-                              double.tryParse(priceController.text.trim()) ?? 0;
-                          final costPrice = double.tryParse(
-                            costPriceController.text.trim(),
-                          );
-                          if (sellingPrice <= 0 ||
-                              costPrice == null ||
-                              costPrice < 0) {
-                            return const SizedBox.shrink();
-                          }
-                          return Padding(
-                            padding: const EdgeInsets.only(top: 8),
-                            child: FoodCostBadge(
-                              sellingPrice: sellingPrice,
-                              costPrice: costPrice,
-                            ),
-                          );
-                        },
-                      ),
-                      const SizedBox(height: 12),
-                      TextField(
-                        controller: originalPriceController,
-                        keyboardType: const TextInputType.numberWithOptions(
-                          decimal: true,
+                          ],
                         ),
-                        decoration: const InputDecoration(
-                          labelText: 'السعر قبل الخصم (اختياري)',
-                          helperText:
-                              'يظهر مشطوباً مع شارة الخصم إذا كان أكبر من السعر النهائي',
-                          border: OutlineInputBorder(),
+                      )
+                    : SingleChildScrollView(
+                        child: _buildMenuItemFormFields(
+                          setDialogState: setDialogState,
+                          nameController: nameController,
+                          nameEnController: nameEnController,
+                          descController: descController,
+                          descEnController: descEnController,
+                          priceController: priceController,
+                          costPriceController: costPriceController,
+                          originalPriceController: originalPriceController,
+                          categoryController: categoryController,
+                          imageUrlController: imageUrlController,
+                          videoWebmController: videoWebmController,
+                          videoMp4Controller: videoMp4Controller,
+                          isStory: isStory,
+                          isAvailable: isAvailable,
+                          showOnWebsite: showOnWebsite,
+                          addonOptions: addonOptions,
+                          linkedItemIds: linkedItemIds,
+                          editingItemId: editingItemId,
+                          onStoryChanged: (val) => setDialogState(() => isStory = val),
+                          onAvailableChanged: (val) =>
+                              setDialogState(() => isAvailable = val),
+                          onShowOnWebsiteChanged: (val) =>
+                              setDialogState(() => showOnWebsite = val),
+                          onAddonsChanged: (next) =>
+                              setDialogState(() => addonOptions = next),
+                          onLinkedChanged: (next) =>
+                              setDialogState(() => linkedItemIds = next),
                         ),
                       ),
-                      const SizedBox(height: 12),
-                      TextField(
-                        controller: categoryController,
-                        decoration: const InputDecoration(
-                          labelText: 'اسم القسم / التصنيف (عربي)',
-                          border: OutlineInputBorder(),
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      TextField(
-                        controller: imageUrlController,
-                        keyboardType: TextInputType.url,
-                        decoration: const InputDecoration(
-                          labelText: 'مسار الصورة المحلية (اختياري)',
-                          hintText: '/menu-images/123456.jpg',
-                          border: OutlineInputBorder(),
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      TextField(
-                        controller: videoWebmController,
-                        keyboardType: TextInputType.url,
-                        decoration: const InputDecoration(
-                          labelText: 'رابط فيديو WebM (اختياري)',
-                          helperText:
-                              'يُحمّل فقط عندما يضغط العميل على المشاهدة',
-                          hintText: 'https://cdn.example.com/dish.webm',
-                          border: OutlineInputBorder(),
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      TextField(
-                        controller: videoMp4Controller,
-                        keyboardType: TextInputType.url,
-                        decoration: const InputDecoration(
-                          labelText: 'رابط فيديو MP4 احتياطي (اختياري)',
-                          hintText: 'https://cdn.example.com/dish.mp4',
-                          border: OutlineInputBorder(),
-                        ),
-                      ),
-                      SwitchListTile(
-                        title: const Text('إظهار ضمن القصص المميزة'),
-                        subtitle: const Text('يتطلب صورة وفيديو صالحين للصنف'),
-                        value: isStory,
-                        onChanged: (val) => setDialogState(() => isStory = val),
-                      ),
-                      const SizedBox(height: 12),
-                      SwitchListTile(
-                        title: const Text('متوفر للطلب؟'),
-                        subtitle: const Text(
-                          'إذا أُغلق يختفي من الكاشير والموقع',
-                        ),
-                        value: isAvailable,
-                        onChanged: (val) =>
-                            setDialogState(() => isAvailable = val),
-                      ),
-                      SwitchListTile(
-                        title: const Text('يظهر في الموقع الإلكتروني؟'),
-                        subtitle: const Text(
-                          'إذا أُغلق يبقى ظاهراً للكاشير فقط ولا يظهر للعملاء',
-                        ),
-                        value: showOnWebsite,
-                        onChanged: (val) =>
-                            setDialogState(() => showOnWebsite = val),
-                      ),
-                      const SizedBox(height: 16),
-                      const Divider(),
-                      const SizedBox(height: 8),
-                      AdminItemAddonsEditor(
-                        options: addonOptions,
-                        itemId: int.tryParse(editingItemId?.toString() ?? ''),
-                        onChanged: (next) =>
-                            setState(() => addonOptions = next),
-                      ),
-                      const SizedBox(height: 16),
-                      const Divider(),
-                      const SizedBox(height: 8),
-                      AdminItemLinkedSidesEditor(
-                        linkedItemIds: linkedItemIds,
-                        currentItemId: int.tryParse(
-                          editingItemId?.toString() ?? '',
-                        ),
-                        onChanged: (next) =>
-                            setDialogState(() => linkedItemIds = next),
-                      ),
-                    ],
-                  ),
-                ),
               ),
               actions: [
                 TextButton(
@@ -1714,7 +1798,12 @@ class _AdminDashboardState extends State<AdminDashboard>
         case AdminSidebar.superHrIndex:
           return const HrModulePage();
         case AdminSidebar.superTablesIndex:
+          if (_inventoryManagementEnabled && !_tableManagementEnabled) {
+            return const InventoryModulePage();
+          }
           return const AdminTablesPanel();
+        case AdminSidebar.superInventoryIndex:
+          return const InventoryModulePage();
         default:
           return _buildAnalyticsTab();
       }
@@ -1770,7 +1859,12 @@ class _AdminDashboardState extends State<AdminDashboard>
       case AdminSidebar.hrIndex:
         return const HrModulePage();
       case AdminSidebar.tablesIndex:
+        if (_inventoryManagementEnabled && !_tableManagementEnabled) {
+          return const InventoryModulePage();
+        }
         return const AdminTablesPanel();
+      case AdminSidebar.inventoryIndex:
+        return const InventoryModulePage();
       case AdminSidebar.posIndex:
         return _buildPosTab();
       default:

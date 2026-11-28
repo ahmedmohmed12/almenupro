@@ -147,6 +147,7 @@ class Restaurant {
     this.tableManagementEnabled = false,
     this.kitchenManagementEnabled = false,
     this.deliveryManagementEnabled = false,
+    this.inventoryEnabled = false,
     this.location,
     this.createdAt,
     this.updatedAt,
@@ -165,6 +166,7 @@ class Restaurant {
   final bool tableManagementEnabled;
   final bool kitchenManagementEnabled;
   final bool deliveryManagementEnabled;
+  final bool inventoryEnabled;
   final GeoPointLite? location;
   final DateTime? createdAt;
   final DateTime? updatedAt;
@@ -213,6 +215,11 @@ class Restaurant {
           (json['features'] is Map &&
               (json['features']['deliveryManagement'] == true ||
                   json['features']['delivery_management'] == true)),
+      inventoryEnabled: json['inventoryEnabled'] == true ||
+          json['inventory_enabled'] == true ||
+          (json['features'] is Map &&
+              (json['features']['inventoryEnabled'] == true ||
+                  json['features']['inventory_enabled'] == true)),
       location: GeoPointLite.tryParse(json['location']),
       createdAt: DateTime.tryParse(json['createdAt']?.toString() ?? ''),
       updatedAt: DateTime.tryParse(
@@ -236,10 +243,12 @@ class Restaurant {
         'tableManagement': tableManagementEnabled,
         'kitchenManagement': kitchenManagementEnabled,
         'deliveryManagement': deliveryManagementEnabled,
+        'inventoryEnabled': inventoryEnabled,
         'features': {
           'tableManagement': tableManagementEnabled,
           'kitchenManagement': kitchenManagementEnabled,
           'deliveryManagement': deliveryManagementEnabled,
+          'inventoryEnabled': inventoryEnabled,
         },
         if (location != null) 'location': location!.toMap(),
         if (createdAt != null) 'createdAt': createdAt!.toIso8601String(),
@@ -260,6 +269,7 @@ class Restaurant {
     bool? tableManagementEnabled,
     bool? kitchenManagementEnabled,
     bool? deliveryManagementEnabled,
+    bool? inventoryEnabled,
     GeoPointLite? location,
     DateTime? createdAt,
     DateTime? updatedAt,
@@ -281,6 +291,7 @@ class Restaurant {
           kitchenManagementEnabled ?? this.kitchenManagementEnabled,
       deliveryManagementEnabled:
           deliveryManagementEnabled ?? this.deliveryManagementEnabled,
+      inventoryEnabled: inventoryEnabled ?? this.inventoryEnabled,
       location: location ?? this.location,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,

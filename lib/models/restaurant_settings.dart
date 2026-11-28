@@ -40,6 +40,7 @@ class RestaurantSettings {
     this.tableManagementEnabled = false,
     this.kitchenManagementEnabled = false,
     this.deliveryManagementEnabled = false,
+    this.inventoryEnabled = false,
     this.invoiceLanguage = InvoiceLanguage.arabic,
     this.dynamicMenuSortingEnabled = false,
     this.paydayStartDay = 1,
@@ -81,6 +82,7 @@ class RestaurantSettings {
   final bool tableManagementEnabled;
   final bool kitchenManagementEnabled;
   final bool deliveryManagementEnabled;
+  final bool inventoryEnabled;
   final InvoiceLanguage invoiceLanguage;
   /// When false, the public menu keeps the restaurant's manual [MenuItem.displayOrder].
   final bool dynamicMenuSortingEnabled;
@@ -238,6 +240,11 @@ class RestaurantSettings {
           (json['features'] is Map &&
               (json['features']['deliveryManagement'] == true ||
                   json['features']['delivery_management'] == true)),
+      inventoryEnabled: json['inventoryEnabled'] == true ||
+          json['inventory_enabled'] == true ||
+          (json['features'] is Map &&
+              (json['features']['inventoryEnabled'] == true ||
+                  json['features']['inventory_enabled'] == true)),
       invoiceLanguage: InvoiceLanguage.fromStorage(
         json['invoiceLanguage']?.toString() ??
             json['invoice_language']?.toString(),
@@ -292,6 +299,7 @@ class RestaurantSettings {
     bool? tableManagementEnabled,
     bool? kitchenManagementEnabled,
     bool? deliveryManagementEnabled,
+    bool? inventoryEnabled,
     InvoiceLanguage? invoiceLanguage,
     bool? dynamicMenuSortingEnabled,
     int? paydayStartDay,
@@ -345,6 +353,7 @@ class RestaurantSettings {
           kitchenManagementEnabled ?? this.kitchenManagementEnabled,
       deliveryManagementEnabled:
           deliveryManagementEnabled ?? this.deliveryManagementEnabled,
+      inventoryEnabled: inventoryEnabled ?? this.inventoryEnabled,
       invoiceLanguage: invoiceLanguage ?? this.invoiceLanguage,
       dynamicMenuSortingEnabled:
           dynamicMenuSortingEnabled ?? this.dynamicMenuSortingEnabled,

@@ -49,6 +49,7 @@ class AdminSidebar extends StatefulWidget {
   static const int reservationsIndex = 14;
   static const int hrIndex = 15;
   static const int tablesIndex = 16;
+  static const int inventoryIndex = 17;
 
   /// Super Admin sidebar — live dashboard first, then POS and restaurants.
   static const int superAnalyticsIndex = 0;
@@ -68,6 +69,7 @@ class AdminSidebar extends StatefulWidget {
   static const int superReservationsIndex = 14;
   static const int superHrIndex = 15;
   static const int superTablesIndex = 16;
+  static const int superInventoryIndex = 17;
 
   static const AdminSidebarItem whatsappBroadcastItem = AdminSidebarItem(
     icon: Icons.campaign_outlined,
@@ -87,6 +89,11 @@ class AdminSidebar extends StatefulWidget {
   static const AdminSidebarItem tablesItem = AdminSidebarItem(
     icon: Icons.table_restaurant,
     label: 'إدارة الطاولات',
+  );
+
+  static const AdminSidebarItem inventoryItem = AdminSidebarItem(
+    icon: Icons.inventory_2_outlined,
+    label: 'المخزون والتكلفة',
   );
 
   static const List<AdminSidebarItem> defaultItems = [

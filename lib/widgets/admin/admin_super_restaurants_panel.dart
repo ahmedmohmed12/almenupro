@@ -43,6 +43,7 @@ class _AdminSuperRestaurantsPanelState extends State<AdminSuperRestaurantsPanel>
   SubscriptionPlan _subscriptionPlan = SubscriptionPlan.free;
   SubscriptionStatus _subscriptionStatus = SubscriptionStatus.active;
   var _tableManagementEnabled = false;
+  var _inventoryEnabled = false;
   var _kitchenManagementEnabled = false;
   var _deliveryManagementEnabled = false;
   GeoPointLite? _location;
@@ -142,6 +143,7 @@ class _AdminSuperRestaurantsPanelState extends State<AdminSuperRestaurantsPanel>
       _subscriptionPlan = SubscriptionPlan.free;
       _subscriptionStatus = SubscriptionStatus.active;
       _tableManagementEnabled = false;
+      _inventoryEnabled = false;
       _kitchenManagementEnabled = false;
       _deliveryManagementEnabled = false;
       _location = null;
@@ -164,6 +166,7 @@ class _AdminSuperRestaurantsPanelState extends State<AdminSuperRestaurantsPanel>
       _subscriptionPlan = restaurant.subscriptionPlan;
       _subscriptionStatus = restaurant.subscriptionStatus;
       _tableManagementEnabled = restaurant.tableManagementEnabled;
+      _inventoryEnabled = restaurant.inventoryEnabled;
       _kitchenManagementEnabled = restaurant.kitchenManagementEnabled;
       _deliveryManagementEnabled = restaurant.deliveryManagementEnabled;
       _location = restaurant.location;
@@ -244,6 +247,7 @@ class _AdminSuperRestaurantsPanelState extends State<AdminSuperRestaurantsPanel>
           subscriptionNotes: subscriptionNotes,
           adminPassword: password.isEmpty ? null : password,
           tableManagementEnabled: _tableManagementEnabled,
+          inventoryEnabled: _inventoryEnabled,
           kitchenManagementEnabled: _kitchenManagementEnabled,
           deliveryManagementEnabled: _deliveryManagementEnabled,
           location: _location,
@@ -261,6 +265,7 @@ class _AdminSuperRestaurantsPanelState extends State<AdminSuperRestaurantsPanel>
           subscriptionExpiresAt: subscriptionExpiresAt,
           subscriptionNotes: subscriptionNotes,
           tableManagementEnabled: _tableManagementEnabled,
+          inventoryEnabled: _inventoryEnabled,
           kitchenManagementEnabled: _kitchenManagementEnabled,
           deliveryManagementEnabled: _deliveryManagementEnabled,
           location: _location,
@@ -627,6 +632,17 @@ class _AdminSuperRestaurantsPanelState extends State<AdminSuperRestaurantsPanel>
                     ? null
                     : (value) =>
                         setState(() => _deliveryManagementEnabled = value),
+              ),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('المخزون والتكلفة (AVCO)'),
+                subtitle: const Text(
+                  'يفتح وحدة مخزون Foodics: مشتريات، تحويلات، تقارير، وخصم عند التسليم.',
+                ),
+                value: _inventoryEnabled,
+                onChanged: _saving
+                    ? null
+                    : (value) => setState(() => _inventoryEnabled = value),
               ),
               const SizedBox(height: 16),
               const Divider(),
