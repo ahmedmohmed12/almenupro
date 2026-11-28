@@ -15,9 +15,10 @@
     "process:platform-sales:today": "node scripts/process-todays-platform-orders.js",
     "export:mysql": "node scripts/export-mysql-dump.js",
     "build": "node scripts/preparePublicUploads.js",
-    "build:frontend": "bash frontend/scripts/build.sh",
-    "deploy:api:railway": "railway up",
-    "deploy:frontend:pages": "npm run build:frontend && npx wrangler pages deploy frontend/dist --project-name=almenupro-frontend"
+    "build:frontend": "node frontend/scripts/build.mjs",
+    "build:frontend:bash": "bash frontend/scripts/build.sh",
+    "deploy:api:railway": "npx --yes @railway/cli up",
+    "deploy:frontend:pages": "node frontend/scripts/build.mjs && npx wrangler pages deploy frontend/dist --project-name=almenupro"
   },
   "engines": {
     "node": "22.x"

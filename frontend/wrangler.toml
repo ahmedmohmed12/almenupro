@@ -1,5 +1,5 @@
 # Cloudflare Pages — deploy prebuilt `dist` (Flutter web + landing pages).
 # Run from repo root: npm run deploy:frontend:pages
-name = "almenupro-frontend"
+name = "almenupro"
 compatibility_date = "2024-11-01"
 pages_build_output_dir = "dist"
