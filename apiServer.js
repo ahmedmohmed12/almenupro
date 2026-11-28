@@ -98,6 +98,8 @@ const { applyGuestOrderToTable } = require('./lib/diningTables');
 const { handleReviewRoutes } = require('./lib/reviewRoutes');
 const { handleOrderRatingRoutes, createRatingToken } = require('./lib/orderRating');
 const { handleExpenseRoutes } = require('./lib/expenseRoutes');
+const { handleInventoryRoutes } = require('./lib/inventoryRoutes');
+const { maybeQueueInventoryDeduction } = require('./lib/inventory/inventoryHooks');
 const { handleSignupRoutes } = require('./lib/signupRoutes');
 const { handleDeliveryRoutes, enqueueDeliveryForAcceptedOrder } = require('./lib/deliveryRoutes');
 const { stampTimeline, stampFromOrderStatus } = require('./lib/orderTimeline');
@@ -888,6 +890,30 @@ async function routeRequest(req, res, url, pathname) {
     rejectCashier: (auth, res, message) => {
       if (isCashier(auth) || isKitchen(auth)) {
         sendJson(res, 403, { error: message, code: 'STATION_FORBIDDEN' });
+        return true;
+      }
+      return false;
+    },
+  })) {
+    return true;
+  }
+
+  if (await handleInventoryRoutes(req, res, url, {
+    readBody,
+    sendJson,
+    authError,
+    requireAuth,
+    assertRestaurantAccess,
+    resolveScopedRestaurantId,
+    parseJson,
+    dataStore,
+    readItems: () => dataStore.readItems(),
+    rejectCashier: (auth, res, message) => {
+      if (isCashier(auth) || isKitchen(auth)) {
+        sendJson(res, 403, {
+          error: message || 'غير مسموح للكاشير',
+          code: 'STATION_FORBIDDEN',
+        });
         return true;
       }
       return false;
@@ -2489,6 +2515,11 @@ async function routeRequest(req, res, url, pathname) {
     }
     Object.assign(created, paymentApplied.order);
     await dataStore.prependOrder(created, existingOrders);
+    maybeQueueInventoryDeduction(dataStore, {
+      previous: null,
+      next: created,
+      auth: parseAuthHeader(req),
+    });
     const dineInTableId = String(created.tableId || created.table_id || '').trim();
     if (dineInTableId && restaurantId) {
       try {
@@ -2662,6 +2693,11 @@ async function routeRequest(req, res, url, pathname) {
     }
     orders[index] = next;
     const patched = await dataStore.patchOrderById(orderId, next, orders);
+    maybeQueueInventoryDeduction(dataStore, {
+      previous,
+      next: patched || next,
+      auth,
+    });
     sendJson(res, 200, patched || next);
     return true;
   }
