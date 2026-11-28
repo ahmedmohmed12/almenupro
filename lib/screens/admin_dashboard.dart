@@ -211,7 +211,16 @@ class _AdminDashboardState extends State<AdminDashboard>
     await SuperAdminScopeService.instance.initialize();
     await SuperAdminScopeService.instance.refreshRestaurants();
     SuperAdminScopeService.instance.addListener(_onSuperAdminScopeChanged);
+    RestaurantSettingsService.instance.addListener(_onRestaurantSettingsChanged);
     if (mounted) setState(() {});
+  }
+
+  void _onRestaurantSettingsChanged() {
+    if (!mounted) return;
+    if (RestaurantSettingsService.instance.cached != null) {
+      _loadedSettings = RestaurantSettingsService.instance.cached;
+    }
+    setState(() {});
   }
 
   void _onSuperAdminScopeChanged() {
@@ -308,6 +317,7 @@ class _AdminDashboardState extends State<AdminDashboard>
     detachAdminRuntimeKeepAlive();
     WidgetsBinding.instance.removeObserver(this);
     SuperAdminScopeService.instance.removeListener(_onSuperAdminScopeChanged);
+    RestaurantSettingsService.instance.removeListener(_onRestaurantSettingsChanged);
     AdminOrderMonitorService.instance.stop();
     ScheduledOrdersController.instance.removeListener(_onScheduledDesk);
     _whatsappController.dispose();
@@ -353,6 +363,13 @@ class _AdminDashboardState extends State<AdminDashboard>
       if (!settings.tableManagementEnabled &&
           (_selectedIndex == AdminSidebar.tablesIndex ||
               _selectedIndex == AdminSidebar.superTablesIndex)) {
+        _selectedIndex = _isSuperAdmin
+            ? AdminSidebar.superAnalyticsIndex
+            : AdminSidebar.analyticsIndex;
+      }
+      if (!settings.inventoryEnabled &&
+          (_selectedIndex == AdminSidebar.inventoryIndex ||
+              _selectedIndex == AdminSidebar.superInventoryIndex)) {
         _selectedIndex = _isSuperAdmin
             ? AdminSidebar.superAnalyticsIndex
             : AdminSidebar.analyticsIndex;

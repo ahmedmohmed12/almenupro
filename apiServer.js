@@ -356,9 +356,17 @@ function defaultFrontendAssetOrigin() {
 function publicRestaurant(entry) {
   if (!entry || typeof entry !== 'object') return entry;
   const { adminPassword, ...rest } = entry;
+  const features = normalizeFeatures(entry.features);
   return {
     ...rest,
-    features: normalizeFeatures(entry.features),
+    features,
+    tableManagementEnabled: isTableManagementEnabled(entry),
+    kitchenManagementEnabled: isKitchenManagementEnabled(entry),
+    deliveryManagementEnabled: isDeliveryManagementEnabled(entry),
+    inventoryEnabled: isInventoryEnabled(entry),
+    tableManagement: features.tableManagement,
+    kitchenManagement: features.kitchenManagement,
+    deliveryManagement: features.deliveryManagement,
     location: parseRestaurantLocation(entry.location, null),
   };
 }
@@ -1325,6 +1333,7 @@ async function routeRequest(req, res, url, pathname) {
             tableManagement: body.tableManagement,
             kitchenManagement: body.kitchenManagement,
             deliveryManagement: body.deliveryManagement ?? body.deliveryManagementEnabled,
+            inventoryEnabled: body.inventoryEnabled ?? body.inventory_enabled,
           },
         ),
         location: parseRestaurantLocation(body.location, null),

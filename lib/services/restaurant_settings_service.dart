@@ -345,6 +345,19 @@ class RestaurantSettingsService extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Drops cached settings for a tenant after Super Admin subscription changes.
+  Future<void> invalidateRestaurant(String restaurantId) async {
+    final id = restaurantId.trim();
+    if (id.isEmpty) return;
+    if (_cachedRestaurantId == id) {
+      _cached = null;
+      _cachedRestaurantId = null;
+    }
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_prefsKey(id));
+    notifyListeners();
+  }
+
   void _setCache(RestaurantSettings settings, String restaurantId) {
     _cached = settings;
     _cachedRestaurantId = restaurantId;

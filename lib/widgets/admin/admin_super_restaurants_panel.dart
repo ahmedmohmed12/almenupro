@@ -5,6 +5,7 @@ import '../../models/delivery_dispatch.dart';
 import '../../models/restaurant.dart';
 import '../../models/signup_request.dart';
 import '../../services/api_service.dart';
+import '../../services/restaurant_settings_service.dart';
 import '../../services/super_admin_scope_service.dart';
 import '../../services/talabat_menu_service.dart';
 import '../../utils/restaurant_route.dart';
@@ -272,6 +273,10 @@ class _AdminSuperRestaurantsPanelState extends State<AdminSuperRestaurantsPanel>
         );
       }
       await SuperAdminScopeService.instance.refreshRestaurants();
+      await RestaurantSettingsService.instance.invalidateRestaurant(saved.id);
+      if (SuperAdminScopeService.instance.selectedRestaurantId == saved.id) {
+        await RestaurantSettingsService.instance.load(restaurantId: saved.id);
+      }
       _loadRestaurantIntoForm(saved);
 
       if (!mounted) return;
@@ -623,6 +628,17 @@ class _AdminSuperRestaurantsPanelState extends State<AdminSuperRestaurantsPanel>
               ),
               SwitchListTile(
                 contentPadding: EdgeInsets.zero,
+                title: const Text('المخزون والتكلفة'),
+                subtitle: const Text(
+                  'يظهر في لوحة المدير تبويب «المخزون والتكلفة»: مواد، مشتريات، تحويلات، إنتاج، تقارير، وتكلفة الطعام (AVCO).',
+                ),
+                value: _inventoryEnabled,
+                onChanged: _saving
+                    ? null
+                    : (value) => setState(() => _inventoryEnabled = value),
+              ),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
                 title: const Text('توصيل سائقي المنيو برو'),
                 subtitle: const Text(
                   'يفتح إرسال طلبات التوصيل لسائقي منصة المنيو برو من نقطة البيع.',
@@ -632,17 +648,6 @@ class _AdminSuperRestaurantsPanelState extends State<AdminSuperRestaurantsPanel>
                     ? null
                     : (value) =>
                         setState(() => _deliveryManagementEnabled = value),
-              ),
-              SwitchListTile(
-                contentPadding: EdgeInsets.zero,
-                title: const Text('المخزون والتكلفة (AVCO)'),
-                subtitle: const Text(
-                  'يفتح وحدة مخزون Foodics: مشتريات، تحويلات، تقارير، وخصم عند التسليم.',
-                ),
-                value: _inventoryEnabled,
-                onChanged: _saving
-                    ? null
-                    : (value) => setState(() => _inventoryEnabled = value),
               ),
               const SizedBox(height: 16),
               const Divider(),
@@ -750,6 +755,8 @@ class _AdminSuperRestaurantsPanelState extends State<AdminSuperRestaurantsPanel>
                           _badge('مطابخ', const Color(0xFF6A1B9A)),
                         if (restaurant.deliveryManagementEnabled)
                           _badge('توصيل سائقين', const Color(0xFFE65100)),
+                        if (restaurant.inventoryEnabled)
+                          _badge('مخزون وتكلفة', const Color(0xFF00838F)),
                         if (restaurant.location != null)
                           _badge('موقع على الخريطة', const Color(0xFF00695C)),
                       ],

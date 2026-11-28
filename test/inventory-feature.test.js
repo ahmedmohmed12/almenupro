@@ -28,3 +28,20 @@ test('inventory blocked on inactive subscription', () => {
     false,
   );
 });
+
+test('normalizeFeatures persists inventoryEnabled from create payload shape', () => {
+  const features = normalizeFeatures({
+    tableManagement: true,
+    kitchenManagement: false,
+    deliveryManagement: true,
+    inventoryEnabled: true,
+  });
+  assert.equal(features.inventoryEnabled, true);
+  assert.equal(
+    isInventoryEnabled({
+      subscriptionStatus: 'active',
+      features,
+    }),
+    true,
+  );
+});
