@@ -87,7 +87,7 @@ const {
   syncCategoriesFromItemNames,
 } = require('./lib/menuCategories');
 const { assignTargetKitchen, findKitchenByLogin, orderTargetKitchenId } = require('./lib/kitchenRouting');
-const { handleTableRoutes, normalizeFeatures, isKitchenManagementEnabled, isTableManagementEnabled, isDeliveryManagementEnabled } = require('./lib/tableRoutes');
+const { handleTableRoutes, normalizeFeatures, isKitchenManagementEnabled, isTableManagementEnabled, isDeliveryManagementEnabled, isInventoryEnabled } = require('./lib/tableRoutes');
 const {
   stampKitchenSent,
   normalizeKitchenLine,
@@ -908,6 +908,8 @@ async function routeRequest(req, res, url, pathname) {
     parseJson,
     dataStore,
     readItems: () => dataStore.readItems(),
+    readRestaurants: () => dataStore.readRestaurants(),
+    readOrders: () => dataStore.readOrders(),
     rejectCashier: (auth, res, message) => {
       if (isCashier(auth) || isKitchen(auth)) {
         sendJson(res, 403, {
@@ -1390,11 +1392,17 @@ async function routeRequest(req, res, url, pathname) {
         body.deliveryManagementEnabled ??
         body.features?.deliveryManagement ??
         body.features?.delivery_management;
+      const inventoryEnabled =
+        body.inventoryEnabled ??
+        body.inventory_enabled ??
+        body.features?.inventoryEnabled ??
+        body.features?.inventory_enabled;
       next.features = {
         ...normalizeFeatures(current.features),
         ...(tableEnabled !== undefined ? { tableManagement: tableEnabled === true } : {}),
         ...(kitchenEnabled !== undefined ? { kitchenManagement: kitchenEnabled === true } : {}),
         ...(deliveryEnabled !== undefined ? { deliveryManagement: deliveryEnabled === true } : {}),
+        ...(inventoryEnabled !== undefined ? { inventoryEnabled: inventoryEnabled === true } : {}),
       };
     } else {
       next.subscriptionPlan = current.subscriptionPlan;
@@ -2515,10 +2523,11 @@ async function routeRequest(req, res, url, pathname) {
     }
     Object.assign(created, paymentApplied.order);
     await dataStore.prependOrder(created, existingOrders);
-    maybeQueueInventoryDeduction(dataStore, {
+    void maybeQueueInventoryDeduction(dataStore, {
       previous: null,
       next: created,
       auth: parseAuthHeader(req),
+      readRestaurants: () => dataStore.readRestaurants(),
     });
     const dineInTableId = String(created.tableId || created.table_id || '').trim();
     if (dineInTableId && restaurantId) {
@@ -2693,10 +2702,11 @@ async function routeRequest(req, res, url, pathname) {
     }
     orders[index] = next;
     const patched = await dataStore.patchOrderById(orderId, next, orders);
-    maybeQueueInventoryDeduction(dataStore, {
+    void maybeQueueInventoryDeduction(dataStore, {
       previous,
       next: patched || next,
       auth,
+      readRestaurants: () => dataStore.readRestaurants(),
     });
     sendJson(res, 200, patched || next);
     return true;
@@ -2923,10 +2933,12 @@ async function routeRequest(req, res, url, pathname) {
       tableManagementEnabled: isTableManagementEnabled(restaurant),
       kitchenManagementEnabled: isKitchenManagementEnabled(restaurant),
       deliveryManagementEnabled: isDeliveryManagementEnabled(restaurant),
+      inventoryEnabled: isInventoryEnabled(restaurant),
       features: {
         tableManagement: isTableManagementEnabled(restaurant),
         kitchenManagement: isKitchenManagementEnabled(restaurant),
         deliveryManagement: isDeliveryManagementEnabled(restaurant),
+        inventoryEnabled: isInventoryEnabled(restaurant),
       },
     });
     return true;

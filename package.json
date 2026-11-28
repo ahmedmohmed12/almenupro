@@ -10,7 +10,7 @@
     "build:talabat-bookmarklet": "node tools/build-talabat-bookmarklet.js",
     "test:talabat-import": "node --test test/talabat-bookmarklet-import.test.js",
     "test:external-orders": "node --test test/externalOrders.test.js",
-    "test:inventory": "node --test test/inventory-avco.test.js",
+    "test:inventory": "node --test test/inventory-*.test.js",
     "test:mysql": "node scripts/mysql-smoke.js",
     "process:platform-sales:today": "node scripts/process-todays-platform-orders.js",
     "export:mysql": "node scripts/export-mysql-dump.js",
